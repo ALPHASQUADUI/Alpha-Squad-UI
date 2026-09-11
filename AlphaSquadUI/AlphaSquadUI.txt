@@ -1,0 +1,14 @@
+## Title: |cE66A19Ąlpha Şquad UI|r
+## APIVersion: 101050 101051
+## Version: 2.5.0
+## AddOnVersion: 20500
+## Author: SeRuM1
+## Description: Modular Ąlpha Şquad ESO UI suite. Current module: Overload Tracker. Event-driven, performance-focused, subclassing compatible and designed for future modules.
+## SavedVariables: AlphaSquadOverloadTrackerSavedVariables
+
+Core/Core.lua
+Core/Theme.lua
+Core/Utils.lua
+Core/Events.lua
+Core/Settings.lua
+Modules/Overload/Overload.lua

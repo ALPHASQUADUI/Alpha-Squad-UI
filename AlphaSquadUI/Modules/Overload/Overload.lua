@@ -16,10 +16,14 @@
     AI-assisted development disclosure: implementation was assisted by OpenAI ChatGPT.
 ]]
 
-local ADDON_NAME = "AlphaSquadOverloadTracker"
-local DISPLAY_NAME = "Ąlpha Şquad - Overload Tracker"
+local ADDON_NAME = "AlphaSquadUI"
+local DISPLAY_NAME = "Ąlpha Şquad UI - Overload"
 local SETTINGS_MENU_NAME = "|cE66A19Ą|cEA7628l|cEE8237p|cF18E47h|cF49A58a |cF6A968Ş|cF8B77Aq|cFAC58Cu|cFCD49Ea|cFFF3D0d|r"
 local VERSION = "2.5.0"
+
+AlphaSquadUI = AlphaSquadUI or {}
+AlphaSquadUI.Modules = AlphaSquadUI.Modules or {}
+AlphaSquadUI.Modules.Overload = AlphaSquadUI.Modules.Overload or {}
 local SITE_URL = "https://alphasquadeso.com/"
 -- ESO's ACTION_BAR_ULTIMATE_SLOT_INDEX is the zero-offset/base index used by the UI.
 -- The actual action-slot number passed to GetSlot* / OnSlot* for the player ultimate is +1

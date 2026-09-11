@@ -1,23 +1,6 @@
-# Ąlpha Şquad UI Architecture
+# Ąlpha Şquad UI — Repository Architecture
 
-## Goal
-
-Build one lightweight ESO UI suite with a single **Ąlpha Şquad** settings entry and independent feature modules.
-
-## Current state
-
-The production Overload tracker is intentionally kept in its existing addon folder and SavedVariables namespace for compatibility.
-
-```text
-AlphaSquadOverloadTracker/
-├── AlphaSquadOverloadTracker.txt
-├── AlphaSquadOverloadTracker.lua
-└── README.txt
-```
-
-## Target modular direction
-
-As the suite grows, shared services should move into a small core layer while gameplay features remain isolated modules.
+The repository contains one installable ESO addon suite under `AlphaSquadUI/`.
 
 ```text
 AlphaSquadUI/
@@ -29,27 +12,50 @@ AlphaSquadUI/
 │   ├── Theme.lua
 │   └── Utils.lua
 ├── Modules/
-│   ├── Overload/
-│   ├── RaidTools/
-│   └── ...
+│   └── Overload/
+│       ├── Overload.lua
+│       └── README.md
 └── Media/
+    └── .gitkeep
 ```
 
-Migration should happen incrementally so working releases and SavedVariables are not broken.
+## Design principles
 
-## Performance principles
+- **One addon suite, many modules.**
+- **Main manifest stays small and explicit.**
+- **Core is shared infrastructure only.**
+- **Gameplay logic stays inside its module.**
+- **Modules should sleep when irrelevant to minimize CPU usage.**
+- **No future module should require another module unless explicitly documented.**
+- **SavedVariables remain backward compatible whenever possible.**
 
-### Event first
-Use ESO events for state changes. Polling is a fallback, not the primary engine.
+## Current module: Overload
 
-### Dormant modules
-A module that has no relevant skill/context should perform no UI animations, sounds or rapid update callbacks.
+The existing v2.5.0 implementation is intentionally kept together in
+`Modules/Overload/Overload.lua` for this migration.
 
-### Conditional animations
-Register fast update callbacks only while animation is visible. Unregister immediately afterward.
+This avoids changing thousands of lines at the same time as the filesystem
+reorganization. After in-game validation, the Overload module can be split
+safely into smaller files such as:
 
-### No redundant UI writes
-Do not repeatedly call `SetText`, color, texture, alpha or anchor setters when the value has not changed.
+```text
+Modules/Overload/
+├── Overload.lua
+├── Detection.lua
+├── Alerts.lua
+├── HUD.lua
+└── Settings.lua
+```
 
-### Central settings suite
-All future modules should register into the internal Ąlpha Şquad module navigation instead of creating separate ESO Settings entries.
+That second-stage refactor should happen only after this directory migration
+has been tested successfully in ESO.
+
+## Backward compatibility
+
+The addon folder/manifest identity becomes `AlphaSquadUI`, but the existing
+SavedVariables table remains:
+
+`AlphaSquadOverloadTrackerSavedVariables`
+
+This preserves existing Overload settings, position, thresholds and user
+preferences.
