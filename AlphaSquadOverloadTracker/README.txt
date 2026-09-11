@@ -229,6 +229,7 @@ COMPATIBILITY
 AI DISCLOSURE
 Implementation was assisted by OpenAI ChatGPT.
 
+
 V1.8 EMERGENCY ALERTS
 - Emergency strobe begins at 160 Ultimate by default.
 - 160 to 131: rapid red/white full-HUD strobe, size pulse, forced 100% opacity and repeating layered alarm bursts.
@@ -236,6 +237,7 @@ V1.8 EMERGENCY ALERTS
 - The HUD alternates current Ultimate with TURN OFF! during the emergency.
 - No LIMIT text is displayed.
 - Alert start can be changed with /asoverload warning 160 or the in-game settings.
+
 
 V1.9 OVERLOAD READY REMINDER
 - Default: enabled at 400 Ultimate.
