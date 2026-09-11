@@ -8,8 +8,6 @@
 
 ---
 
-Test modification
-
 ## About the project
 
 **Ąlpha Şquad UI** is a modular addon suite for **The Elder Scrolls Online** designed around three priorities:
