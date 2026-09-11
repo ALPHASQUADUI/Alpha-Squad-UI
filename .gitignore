@@ -1,0 +1,20 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.tmp
+
+# Local ESO runtime data
+SavedVariables/
+Logs/
+Errors/
+
+# Packaging/build scratch
+build/
+dist/
+*.bak
+*.old
+
+# Keep intentional release archives tracked only when explicitly added
