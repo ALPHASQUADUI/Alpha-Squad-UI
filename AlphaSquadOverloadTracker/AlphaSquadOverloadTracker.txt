@@ -1,0 +1,9 @@
+## Title: |c35D9FFĄlpha Şquad|r - Overload Tracker
+## APIVersion: 101050 101051
+## Version: 2.5.0
+## AddOnVersion: 20500
+## Author: SeRuM1
+## Description: Lightweight modular Ąlpha Şquad ESO toolkit. Current module: Overload Tracker for Overload, Energy Overload and Power Overload, including subclassed builds. Native Settings > Ąlpha Şquad panel with internal module sidebar, event-driven tracking, slow safety sync, background-only opacity, automatic menu/PvP/context suppression, reserve alarms, READY reminder and Ultimate counter. Created by SeRuM1.
+## SavedVariables: AlphaSquadOverloadTrackerSavedVariables
+
+AlphaSquadOverloadTracker.lua
