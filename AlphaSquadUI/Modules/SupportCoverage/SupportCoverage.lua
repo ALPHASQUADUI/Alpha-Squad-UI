@@ -182,6 +182,7 @@ function SC:SetActiveProfile(profileKey)
     if not profileKey or profileKey == "" then return end
     self.sv.activeProfile = profileKey
     self:Refresh("profile")
+    if self.SchedulePlanBroadcast then self:SchedulePlanBroadcast() end
 end
 
 function SC:GetContextKey()
@@ -259,6 +260,7 @@ function SC:OnCombatState(inCombat)
         self.pull = {
             startedAt = NowMs(),
             samples = 0,
+            effectKnownMs = {},
             effectUpMs = {},
             longestGapMs = {},
             gapStartedAt = {},
