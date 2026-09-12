@@ -366,6 +366,16 @@ function Group:RefreshHUD()
     self:ApplyVisibility()
 end
 
+function Group:ApplyConfigWindowScale()
+    if not self.configWindow or not GuiRoot then return end
+
+    local rootW = GuiRoot:GetWidth() or 1920
+    local rootH = GuiRoot:GetHeight() or 1080
+    local fitX = math.max(0.65, (rootW - 30) / 780)
+    local fitY = math.max(0.65, (rootH - 30) / 760)
+    self.configWindow:SetScale(math.min(1, fitX, fitY))
+end
+
 function Group:CreateHUD()
     local win = WINDOW_MANAGER:CreateTopLevelWindow("AlphaSquadULTGroupWindow")
     self.window = win
