@@ -173,7 +173,7 @@ It checks:
 - Lua syntax
 - manifest file paths
 - required addon metadata
-- test ZIP packaging
+- release ZIP packaging
 
 Syntax validation does not replace in-game ESO testing.
 
