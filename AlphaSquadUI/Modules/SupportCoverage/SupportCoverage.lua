@@ -84,6 +84,7 @@ function SC:GetDefaults()
         customRequirements = {},
         customCatalog = {},
         profileOverrides = {},
+        contextProfiles = {},
     }
 end
 
@@ -105,7 +106,7 @@ function SC:EnsureSavedVariables()
 
     local tableKeys = {
         "roleOverrides", "assignmentLocks", "duplicateBackups", "manualCapabilities",
-        "customRequirements", "customCatalog", "profileOverrides",
+        "customRequirements", "customCatalog", "profileOverrides", "contextProfiles",
     }
     for _, key in ipairs(tableKeys) do
         if type(self.sv[key]) ~= "table" then self.sv[key] = {} end
@@ -181,6 +182,72 @@ function SC:SetActiveProfile(profileKey)
     if not profileKey or profileKey == "" then return end
     self.sv.activeProfile = profileKey
     self:Refresh("profile")
+end
+
+function SC:GetContextKey()
+    local zone = GetUnitZone and GetUnitZone("player") or "Unknown Zone"
+    if not zone or zone == "" then zone = "Unknown Zone" end
+
+    local boss = ""
+    if DoesUnitExist and DoesUnitExist("reticleover") and GetUnitName then
+        boss = GetUnitName("reticleover") or ""
+    end
+
+    if boss ~= "" then return tostring(zone) .. " • " .. tostring(boss) end
+    return tostring(zone)
+end
+
+local function ShallowCopy(source)
+    local result = {}
+    for key, value in pairs(source or {}) do
+        if type(value) == "table" then
+            result[key] = ShallowCopy(value)
+        else
+            result[key] = value
+        end
+    end
+    return result
+end
+
+function SC:SaveContextProfile(name)
+    name = tostring(name or self:GetContextKey())
+    if name == "" then return nil end
+    self.sv.contextProfiles[name] = {
+        activeProfile = self.sv.activeProfile,
+        profileOverrides = ShallowCopy(self.sv.profileOverrides),
+        assignmentLocks = ShallowCopy(self.sv.assignmentLocks),
+        duplicateBackups = ShallowCopy(self.sv.duplicateBackups),
+        roleOverrides = ShallowCopy(self.sv.roleOverrides),
+        savedAt = self.NowMs(),
+    }
+    self.lastContextProfile = name
+    return name
+end
+
+function SC:LoadContextProfile(name)
+    name = tostring(name or self:GetContextKey())
+    local profile = self.sv.contextProfiles[name]
+    if type(profile) ~= "table" then return false end
+
+    self.sv.activeProfile = profile.activeProfile or self.sv.activeProfile
+    self.sv.profileOverrides = ShallowCopy(profile.profileOverrides or {})
+    self.sv.assignmentLocks = ShallowCopy(profile.assignmentLocks or {})
+    self.sv.duplicateBackups = ShallowCopy(profile.duplicateBackups or {})
+    self.sv.roleOverrides = ShallowCopy(profile.roleOverrides or {})
+    self.lastContextProfile = name
+    self:Refresh("context profile")
+    return true
+end
+
+function SC:AddCustomEffectId(effectKey, abilityId)
+    effectKey = tostring(effectKey or "")
+    abilityId = tonumber(abilityId)
+    if not abilityId or abilityId <= 0 then return false end
+    if not self.Catalog or not self.Catalog.effects[effectKey] then return false end
+
+    self.sv.customCatalog[effectKey] = self.sv.customCatalog[effectKey] or {}
+    self.sv.customCatalog[effectKey][tostring(math.floor(abilityId))] = true
+    return true
 end
 
 function SC:OnCombatState(inCombat)
@@ -347,8 +414,20 @@ function SC:RegisterSlashCommands()
                 tonumber(c.coveredCount) or 0,
                 tonumber(c.requiredCount) or 0,
                 tonumber(c.limitedPlayers) or 0))
+        elseif lower == "matrix" then
+            if SC.OpenMatrix then SC:OpenMatrix() end
+        elseif lower == "saveprofile" then
+            local name = SC:SaveContextProfile()
+            d("|cE66A19[ĄS SUPPORT]|r Saved profile: " .. tostring(name))
+        elseif lower == "loadprofile" then
+            local ok = SC:LoadContextProfile()
+            d("|cE66A19[ĄS SUPPORT]|r Context profile " .. (ok and "loaded." or "not found."))
+        elseif lower:match("^custom%s+") then
+            local effectKey, id = lower:match("^custom%s+([%w_]+)%s+(%d+)$")
+            local ok = SC:AddCustomEffectId(effectKey, id)
+            d("|cE66A19[ĄS SUPPORT]|r Custom effect ID " .. (ok and "saved." or "invalid."))
         else
-            d("|cE66A19[ĄS SUPPORT]|r /assupport • show/hide • lock/unlock • scan • status • reset")
+            d("|cE66A19[ĄS SUPPORT]|r /assupport • matrix • show/hide • lock/unlock • scan • status • saveprofile/loadprofile • custom <key> <id> • reset")
         end
     end
 end
