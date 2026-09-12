@@ -192,10 +192,13 @@ function ULT:ApplyVisibility()
     if not self.window or not self.sv then return end
 
     local settingsVisible = self.settingsWindow and not self.settingsWindow:IsHidden() or false
+    local sharedSettings = AlphaSquadUI and AlphaSquadUI.Settings and AlphaSquadUI.Settings.mainWindow
+    local sharedSettingsVisible = sharedSettings and not sharedSettings:IsHidden() or false
     local hidden =
         not self.sv.enabled
         or not self.sv.visible
         or settingsVisible
+        or sharedSettingsVisible
         or (self.sv.hideInMenus and self.uiObscured)
 
     self.window:SetHidden(hidden)
