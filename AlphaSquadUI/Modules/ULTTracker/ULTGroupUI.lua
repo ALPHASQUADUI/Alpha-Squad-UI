@@ -245,7 +245,8 @@ function Group:ApplyVisibility()
     local configVisible = self.configWindow and not self.configWindow:IsHidden() or false
 
     local hidden =
-        not self.sv.enabled
+        not ULT.sv.enabled
+        or not self.sv.enabled
         or not self.sv.visible
         or sharedSettingsVisible
         or configVisible
