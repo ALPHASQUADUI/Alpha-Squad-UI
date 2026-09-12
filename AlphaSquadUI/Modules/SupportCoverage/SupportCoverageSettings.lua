@@ -208,6 +208,7 @@ local function CycleRole(player)
     local nextRole = NextFrom(ROLE_ORDER, current)
     SC.sv.roleOverrides[player.key] = nextRole
     SC:Refresh("role override")
+    if SC.SchedulePlanBroadcast then SC:SchedulePlanBroadcast() end
 end
 
 local function CycleOwner(effectKey)
@@ -243,6 +244,7 @@ local function CycleOwner(effectKey)
         if not found then SC.sv.assignmentLocks[effectKey] = choices[1] end
     end
     SC:Refresh("owner lock")
+    if SC.SchedulePlanBroadcast then SC:SchedulePlanBroadcast() end
 end
 
 local function ToggleBackups(effectKey)
