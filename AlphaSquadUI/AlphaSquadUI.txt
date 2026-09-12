@@ -1,7 +1,7 @@
 ## Title: |cE66A19Ąlpha Şquad UI|r
 ## APIVersion: 101050 101051
-## Version: 2.5.0-ult-group-test
-## AddOnVersion: 20560
+## Version: 2.5.0-ult-group-grid-test
+## AddOnVersion: 20561
 ## Author: SeRuM1
 ## Description: Modular Ąlpha Şquad ESO UI suite. Modules: Overload Tracker + ULT Tracker with optional raidlead Group Ultimate tracking.
 ## SavedVariables: AlphaSquadOverloadTrackerSavedVariables AlphaSquadULTTrackerSavedVariables
