@@ -170,3 +170,26 @@ Group tracking remains event-driven through LibGroupCombatStats Ultimate events.
 - `/asult group lock`
 - `/asult group unlock`
 - `/asult group reset`
+
+
+### Compact percentage HUD
+
+The group HUD is intentionally minimal for raidlead use:
+
+- one @UserID per row
+- large tracked Ultimate icon
+- charge percentage only
+- no Ultimate name in the HUD
+- no raw Ultimate point count
+
+Percentage is calculated against the real cost of the tracked Ultimate and is
+capped at 100%.
+
+Rows are ordered:
+
+1. READY players first
+2. charging players by highest percentage
+3. recently spent Ultimates last
+
+READY rows use a high-contrast orange/gold/white pulse. Recently spent rows are
+strongly dimmed for a short period.
