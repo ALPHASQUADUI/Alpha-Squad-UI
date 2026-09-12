@@ -245,6 +245,7 @@ function Group:OpenConfig()
     if not self.configWindow then return end
 
     self:BuildRoster()
+    self:ApplyConfigWindowScale()
     self.configWindow:SetHidden(false)
     self:RefreshConfig()
     self:ApplyVisibility()
@@ -279,6 +280,7 @@ function Group:CreateConfigWindow()
     win:SetDrawLayer(DL_OVERLAY)
     win:SetDrawLevel(140)
     win:SetHidden(true)
+    self:ApplyConfigWindowScale()
 
     Solid(win, "AlphaSquadULTGroupConfigBG", {0.008, 0.013, 0.025, 0.997})
 
