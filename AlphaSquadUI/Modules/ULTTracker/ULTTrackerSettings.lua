@@ -86,7 +86,18 @@ function ULT:RefreshSettings()
 end
 
 function ULT:ToggleSettings()
+    local settings = AlphaSquadUI and AlphaSquadUI.Settings
+    if settings and settings.OpenPage and settings:OpenPage("ulttracker") then
+        self:ApplyVisibility()
+        return
+    end
+
+    -- Fallback for unusual load orders / development copies.
+    if not self.settingsWindow and self.CreateSettings then
+        self:CreateSettings()
+    end
     if not self.settingsWindow then return end
+
     local opening = self.settingsWindow:IsHidden()
     self.settingsWindow:SetHidden(not opening)
     if opening then self:RefreshSettings() end
@@ -479,5 +490,12 @@ function ULT:BuildIntegratedSettingsPage(page, ui)
             groupStatus:SetText(string.format("ENABLED • %d/%d sharing • Event-driven raidlead list", shared, total))
             SetColor(groupStatus, C.green)
         end
+    end)
+end
+
+
+if AlphaSquadUI.Settings and AlphaSquadUI.Settings.RegisterPage then
+    AlphaSquadUI.Settings.RegisterPage("ulttracker", function(page, ui)
+        ULT:BuildIntegratedSettingsPage(page, ui)
     end)
 end
