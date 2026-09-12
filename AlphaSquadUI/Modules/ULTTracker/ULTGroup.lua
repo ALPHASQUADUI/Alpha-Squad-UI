@@ -393,13 +393,25 @@ function Group:CheckReadyTransitions()
 end
 
 function Group:RefreshIntegratedSettings()
-    local refresh = AlphaSquadUI
-        and AlphaSquadUI.Settings
-        and AlphaSquadUI.Settings.RefreshMain
+    local settings = AlphaSquadUI and AlphaSquadUI.Settings
+    local mainWindow = settings and settings.mainWindow
+    if not mainWindow or mainWindow:IsHidden() then return end
+
+    local refresh = settings and settings.RefreshMain
     if refresh then refresh() end
 end
 
 function Group:ScheduleRefresh()
+    if not self.sv then return end
+
+    local configVisible = self.configWindow and not self.configWindow:IsHidden() or false
+    local settings = AlphaSquadUI and AlphaSquadUI.Settings
+    local mainSettingsVisible = settings and settings.mainWindow and not settings.mainWindow:IsHidden() or false
+
+    if not self.sv.enabled and not configVisible and not mainSettingsVisible then
+        return
+    end
+
     if self.refreshPending then return end
     self.refreshPending = true
 
@@ -413,8 +425,14 @@ function Group:Refresh(reason)
     if not self.initialized or not self.sv then return end
 
     self:BuildRoster()
-    self:CheckReadyTransitions()
-    self:RefreshHUD()
+
+    if self.sv.enabled then
+        self:CheckReadyTransitions()
+        self:RefreshHUD()
+    elseif self.ApplyVisibility then
+        self:ApplyVisibility()
+    end
+
     self:RefreshConfig()
     self:RefreshIntegratedSettings()
 end
