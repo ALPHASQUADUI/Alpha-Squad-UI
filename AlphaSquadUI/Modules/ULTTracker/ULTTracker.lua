@@ -16,7 +16,7 @@ AlphaSquadUI.Modules.ULTTracker = ULT
 
 ULT.name = "ULTTracker"
 ULT.displayName = "ULT Tracker"
-ULT.version = "0.1.0"
+ULT.version = (AlphaSquadUI and AlphaSquadUI.version) or "2.6.0"
 ULT.addonName = "AlphaSquadUI"
 ULT.savedVarsName = "AlphaSquadULTTrackerSavedVariables"
 
@@ -59,7 +59,6 @@ ULT.bars = ULT.bars or {
 
 ULT.sv = nil
 ULT.window = nil
-ULT.settingsWindow = nil
 ULT.uiObscured = false
 ULT.currentUltimate = 0
 ULT.lastSoundAt = 0
@@ -512,8 +511,7 @@ function ULT:Initialize()
     end
 
     if self.CreateHUD then self:CreateHUD() end
-    -- ULT settings now use the shared Ąlpha Şquad shell. The legacy standalone
-    -- window remains as fallback code but is not instantiated at runtime.
+    -- ULT settings are provided exclusively by the shared Ąlpha Şquad settings shell.
     if self.InitializeGroup then self:InitializeGroup() end
 
     self:RegisterSceneCallbacks()
