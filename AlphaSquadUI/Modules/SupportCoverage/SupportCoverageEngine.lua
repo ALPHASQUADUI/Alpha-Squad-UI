@@ -150,8 +150,8 @@ function SC:GetCapabilityOwners(effectKey)
     table.sort(owners, function(a, b)
         local qa = a.dataQuality == "ASUI" and 100 or 0
         local qb = b.dataQuality == "ASUI" and 100 or 0
-        local sa = qa + RoleScore(effectKey, a.role)
-        local sb = qb + RoleScore(effectKey, b.role)
+        local sa = qa + RoleScore(effectKey, a.role) + math.min(31, tonumber(a.supportScore) or 0)
+        local sb = qb + RoleScore(effectKey, b.role) + math.min(31, tonumber(b.supportScore) or 0)
         if sa ~= sb then return sa > sb end
         return tostring(a.displayName or "") < tostring(b.displayName or "")
     end)
@@ -382,45 +382,90 @@ function SC:ObserveEffectsOnUnit(unitTag)
     return observed, true
 end
 
+function SC:ObserveBossEffects()
+    local combined = {}
+    local readable = false
+    local tags = {"boss1","boss2","boss3","boss4","boss5","boss6","reticleover"}
+
+    for _, unitTag in ipairs(tags) do
+        local exists = true
+        if DoesUnitExist then
+            local ok, value = pcall(DoesUnitExist, unitTag)
+            if ok then exists = value == true end
+        end
+
+        if exists then
+            local observed, canRead = self:ObserveEffectsOnUnit(unitTag)
+            if canRead then
+                readable = true
+                for key, value in pairs(observed or {}) do
+                    combined[key] = value
+                end
+            end
+        end
+    end
+
+    return combined, readable
+end
+
 function SC:SampleLiveCoverage()
     if not self.inCombat or not self.sv or not self.sv.enabled then return end
     local coverage = self.coverage
     if not coverage or not coverage.entries then return end
 
-    local groupObserved = {}
-    local unitReadable = 0
+    if self.ShareLiveSnapshot then self:ShareLiveSnapshot() end
 
+    local now = self.NowMs()
+    local bossObserved, bossReadable = self:ObserveBossEffects()
+
+    -- Verified group coverage uses each ASUI client observing its own buffs.
+    local verifiedPlayers = {}
+    local verifiedTotal = 0
     for _, player in ipairs(self.roster or {}) do
-        local observed, readable = self:ObserveEffectsOnUnit(player.unitTag)
-        if readable then unitReadable = unitReadable + 1 end
-        for key in pairs(observed) do
-            groupObserved[key] = (groupObserved[key] or 0) + 1
+        local liveCaps = nil
+        if player.unitTag == "player" or (AreUnitsEqual and pcall(AreUnitsEqual, player.unitTag, "player") and AreUnitsEqual(player.unitTag, "player")) then
+            if not self.localLive or now - (self.localLive.updatedAt or 0) > 3500 then
+                if self.GetLocalLiveCapabilities then self:GetLocalLiveCapabilities() end
+            end
+            liveCaps = self.localLive and self.localLive.capabilities or nil
+        elseif player.dataQuality == "ASUI" and player.liveCapabilities and now - (player.liveUpdatedAt or 0) <= 5500 then
+            liveCaps = player.liveCapabilities
+        end
+
+        if liveCaps then
+            verifiedPlayers[#verifiedPlayers + 1] = {player=player, caps=liveCaps}
+            verifiedTotal = verifiedTotal + 1
         end
     end
 
-    local bossObserved, bossReadable = self:ObserveEffectsOnUnit("reticleover")
-    local now = self.NowMs()
-    local sampleMs = 1250
+    local groupSize = #(self.roster or {})
+    local sampleMs = 1500
 
     for _, row in ipairs(coverage.entries) do
         local key = row.key
         local effect = row.effect
-        local known, live, count = false, false, 0
+        local known, live, count, total, unknown = false, false, 0, 0, 0
 
         if effect.boss and bossReadable then
             known = true
             live = bossObserved[key] ~= nil
             count = live and 1 or 0
-        elseif effect.group and unitReadable > 0 then
+            total = 1
+        elseif effect.group and verifiedTotal > 0 then
             known = true
-            count = groupObserved[key] or 0
+            total = verifiedTotal
+            unknown = math.max(0, groupSize - verifiedTotal)
+            for _, verified in ipairs(verifiedPlayers) do
+                if verified.caps[key] then count = count + 1 end
+            end
             live = count > 0
         end
 
         row.liveKnown = known
         row.live = live
         row.liveCount = count
-        row.liveTotal = effect.group and unitReadable or (effect.boss and 1 or 0)
+        row.liveTotal = total
+        row.liveUnknown = unknown
 
         if self.pull and known then
             self.pull.samples = (self.pull.samples or 0) + 1
@@ -428,7 +473,6 @@ function SC:SampleLiveCoverage()
             self.pull.effectKnownMs[key] = (self.pull.effectKnownMs[key] or 0) + sampleMs
             self.pull.effectUpMs[key] = self.pull.effectUpMs[key] or 0
             self.pull.longestGapMs[key] = self.pull.longestGapMs[key] or 0
-            self.pull.gapStartedAt[key] = self.pull.gapStartedAt[key]
 
             if live then
                 self.pull.effectUpMs[key] = self.pull.effectUpMs[key] + sampleMs
@@ -453,7 +497,7 @@ function SC:SetLiveUpdateActive(enabled)
     local name = "AlphaSquadUI_SupportCoverage_Live"
 
     if enabled then
-        EM:RegisterForUpdate(name, 1250, function()
+        EM:RegisterForUpdate(name, 1500, function()
             if SC then SC:SampleLiveCoverage() end
         end)
     else
@@ -484,4 +528,5 @@ function SC:FinalizePull()
     self.lastPull = pull
     self.pull = nil
     self:SetLiveUpdateActive(false)
+    if self.ShowPullSummaryBanner then self:ShowPullSummaryBanner(pull) end
 end
