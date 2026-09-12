@@ -1,9 +1,9 @@
 ## Title: |cE66A19Ąlpha Şquad UI|r
 ## APIVersion: 101050 101051
-## Version: 2.7.0-support-coverage-test
-## AddOnVersion: 20700
+## Version: 2.7.0-support-coverage-test.1
+## AddOnVersion: 20701
 ## Author: SeRuM1
-## Description: Modular Ąlpha Şquad ESO UI suite: Overload Tracker, ULT Tracker, Group ULT Tracker and Support Coverage raidlead planning.
+## Description: Modular Alpha Squad UI with optional support readiness, build checks and bounded pull history.
 ## SavedVariables: AlphaSquadOverloadTrackerSavedVariables AlphaSquadULTTrackerSavedVariables AlphaSquadSupportCoverageSavedVariables
 ## OptionalDependsOn: LibGroupCombatStats LibGroupBroadcast LibFoodDrinkBuff
 
@@ -22,10 +22,19 @@ Modules/ULTTracker/ULTTrackerSettings.lua
 
 Modules/SupportCoverage/SupportCoverage.lua
 Modules/SupportCoverage/SupportCoverageCatalog.lua
+Modules/SupportCoverage/SupportCoverageAudit.lua
 Modules/SupportCoverage/SupportCoverageScanner.lua
+Modules/SupportCoverage/SupportCoverageBuild.lua
+Modules/SupportCoverage/SupportCoverageHistory.lua
 Modules/SupportCoverage/SupportCoverageShare.lua
+Modules/SupportCoverage/SupportCoverageDetails.lua
+Modules/SupportCoverage/SupportCoverageLiveShare.lua
 Modules/SupportCoverage/SupportCoverageEngine.lua
+Modules/SupportCoverage/SupportCoverageTracking.lua
 Modules/SupportCoverage/SupportCoverageUI.lua
+Modules/SupportCoverage/SupportCoveragePlanner.lua
+Modules/SupportCoverage/SupportCoverageInspector.lua
 Modules/SupportCoverage/SupportCoverageSettings.lua
+Modules/SupportCoverage/SupportCoverageIntegration.lua
 
 Modules/Overload/Overload.lua

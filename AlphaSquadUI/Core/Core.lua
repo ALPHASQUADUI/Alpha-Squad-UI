@@ -6,7 +6,7 @@ local ASUI = AlphaSquadUI
 
 ASUI.name = "AlphaSquadUI"
 ASUI.displayName = "Ąlpha Şquad UI"
-ASUI.version = "2.7.0-support-coverage-test"
+ASUI.version = "2.7.0-support-coverage-test.1"
 ASUI.author = "SeRuM1"
 ASUI.website = "https://alphasquadeso.com/"
 

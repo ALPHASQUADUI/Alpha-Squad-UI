@@ -46,25 +46,26 @@ local function AddCapability(target, key, source)
 end
 
 local function GetLink(slot)
-    if not GetItemLink or BAG_WORN == nil then return "" end
+    if not GetItemLink or BAG_WORN == nil then return nil end
     local link = SafeCall(GetItemLink, BAG_WORN, slot, LINK_STYLE_DEFAULT or 0)
-    return tostring(link or "")
+    return link ~= nil and tostring(link) or nil
 end
 
 local function ClassifyEnchant(header, description)
     local text = Normalize((header or "") .. " " .. (description or ""))
 
     local patterns = {
-        prismatic = {"prismatic", "multi-effect", "tri-stat", "tristat", "hakeijo", "prismatique", "prismatisch"},
-        magicka = {"maximum magicka", "max magicka", "magie maximale", "magicka maximale", "maximale magicka"},
-        stamina = {"maximum stamina", "max stamina", "vigueur maximale", "ausdauer", "stamina maximale"},
-        health = {"maximum health", "max health", "santé maximale", "gesundheit", "leben"},
-        crusher = {"crushing", "crusher", "reduce the target's physical and spell resistance", "résistance physique et magique", "physische und magieresistenz"},
-        weapon_spell_damage = {"weapon and spell damage", "dégâts des armes et des sorts", "waffen- und magiekraft"},
-        recovery = {"recovery", "récupération", "regeneration", "regénération"},
+        prismatic = {"prismatic", "multi-effect", "tri-stat", "tristat", "hakeijo"},
+        magicka = {"maximum magicka", "max magicka"},
+        stamina = {"maximum stamina", "max stamina"},
+        health = {"maximum health", "max health"},
+        crusher = {"crushing", "crusher", "reduce the target's physical and spell resistance"},
+        weapon_spell_damage = {"weapon and spell damage"},
+        recovery = {"recovery", "regeneration"},
     }
 
-    for kind, list in pairs(patterns) do
+    for _, kind in ipairs({"prismatic","crusher","magicka","stamina","health","weapon_spell_damage","recovery"}) do
+        local list=patterns[kind]
         for _, token in ipairs(list) do
             if text:find(Normalize(token), 1, true) then return kind end
         end
@@ -74,6 +75,7 @@ end
 
 function SC:ScanEquipment()
     local snapshot = {
+        complete = GetItemLink ~= nil and GetItemLinkSetInfo ~= nil,
         sets = {},
         setList = {},
         items = {},
@@ -94,7 +96,10 @@ function SC:ScanEquipment()
 
     for _, slot in ipairs(EQUIP_SLOTS) do
         local link = GetLink(slot)
-        if link ~= "" then
+        if link == nil then
+            snapshot.complete = false
+            snapshot.glyphs.unknown = (snapshot.glyphs.unknown or 0) + (ARMOR_SLOTS[slot] and 1 or 0)
+        elseif link ~= "" then
             local itemName = SafeCall(GetItemLinkName, link) or ""
             local item = {
                 slot = slot,
@@ -102,10 +107,18 @@ function SC:ScanEquipment()
                 name = itemName,
                 enchant = "unknown",
                 hasEnchant = false,
+                trait = SafeCall(GetItemLinkTraitInfo, link),
+                armorType = SafeCall(GetItemLinkArmorType, link),
+                weaponType = SafeCall(GetItemLinkWeaponType, link),
+                enchantId = SafeCall(GetItemLinkAppliedEnchantId, link),
+                isArmor = ARMOR_SLOTS[slot] == true,
+                isWeapon = slot == EQUIP_SLOT_MAIN_HAND or slot == EQUIP_SLOT_OFF_HAND
+                    or slot == EQUIP_SLOT_BACKUP_MAIN or slot == EQUIP_SLOT_BACKUP_OFF,
             }
 
             local hasSet, setName, _, normalEquipped, maxEquipped, setId, perfectedEquipped =
-                SafeCall(GetItemLinkSetInfo, link)
+                SafeCall(GetItemLinkSetInfo, link, true)
+            if hasSet == nil then snapshot.complete = false end
             if hasSet and setName and setName ~= "" then
                 local setKey = tonumber(setId) and tostring(setId) or Normalize(setName)
                 if not setSeen[setKey] then
@@ -115,23 +128,37 @@ function SC:ScanEquipment()
                         equipped = tonumber(normalEquipped) or 0,
                         perfected = tonumber(perfectedEquipped) or 0,
                         maxEquipped = tonumber(maxEquipped) or 0,
+                        mainCount = 0, backCount = 0,
                     }
                     snapshot.sets[setKey] = entry
                     snapshot.setList[#snapshot.setList + 1] = entry
                     setSeen[setKey] = true
 
-                    if Catalog then
-                        local matched = Catalog:MatchSetName(setName)
-                        for capability in pairs(matched) do
-                            AddCapability(snapshot.capabilities, capability, setName)
-                        end
-                    end
+
                 end
             end
 
+            if hasSet and setName and setName ~= "" then
+                local setKey = tonumber(setId) and tostring(setId) or Normalize(setName)
+                item.setId = tonumber(setId)
+                local set = snapshot.sets[setKey]
+                local twoHanded = item.isWeapon and item.weaponType ~= nil and (
+                    item.weaponType == WEAPONTYPE_TWO_HANDED_SWORD or item.weaponType == WEAPONTYPE_TWO_HANDED_AXE
+                    or item.weaponType == WEAPONTYPE_TWO_HANDED_HAMMER or item.weaponType == WEAPONTYPE_BOW
+                    or item.weaponType == WEAPONTYPE_FIRE_STAFF or item.weaponType == WEAPONTYPE_FROST_STAFF
+                    or item.weaponType == WEAPONTYPE_LIGHTNING_STAFF or item.weaponType == WEAPONTYPE_HEALING_STAFF)
+                local pieces = twoHanded and 2 or 1
+                local mainOnly = slot == EQUIP_SLOT_MAIN_HAND or slot == EQUIP_SLOT_OFF_HAND
+                local backOnly = slot == EQUIP_SLOT_BACKUP_MAIN or slot == EQUIP_SLOT_BACKUP_OFF
+                if not backOnly then set.mainCount = set.mainCount + pieces end
+                if not mainOnly then set.backCount = set.backCount + pieces end
+            end
+
             local hasEnchant, enchantHeader, enchantDescription = SafeCall(GetItemLinkEnchantInfo, link)
-            item.hasEnchant = hasEnchant == true
-            if item.hasEnchant then
+            item.hasEnchant = hasEnchant
+            if hasEnchant == nil then
+                item.enchant = "unknown"
+            elseif item.hasEnchant then
                 item.enchant = ClassifyEnchant(enchantHeader, enchantDescription)
             else
                 item.enchant = "missing"
@@ -139,7 +166,9 @@ function SC:ScanEquipment()
 
             if ARMOR_SLOTS[slot] then
                 snapshot.glyphs.armorTotal = snapshot.glyphs.armorTotal + 1
-                if not item.hasEnchant then
+                if item.hasEnchant == nil then
+                    snapshot.glyphs.unknown = (snapshot.glyphs.unknown or 0) + 1
+                elseif item.hasEnchant == false then
                     snapshot.glyphs.armorMissing = snapshot.glyphs.armorMissing + 1
                 elseif snapshot.glyphs[item.enchant] ~= nil then
                     snapshot.glyphs[item.enchant] = snapshot.glyphs[item.enchant] + 1
@@ -158,6 +187,28 @@ function SC:ScanEquipment()
         end
     end
 
+    for _, set in ipairs(snapshot.setList) do
+        set.activeOnMain, set.activeOnBack = false, false
+        for _, source in ipairs(Catalog and Catalog.setSources or {}) do
+            local identityMatch = source.setId and set.id == source.setId
+            local nameHint = not source.setId and Normalize(set.name):find(Normalize(source.token), 1, true)
+            if identityMatch or nameHint then
+                local required = tonumber(source.requiredPieces) or 5
+                local main, back = set.mainCount >= required, set.backCount >= required
+                set.activeOnMain = set.activeOnMain or main
+                set.activeOnBack = set.activeOnBack or back
+                if main or back then
+                    for _, key in ipairs(source.provides) do
+                        AddCapability(snapshot.capabilities, key, set.name)
+                        local cap = snapshot.capabilities[key]
+                        cap.evidence = identityMatch and "SET_ID" or "SET_NAME_HINT"
+                        cap.mainBar, cap.backBar = main, back
+                    end
+                end
+            end
+        end
+    end
+
     table.sort(snapshot.setList, function(a, b)
         return Normalize(a.name) < Normalize(b.name)
     end)
@@ -170,6 +221,8 @@ function SC:ScanSkills()
         primary = {},
         backup = {},
         champion = {},
+        championKnown = HOTBAR_CATEGORY_CHAMPION ~= nil and GetSlotBoundId ~= nil,
+        known = GetSlotBoundId ~= nil and HOTBAR_CATEGORY_PRIMARY ~= nil and HOTBAR_CATEGORY_BACKUP ~= nil,
         capabilities = {},
     }
 
@@ -184,6 +237,7 @@ function SC:ScanSkills()
         if category ~= nil then
             for slot = 3, ultimateSlot do
                 local boundId = SafeCall(GetSlotBoundId, slot, category)
+                if boundId == nil then result.known = false end
                 boundId = tonumber(boundId) or 0
                 if boundId > 0 then
                     local effectiveId = boundId
@@ -226,6 +280,7 @@ function SC:ScanSkills()
 
         for slot = startSlot, endSlot do
             local starId = SafeCall(GetSlotBoundId, slot, HOTBAR_CATEGORY_CHAMPION)
+            if starId == nil then result.championKnown = false end
             starId = tonumber(starId) or 0
             if starId > 0 then
                 local name = ""
@@ -233,6 +288,8 @@ function SC:ScanSkills()
                 result.champion[#result.champion + 1] = {
                     slot = slot,
                     id = starId,
+                    points = SafeCall(GetNumPointsSpentOnChampionSkill,starId),
+                    discipline = self.GetChampionDiscipline and self:GetChampionDiscipline(starId),
                     name = tostring(name or ""),
                 }
             end
@@ -249,6 +306,9 @@ function SC:ScanFood(unitTag)
     if lib and type(lib.GetFoodBuffInfos) == "function" then
         local buffType, isDrink, abilityId, buffName, timeStarted, timeEnds, icon =
             SafeCall(lib.GetFoodBuffInfos, lib, unitTag)
+        if unitTag == "player" and LFDB_BUFF_TYPE_NONE ~= nil and buffType == LFDB_BUFF_TYPE_NONE then
+            return {active=false, verified=true, source="LibFoodDrinkBuff"}
+        end
         if abilityId and tonumber(abilityId) and tonumber(abilityId) > 0 then
             return {
                 active = true,
@@ -295,7 +355,7 @@ function SC:ScanFood(unitTag)
 end
 
 function SC:ScanPotion()
-    local result = {known=false, name="", itemId=0, effects=""}
+    local result = {known=false, name="", itemId=0, effects="", link=nil, cooldownRemaining=nil}
     if not GetCurrentQuickslot or not GetSlotItemLink then return result end
 
     local slot = SafeCall(GetCurrentQuickslot)
@@ -307,9 +367,12 @@ function SC:ScanPotion()
 
     local itemType = SafeCall(GetItemLinkItemType, link)
     local consumable = SafeCall(IsItemLinkConsumable, link)
-    if consumable ~= true and itemType ~= ITEMTYPE_POTION then return result end
+    if ITEMTYPE_POTION == nil or itemType ~= ITEMTYPE_POTION then return result end
 
     result.known = true
+    result.link = link
+    result.slot = slot
+    result.cooldownRemaining, result.cooldownDuration = SafeCall(GetSlotCooldownInfo, slot, HOTBAR_CATEGORY_QUICKSLOT_WHEEL)
     result.name = tostring(SafeCall(GetItemLinkName, link) or "")
     result.itemId = tonumber(SafeCall(GetItemLinkItemId, link)) or 0
 
@@ -409,9 +472,15 @@ function SC:ScanLocalPlayer()
         skills = skills,
         food = self:ScanFood("player"),
         potion = self:ScanPotion(),
+        masteries = self.ScanClassMasteries and self:ScanClassMasteries() or {known=false},
+        poisons = self.ScanPoisons and self:ScanPoisons() or {known=false},
+        mundus = self.ScanMundus and self:ScanMundus() or {known=false},
         capabilities = capabilities,
     }
 
+    for key,value in pairs(snapshot.masteries.capabilities or {}) do
+        snapshot.capabilities[key]=snapshot.capabilities[key] or value
+    end
     return snapshot
 end
 
@@ -441,7 +510,7 @@ function SC:ScanLimitedUnit(unitTag)
         role = self:GetRoleHint(unitTag, capabilities),
         dataQuality = quality,
         asui = false,
-        connected = IsUnitOnline and IsUnitOnline(unitTag) or true,
+        connected = self.IsOnline and self:IsOnline(unitTag),
         dead = IsUnitDead and IsUnitDead(unitTag) or false,
         food = self:ScanFood(unitTag),
         ult = ult,

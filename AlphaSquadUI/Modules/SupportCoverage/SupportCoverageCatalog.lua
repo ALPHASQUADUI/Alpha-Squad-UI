@@ -112,6 +112,7 @@ Catalog.effects = {
     overcharged = E("overcharged", "Overcharged", "advanced", "status", {priority="advanced", boss=true}),
 }
 
+-- Set-name fragments are capability hints; exact set IDs and per-bar counts are captured locally.
 -- Normalized set-name fragments -> capabilities. Set IDs can be added later without engine changes.
 Catalog.setSources = {
     {token="spell power cure", provides={"major_courage"}},
@@ -132,26 +133,25 @@ Catalog.setSources = {
     {token="jorvuld", provides={"jorvulds_guidance"}},
     {token="pillager", provides={"pillagers_profit"}},
     {token="xoryn", provides={"xoryns_masterpiece"}},
-    {token="spaulder of ruin", provides={"spaulder_of_ruin"}},
-    {token="ozezan", provides={"ozezan","minor_vitality"}},
-    {token="nazaray", provides={"nazaray"}},
-    {token="symphony of blades", provides={"symphony"}},
-    {token="archdruid devyric", provides={"major_vulnerability"}},
-    {token="encratis", provides={"encratis"}},
-    {token="tremorscale", provides={"tremorscale"}},
+    {token="spaulder of ruin", requiredPieces=1, provides={"spaulder_of_ruin"}},
+    {token="ozezan", requiredPieces=2, provides={"ozezan","minor_vitality"}},
+    {token="nazaray", requiredPieces=2, provides={"nazaray"}},
+    {token="symphony of blades", requiredPieces=2, provides={"symphony"}},
+    {token="archdruid devyric", requiredPieces=2, provides={"major_vulnerability"}},
+    {token="encratis", requiredPieces=2, provides={"encratis"}},
+    {token="tremorscale", requiredPieces=2, provides={"tremorscale"}},
     {token="yolnahkriin", provides={"yolnahkriin","minor_courage"}},
     {token="saxhleel", provides={"major_force"}},
     {token="serpent's disdain", provides={"serpents_disdain"}},
     {token="serpents disdain", provides={"serpents_disdain"}},
-    {token="grand rejuvenation", provides={"master_restoration"}},
-    {token="master's restoration", provides={"master_restoration"}},
-    {token="masters restoration", provides={"master_restoration"}},
+    {token="grand rejuvenation", requiredPieces=2, provides={"master_restoration"}},
+    {token="master's restoration", requiredPieces=2, provides={"master_restoration"}},
+    {token="masters restoration", requiredPieces=2, provides={"master_restoration"}},
 }
 
 -- Skill / mastery name fragments. These are capability hints, not proof of uptime.
 Catalog.skillSources = {
     {token="aggressive horn", provides={"major_force"}},
-    {token="war horn", provides={"major_force"}},
     {token="ferocious roar", provides={"major_courage"}},
     {token="combat prayer", provides={"minor_berserk","minor_resolve"}},
     {token="elemental drain", provides={"major_breach","minor_magickasteal"}},
@@ -167,14 +167,6 @@ Catalog.skillSources = {
     {token="lotus flower", provides={"major_savagery_prophecy"}},
     {token="fetcher infection", provides={"minor_vulnerability"}},
     {token="swarm", provides={"minor_vulnerability"}},
-    {token="necrotic potency", provides={"major_heroism"}},
-    {token="trample", provides={"major_heroism"}},
-    {token="tundra's maw", provides={"major_brittle"}},
-    {token="tundras maw", provides={"major_brittle"}},
-    {token="ink-scribe's verve", provides={"major_force"}},
-    {token="ink scribes verve", provides={"major_force"}},
-    {token="erudite's rigor", provides={"minor_cowardice","major_vitality"}},
-    {token="erudites rigor", provides={"minor_cowardice","major_vitality"}},
     {token="altar", provides={"minor_lifesteal"}},
     {token="blood altar", provides={"minor_lifesteal"}},
     {token="overflowing altar", provides={"minor_lifesteal"}},
@@ -277,7 +269,7 @@ function Catalog:GetRequirements(profileKey, saved)
 
     if saved and saved.profileOverrides and type(saved.profileOverrides[profileKey]) == "table" then
         for key, enabled in pairs(saved.profileOverrides[profileKey]) do
-            if enabled and self.effects[key] and not seen[key] then
+            if enabled and self.effects[key] and not seen[key] and not (saved.profileOverrides and saved.profileOverrides[profileKey] and saved.profileOverrides[profileKey][key] == false) then
                 result[#result + 1] = key
                 seen[key] = true
             elseif enabled == false and seen[key] then
@@ -291,7 +283,7 @@ function Catalog:GetRequirements(profileKey, saved)
 
     if saved and type(saved.customRequirements) == "table" then
         for key, enabled in pairs(saved.customRequirements) do
-            if enabled and self.effects[key] and not seen[key] then
+            if enabled and self.effects[key] and not seen[key] and not (saved.profileOverrides and saved.profileOverrides[profileKey] and saved.profileOverrides[profileKey][key] == false) then
                 result[#result + 1] = key
                 seen[key] = true
             end
@@ -339,3 +331,103 @@ function Catalog:GetAllEffectKeys()
     end)
     return keys
 end
+
+-- Legacy protocol v1 indices are frozen. Never derive wire IDs from sorted UI labels.
+Catalog.wireV1Keys = {
+    "burning",
+    "chilled",
+    "concussion",
+    "diseased",
+    "hemorrhaging",
+    "off_balance",
+    "overcharged",
+    "poisoned",
+    "sundered",
+    "elemental_catalyst",
+    "lucent_echoes",
+    "major_brittle",
+    "major_force",
+    "minor_brittle",
+    "minor_force",
+    "encratis",
+    "major_vulnerability",
+    "martial_knowledge",
+    "minor_vulnerability",
+    "nazaray",
+    "serpents_disdain",
+    "stagger",
+    "zens_redress",
+    "major_aegis",
+    "major_cowardice",
+    "major_evasion",
+    "major_maim",
+    "major_mending",
+    "major_protection",
+    "major_resolve",
+    "major_vitality",
+    "minor_aegis",
+    "minor_cowardice",
+    "minor_evasion",
+    "minor_maim",
+    "minor_mending",
+    "minor_protection",
+    "minor_resolve",
+    "minor_toughness",
+    "minor_vitality",
+    "ozezan",
+    "major_berserk",
+    "major_brutality_sorcery",
+    "major_courage",
+    "major_savagery_prophecy",
+    "major_slayer",
+    "minor_berserk",
+    "minor_brutality_sorcery",
+    "minor_courage",
+    "minor_savagery_prophecy",
+    "minor_slayer",
+    "pearlescent_ward",
+    "powerful_assault",
+    "spaulder_of_ruin",
+    "yolnahkriin",
+    "crimson_oath",
+    "crusher",
+    "major_breach",
+    "minor_breach",
+    "alkosh",
+    "tremorscale",
+    "master_restoration",
+    "jorvulds_guidance",
+    "major_endurance",
+    "major_fortitude",
+    "major_heroism",
+    "major_intellect",
+    "minor_endurance",
+    "minor_fortitude",
+    "minor_heroism",
+    "minor_intellect",
+    "minor_lifesteal",
+    "minor_magickasteal",
+    "pillagers_profit",
+    "symphony",
+    "xoryns_masterpiece",
+}
+
+-- U50 mastery capability metadata, checked against official live patch notes (693682).
+-- These are conditional build capabilities, not observations or guaranteed uptime.
+Catalog.effects.bright_harbinger = E("bright_harbinger","Bright Harbinger","offense","unique",{priority="situational",group=true,wireV1Unavailable=true})
+Catalog.effects.calculated_defense = E("calculated_defense","Calculated Defense","offense","unique",{priority="situational",group=true,wireV1Unavailable=true})
+Catalog.effects.sphere_of_influence = E("sphere_of_influence","Sphere of Influence","sustain","unique",{priority="situational",group=true,wireV1Unavailable=true})
+Catalog.effects.share_the_spoils = E("share_the_spoils","Share the Spoils","sustain","unique",{priority="situational",group=true,wireV1Unavailable=true})
+Catalog.effects.evasive_trance = E("evasive_trance","Evasive Trance","debuff","unique",{priority="situational",boss=true,wireV1Unavailable=true})
+Catalog.masterySources = {
+    {name="Tundra's Maw",provides={"major_brittle"}},
+    {name="Nature's Bounty",requires="Nature's Gift",rank=2,provides={"major_heroism"}},
+    {name="Bright Harbinger",requires="Illuminate",rank=2,provides={"bright_harbinger"}},
+    {name="Calculated Defense",provides={"calculated_defense"}},
+    {name="Sphere of Influence",provides={"sphere_of_influence"}},
+    {name="Share the Spoils",requires="Transfer",rank=2,provides={"share_the_spoils"}},
+    {name="Evasive Trance",provides={"evasive_trance"}},
+    {name="Lead From the Front",requires="The Storm Voice",rank=2,provides={"major_berserk","major_protection"}},
+    {name="Erudite's Rigor",requires="Fatewoven Armor",rank=1,provides={"minor_cowardice","major_vitality"}},
+    {name="Ink-Scribe's Verve",provides={"major_force"}},
+}

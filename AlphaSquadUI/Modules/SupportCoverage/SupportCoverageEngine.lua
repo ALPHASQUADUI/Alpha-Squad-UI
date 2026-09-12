@@ -44,12 +44,23 @@ local function MergeManualCapabilities(sc, entry)
     end
 end
 
+local function SnapshotView(source)
+    if not source then return nil end
+    local view = {}
+    for key, value in pairs(source) do view[key] = value end
+    view.capabilities = SC.Audit.Copy(source.capabilities or {})
+    if source.detailAt and SC.NowMs()-math.max(source.detailAt,source.detailAliveAt or 0)<=120000 then
+        for key,value in pairs(source.detailCapabilities or {}) do view.capabilities[key]=value end
+    end
+    return view
+end
+
 function SC:BuildRoster()
     local roster, byKey = {}, {}
     local groupSize = GetGroupSize and GetGroupSize() or 0
 
     if groupSize <= 0 then
-        local localData = self.localSnapshot or (self.ScanLocalPlayer and self:ScanLocalPlayer())
+        local localData = SnapshotView(self.localSnapshot or (self.ScanLocalPlayer and self:ScanLocalPlayer()))
         if localData then
             localData.unitTag = "player"
             localData.key = localData.displayName
@@ -77,19 +88,26 @@ function SC:BuildRoster()
 
             local entry
             if isSelf then
-                entry = self.localSnapshot or (self.ScanLocalPlayer and self:ScanLocalPlayer())
+                entry = SnapshotView(self.localSnapshot or (self.ScanLocalPlayer and self:ScanLocalPlayer()))
                 if entry then
                     entry.dataQuality = "ASUI"
                     entry.asui = true
                 end
             else
-                entry = self.peerData[key]
+                local peer = self.peerData[key]
+                entry = peer and SnapshotView(peer) or (self.ScanLimitedUnit and self:ScanLimitedUnit(unitTag))
                 if entry then
+                    if peer and self.NowMs() - (peer.scannedAt or 0) > 45000 then
+                        -- Keep fresh live/detail evidence but never keep old build capabilities green.
+                        entry.capabilities, entry.equipment = {}, nil
+                        if peer.detailAt and self.NowMs()-math.max(peer.detailAt,peer.detailAliveAt or 0)<=120000 then entry.capabilities=self.Audit.Copy(peer.detailCapabilities or {}) end
+                        entry.food, entry.potion = nil, nil
+                        entry.buildVerified = false
+                        entry.dataQuality = peer.liveUpdatedAt and "ASUI LIVE" or "STALE"
+                    end
                     entry.unitTag = unitTag
-                    entry.connected = IsUnitOnline and IsUnitOnline(unitTag) or true
-                    entry.dead = IsUnitDead and IsUnitDead(unitTag) or false
-                elseif self.ScanLimitedUnit then
-                    entry = self:ScanLimitedUnit(unitTag)
+                    entry.connected = self:IsOnline(unitTag)
+                    entry.dead = self.Try(IsUnitDead, unitTag) == true
                 end
             end
 
@@ -109,7 +127,10 @@ function SC:BuildRoster()
 
     -- Purge stale peer snapshots so rejoining players cannot inherit old build state.
     for key in pairs(self.peerData) do
-        if not activeKeys[key] then self.peerData[key] = nil end
+        if not activeKeys[key] then
+            self.peerData[key] = nil
+            if self.detailReceivers then self.detailReceivers[key] = nil end
+        end
     end
 
     table.sort(roster, function(a, b)
@@ -142,7 +163,7 @@ end
 function SC:GetCapabilityOwners(effectKey)
     local owners = {}
     for _, entry in ipairs(self.roster or {}) do
-        if entry.capabilities and entry.capabilities[effectKey] then
+        if entry.connected ~= false and entry.capabilities and entry.capabilities[effectKey] then
             owners[#owners + 1] = entry
         end
     end
@@ -162,15 +183,28 @@ end
 function SC:GetAssignedOwner(effectKey, owners)
     owners = owners or self:GetCapabilityOwners(effectKey)
     local locked = self.sv.assignmentLocks and self.sv.assignmentLocks[effectKey]
+    if locked and not self.byKey[locked] then return nil, true, "LOCKED_MISSING" end
     if locked and self.byKey[locked] then
         local entry = self.byKey[locked]
-        if entry.capabilities and entry.capabilities[effectKey] then
+        if entry.connected ~= false and entry.capabilities and entry.capabilities[effectKey] then
             return entry, true
         end
         return entry, true, "LOCKED_MISSING"
     end
 
-    if self.sv.autoAssign and owners[1] then return owners[1], false end
+    self.assignmentLoad = self.assignmentLoad or {}
+    if self.sv.autoAssign and owners[1] then
+        -- Spread duties across observed capable owners; never fabricate equipment swaps.
+        local chosen, bestScore
+        for _, owner in ipairs(owners) do
+            local score = RoleScore(effectKey, owner.role) - 12 * ((self.assignmentLoad or {})[owner.key] or 0)
+            if owner.connected ~= false and (not bestScore or score > bestScore) then chosen, bestScore = owner, score end
+        end
+        if chosen then
+            self.assignmentLoad[chosen.key] = (self.assignmentLoad[chosen.key] or 0) + 1
+            return chosen, false
+        end
+    end
     return nil, false
 end
 
@@ -180,6 +214,7 @@ local function IsBackup(sc, effectKey, playerKey)
 end
 
 function SC:EvaluateCoverage(reason)
+    self.assignmentLoad = {}
     local profileKey = self.sv.activeProfile or "full"
     local requirements = Catalog:GetRequirements(profileKey, self.sv)
     local result = {
@@ -205,12 +240,12 @@ function SC:EvaluateCoverage(reason)
         if player.dataQuality == "ASUI" then
             result.asuiPlayers = result.asuiPlayers + 1
             local food = player.food
-            if food and food.active == false then
+            if self.sv.checkFoodPresence and food and food.verified == true and food.active == false then
                 result.foodMissing[#result.foodMissing + 1] = player.displayName
             end
             local missingGlyphs = player.equipment and player.equipment.glyphs
                 and tonumber(player.equipment.glyphs.armorMissing) or 0
-            if missingGlyphs > 0 then
+            if self.sv.checkMissingGlyphs and missingGlyphs > 0 then
                 result.glyphMissing[#result.glyphMissing + 1] = {
                     player = player.displayName,
                     count = missingGlyphs,
@@ -221,16 +256,34 @@ function SC:EvaluateCoverage(reason)
         end
     end
 
+    for _, player in ipairs(self.roster or {}) do
+        player.audit = self:EvaluateBuildAudit(player)
+        for _, check in ipairs(player.audit.rows) do
+            if check.status == "MISMATCH" then
+                result.issues[#result.issues + 1] = {severity=check.mode == "REQUIRED" and "error" or "warning", text=player.displayName .. " - " .. check.label .. " mismatch"}
+            elseif check.status == "UNKNOWN" then
+                result.issues[#result.issues + 1] = {severity="unknown", text=player.displayName .. " - " .. check.label .. " unverified"}
+            end
+        end
+        if player.audit.requiredFailures > 0 or player.audit.requiredUnknown > 0 then result.ready = false end
+    end
+
     for _, effectKey in ipairs(requirements) do
         local effect = Catalog.effects[effectKey]
         local owners = self:GetCapabilityOwners(effectKey)
         local assigned, locked, lockProblem = self:GetAssignedOwner(effectKey, owners)
 
+        local unsupportedPeer=false
+        if effect.wireV1Unavailable then
+            for _,player in ipairs(self.roster) do
+                if not self:IsSelf(player.unitTag) and (not player.detailAt or self.NowMs()-math.max(player.detailAt,player.detailAliveAt or 0)>120000) then unsupportedPeer=true end
+            end
+        end
         local status
         if #owners > 0 then
             status = "covered"
             result.coveredCount = result.coveredCount + 1
-        elseif result.limitedPlayers > 0 and self.sv.showUnknown then
+        elseif (result.limitedPlayers > 0 or unsupportedPeer) and self.sv.showUnknown then
             status = "unknown"
             result.unknownCount = result.unknownCount + 1
         else
@@ -316,10 +369,19 @@ function SC:EvaluateCoverage(reason)
     end
 
     -- UNKNOWN data never becomes a false hard failure; the raidlead sees LIMITED instead.
-    if result.missingCount == 0 and #result.foodMissing == 0 and #result.glyphMissing == 0 then
-        result.ready = true
+    if result.unknownCount > 0 then result.ready = false end
+    -- Never overwrite errors from locked owners or REQUIRED build checks.
+    for _, issue in ipairs(result.issues) do
+        if issue.severity == "error" then result.ready = false end
     end
 
+    local severity = {error=1, warning=2, unknown=3}
+    table.sort(result.issues, function(a, b)
+        local sa, sb = severity[a.severity] or 4, severity[b.severity] or 4
+        if sa ~= sb then return sa < sb end
+        return a.text < b.text
+    end)
+    result.budgetEvidence = "PLANNED_ONLY"
     self.coverage = result
 
     if not self.inCombat and self.sv.showReadyBanner and self.ShowReadyBanner then
@@ -329,204 +391,3 @@ function SC:EvaluateCoverage(reason)
     return result
 end
 
-local function MatchObservedEffect(name, effect, abilityId)
-    if SC.sv and SC.sv.customCatalog and effect and SC.sv.customCatalog[effect.key] then
-        if SC.sv.customCatalog[effect.key][tostring(tonumber(abilityId) or 0)] then return true end
-    end
-
-    local observed = Normalize(name)
-    local target = Normalize(effect.label)
-    if observed == target then return true end
-    if observed:find(target, 1, true) then return true end
-
-    -- ESO sometimes exposes split legacy names for hybridized paired effects.
-    if effect.key == "major_brutality_sorcery" then
-        return observed:find("major brutality",1,true) or observed:find("major sorcery",1,true)
-    elseif effect.key == "minor_brutality_sorcery" then
-        return observed:find("minor brutality",1,true) or observed:find("minor sorcery",1,true)
-    elseif effect.key == "major_savagery_prophecy" then
-        return observed:find("major savagery",1,true) or observed:find("major prophecy",1,true)
-    elseif effect.key == "minor_savagery_prophecy" then
-        return observed:find("minor savagery",1,true) or observed:find("minor prophecy",1,true)
-    end
-
-    return false
-end
-
-function SC:ObserveEffectsOnUnit(unitTag)
-    local observed = {}
-    if not GetNumBuffs or not GetUnitBuffInfo or not unitTag then return observed, false end
-
-    local ok, count = pcall(GetNumBuffs, unitTag)
-    if not ok or not tonumber(count) then return observed, false end
-    count = tonumber(count) or 0
-
-    for i = 1, count do
-        local success, name, _, ending, _, stacks, _, _, _, _, statusEffectType, abilityId =
-            pcall(GetUnitBuffInfo, unitTag, i)
-        if success and name and name ~= "" then
-            for key, effect in pairs(Catalog.effects) do
-                if MatchObservedEffect(name, effect, abilityId) then
-                    observed[key] = {
-                        name = name,
-                        abilityId = tonumber(abilityId) or 0,
-                        ending = tonumber(ending) or 0,
-                        stacks = tonumber(stacks) or 0,
-                        statusEffectType = statusEffectType,
-                    }
-                end
-            end
-        end
-    end
-
-    return observed, true
-end
-
-function SC:ObserveBossEffects()
-    local combined = {}
-    local readable = false
-    local tags = {"boss1","boss2","boss3","boss4","boss5","boss6","reticleover"}
-
-    for _, unitTag in ipairs(tags) do
-        local exists = true
-        if DoesUnitExist then
-            local ok, value = pcall(DoesUnitExist, unitTag)
-            if ok then exists = value == true end
-        end
-
-        if exists then
-            local observed, canRead = self:ObserveEffectsOnUnit(unitTag)
-            if canRead then
-                readable = true
-                for key, value in pairs(observed or {}) do
-                    combined[key] = value
-                end
-            end
-        end
-    end
-
-    return combined, readable
-end
-
-function SC:SampleLiveCoverage()
-    if not self.inCombat or not self.sv or not self.sv.enabled then return end
-    local coverage = self.coverage
-    if not coverage or not coverage.entries then return end
-
-    if self.ShareLiveSnapshot then self:ShareLiveSnapshot() end
-
-    local now = self.NowMs()
-    local bossObserved, bossReadable = self:ObserveBossEffects()
-
-    -- Verified group coverage uses each ASUI client observing its own buffs.
-    local verifiedPlayers = {}
-    local verifiedTotal = 0
-    for _, player in ipairs(self.roster or {}) do
-        local liveCaps = nil
-        if player.unitTag == "player" or (AreUnitsEqual and pcall(AreUnitsEqual, player.unitTag, "player") and AreUnitsEqual(player.unitTag, "player")) then
-            if not self.localLive or now - (self.localLive.updatedAt or 0) > 3500 then
-                if self.GetLocalLiveCapabilities then self:GetLocalLiveCapabilities() end
-            end
-            liveCaps = self.localLive and self.localLive.capabilities or nil
-        elseif player.dataQuality == "ASUI" and player.liveCapabilities and now - (player.liveUpdatedAt or 0) <= 5500 then
-            liveCaps = player.liveCapabilities
-        end
-
-        if liveCaps then
-            verifiedPlayers[#verifiedPlayers + 1] = {player=player, caps=liveCaps}
-            verifiedTotal = verifiedTotal + 1
-        end
-    end
-
-    local groupSize = #(self.roster or {})
-    local sampleMs = 1500
-
-    for _, row in ipairs(coverage.entries) do
-        local key = row.key
-        local effect = row.effect
-        local known, live, count, total, unknown = false, false, 0, 0, 0
-
-        if effect.boss and bossReadable then
-            known = true
-            live = bossObserved[key] ~= nil
-            count = live and 1 or 0
-            total = 1
-        elseif effect.group and verifiedTotal > 0 then
-            known = true
-            total = verifiedTotal
-            unknown = math.max(0, groupSize - verifiedTotal)
-            for _, verified in ipairs(verifiedPlayers) do
-                if verified.caps[key] then count = count + 1 end
-            end
-            live = count > 0
-        end
-
-        row.liveKnown = known
-        row.live = live
-        row.liveCount = count
-        row.liveTotal = total
-        row.liveUnknown = unknown
-
-        if self.pull and known then
-            self.pull.samples = (self.pull.samples or 0) + 1
-            self.pull.effectKnownMs = self.pull.effectKnownMs or {}
-            self.pull.effectKnownMs[key] = (self.pull.effectKnownMs[key] or 0) + sampleMs
-            self.pull.effectUpMs[key] = self.pull.effectUpMs[key] or 0
-            self.pull.longestGapMs[key] = self.pull.longestGapMs[key] or 0
-
-            if live then
-                self.pull.effectUpMs[key] = self.pull.effectUpMs[key] + sampleMs
-                local started = self.pull.gapStartedAt[key]
-                if started then
-                    self.pull.longestGapMs[key] = math.max(self.pull.longestGapMs[key], now - started)
-                    self.pull.gapStartedAt[key] = nil
-                end
-            elseif not self.pull.gapStartedAt[key] then
-                self.pull.gapStartedAt[key] = now
-            end
-        end
-    end
-
-    if self.RefreshHUD then self:RefreshHUD() end
-end
-
-function SC:SetLiveUpdateActive(enabled)
-    enabled = enabled == true
-    if self.liveUpdateActive == enabled then return end
-    self.liveUpdateActive = enabled
-    local name = "AlphaSquadUI_SupportCoverage_Live"
-
-    if enabled then
-        EM:RegisterForUpdate(name, 1500, function()
-            if SC then SC:SampleLiveCoverage() end
-        end)
-    else
-        EM:UnregisterForUpdate(name)
-    end
-end
-
-function SC:FinalizePull()
-    if not self.pull then return end
-    local now = self.NowMs()
-    local pull = self.pull
-    pull.endedAt = now
-    pull.durationMs = math.max(0, now - (pull.startedAt or now))
-    pull.summary = {}
-
-    for key, knownMs in pairs(pull.effectKnownMs or {}) do
-        local upMs = pull.effectUpMs[key] or 0
-        local started = pull.gapStartedAt[key]
-        if started then
-            pull.longestGapMs[key] = math.max(pull.longestGapMs[key] or 0, now - started)
-        end
-        pull.summary[key] = {
-            uptime = knownMs > 0 and math.floor((upMs / knownMs) * 1000 + 0.5) / 10 or nil,
-            longestGapMs = pull.longestGapMs[key] or 0,
-        }
-    end
-
-    self.lastPull = pull
-    self.pull = nil
-    self:SetLiveUpdateActive(false)
-    if self.ShowPullSummaryBanner then self:ShowPullSummaryBanner(pull) end
-end

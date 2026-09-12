@@ -12,7 +12,7 @@ AlphaSquadUI.Modules.SupportCoverage = SC
 
 SC.name = "SupportCoverage"
 SC.displayName = "Support Coverage"
-SC.version = (AlphaSquadUI and AlphaSquadUI.version) or "2.7.0-support-coverage-test"
+SC.version = (AlphaSquadUI and AlphaSquadUI.version) or "2.7.0-support-coverage-test.1"
 SC.savedVarsName = "AlphaSquadSupportCoverageSavedVariables"
 SC.catalogPatch = "U50"
 SC.initialized = false
@@ -103,6 +103,7 @@ function SC:EnsureSavedVariables()
     self.sv.opacity = Clamp(self.sv.opacity, 30, 100)
     self.sv.width = Clamp(self.sv.width, 300, 680)
     self.sv.rowHeight = Clamp(self.sv.rowHeight, 24, 48)
+    if self.EnsureAuditSettings then self:EnsureAuditSettings() end
 
     local tableKeys = {
         "roleOverrides", "assignmentLocks", "duplicateBackups", "manualCapabilities",
@@ -127,6 +128,7 @@ end
 
 function SC:MarkScanDirty(reason)
     self.scanDirty = true
+    if not self.sv or not self.sv.enabled then return end
     self:ScheduleRefresh(reason or "dirty", 80)
 end
 
@@ -143,6 +145,8 @@ end
 
 function SC:Refresh(reason)
     if not self.initialized or not self.sv then return end
+    if self.CheckGroupSession then self:CheckGroupSession() end
+    if not self.sv.enabled then return end
 
     if self.scanDirty and self.ScanLocalPlayer then
         self.localSnapshot = self:ScanLocalPlayer()
@@ -150,16 +154,36 @@ function SC:Refresh(reason)
         if self.ShareLocalSnapshot then self:ShareLocalSnapshot("scan") end
     end
 
+    if self.RefreshReadinessFacts then self:RefreshReadinessFacts() end
+    if self.sv.autoContextProfile and not self.inCombat then
+        local context=self:GetContextKey()
+        if context~=self.lastAutoContext then
+            self.lastAutoContext=context
+            if self.sv.contextProfiles[context] then self:LoadContextProfile(context); return end
+        end
+    end
+    if self.buildPlan then self.buildPlan.stale=true end
     if self.BuildRoster then self:BuildRoster() end
     if self.EvaluateCoverage then self:EvaluateCoverage(reason) end
+    if self.MaybeBroadcastPlan then self:MaybeBroadcastPlan() end
+    if not self.inCombat and self.share then
+        if self.NowMs()-(self.share.lastSendAt or 0)>10000 then self:ShareLocalSnapshot("heartbeat") end
+        if self.QueueBuildDetails then self:QueueBuildDetails(false) end
+    end
     if self.RefreshHUD then self:RefreshHUD() end
     if self.RefreshSettings then self:RefreshSettings() end
 end
 
 function SC:SetEnabled(enabled)
     self.sv.enabled = enabled == true
-    if not self.sv.enabled and self.SetLiveUpdateActive then
-        self:SetLiveUpdateActive(false)
+    if not self.sv.enabled then
+        self.combatEndGeneration = (self.combatEndGeneration or 0) + 1
+        if self.pull then self:FinalizePull() end
+        self.inCombat = false
+        if self.SetLiveUpdateActive then self:SetLiveUpdateActive(false) end
+        if self.reportWindow then self.reportWindow:SetHidden(true) end
+    elseif self.Try and self.Try(IsUnitInCombat, "player") == true then
+        self:OnCombatState(true)
     end
     if self.ApplyVisibility then self:ApplyVisibility() end
     self:Refresh("enabled")
@@ -186,16 +210,8 @@ function SC:SetActiveProfile(profileKey)
 end
 
 function SC:GetContextKey()
-    local zone = GetUnitZone and GetUnitZone("player") or "Unknown Zone"
-    if not zone or zone == "" then zone = "Unknown Zone" end
-
-    local boss = ""
-    if DoesUnitExist and DoesUnitExist("reticleover") and GetUnitName then
-        boss = GetUnitName("reticleover") or ""
-    end
-
-    if boss ~= "" then return tostring(zone) .. " • " .. tostring(boss) end
-    return tostring(zone)
+    if self.GetEncounterMetadata then return self:GetEncounterMetadata().key end
+    return "Unknown context"
 end
 
 local function ShallowCopy(source)
@@ -215,6 +231,12 @@ function SC:SaveContextProfile(name)
     if name == "" then return nil end
     self.sv.contextProfiles[name] = {
         activeProfile = self.sv.activeProfile,
+        checkModes = ShallowCopy(self.sv.checkModes),
+        championScope=self.sv.championScope,
+        minimumMeasuredPercent=self.sv.minimumMeasuredPercent,
+        effectRules = ShallowCopy(self.sv.effectRules),
+        buildTemplates = ShallowCopy(self.sv.buildTemplates),
+        playerTemplates = ShallowCopy(self.sv.playerTemplates),
         profileOverrides = ShallowCopy(self.sv.profileOverrides),
         assignmentLocks = ShallowCopy(self.sv.assignmentLocks),
         duplicateBackups = ShallowCopy(self.sv.duplicateBackups),
@@ -231,12 +253,18 @@ function SC:LoadContextProfile(name)
     if type(profile) ~= "table" then return false end
 
     self.sv.activeProfile = profile.activeProfile or self.sv.activeProfile
+    self.sv.championScope=profile.championScope or self.sv.championScope
+    self.sv.minimumMeasuredPercent=profile.minimumMeasuredPercent or self.sv.minimumMeasuredPercent
+    for _,key in ipairs({"checkModes","effectRules","buildTemplates","playerTemplates"}) do
+        if type(profile[key])=="table" then self.sv[key]=ShallowCopy(profile[key]) end
+    end
     self.sv.profileOverrides = ShallowCopy(profile.profileOverrides or {})
     self.sv.assignmentLocks = ShallowCopy(profile.assignmentLocks or {})
     self.sv.duplicateBackups = ShallowCopy(profile.duplicateBackups or {})
     self.sv.roleOverrides = ShallowCopy(profile.roleOverrides or {})
     self.lastContextProfile = name
     self:Refresh("context profile")
+    if self.SchedulePlanBroadcast then self:SchedulePlanBroadcast() end
     return true
 end
 
@@ -248,32 +276,38 @@ function SC:AddCustomEffectId(effectKey, abilityId)
 
     self.sv.customCatalog[effectKey] = self.sv.customCatalog[effectKey] or {}
     self.sv.customCatalog[effectKey][tostring(math.floor(abilityId))] = true
+    if self.RebuildEffectIndex then self:RebuildEffectIndex() end
     return true
 end
 
 function SC:OnCombatState(inCombat)
-    inCombat = inCombat == true
-    if self.inCombat == inCombat then return end
-    self.inCombat = inCombat
-
+    if not self.sv or not self.sv.enabled then return end
+    self.combatEndGeneration = (self.combatEndGeneration or 0) + 1
+    local generation = self.combatEndGeneration
     if inCombat then
-        self.pull = {
-            startedAt = NowMs(),
-            samples = 0,
-            effectKnownMs = {},
-            effectUpMs = {},
-            longestGapMs = {},
-            gapStartedAt = {},
-        }
-        if self.HideReadyBanner then self:HideReadyBanner() end
-    else
-        if self.FinalizePull then self:FinalizePull() end
+        if self.inCombat then return end
+        self.inCombat = true
+        self:StartPull()
+        self:HideReadyBanner()
+        self:SetLiveUpdateActive(true)
+        self:Refresh("combat start")
+        self:SampleLiveCoverage()
+        return
     end
-
-    if self.SetLiveUpdateActive then
-        self:SetLiveUpdateActive(inCombat and self.sv.enabled)
+    if not self.inCombat then return end
+    local function FinishWhenQuiet()
+        if generation ~= SC.combatEndGeneration or not SC.inCombat then return end
+        local fighting = SC.Try(IsUnitInCombat, "player") == true
+        for index = 1, math.min(12, GetGroupSize and GetGroupSize() or 0) do
+            local tag = SC.Try(GetGroupUnitTagByIndex, index) or ("group" .. index)
+            if SC.Try(IsUnitInCombat, tag) == true then fighting = true end
+        end
+        if fighting then zo_callLater(FinishWhenQuiet, 1500); return end
+        SC.inCombat = false
+        SC:FinalizePull()
+        SC:Refresh("combat end")
     end
-    self:Refresh(inCombat and "combat start" or "combat end")
+    zo_callLater(FinishWhenQuiet, 1500)
 end
 
 function SC:RegisterEvents()
@@ -311,8 +345,12 @@ function SC:RegisterEvents()
         EM:RegisterForEvent(prefix .. "_Activated", EVENT_PLAYER_ACTIVATED, function()
             zo_callLater(function()
                 if SC then
+                    SC.groupSessionReady = true
+                    SC:CheckGroupSession()
                     SC:RefreshUIObscured()
                     SC:MarkScanDirty("activated")
+                    SC:CheckGroupSession()
+                    if SC.Try(IsUnitInCombat, "player") == true then SC:OnCombatState(true) end
                 end
             end, 350)
         end)
@@ -345,6 +383,26 @@ function SC:RegisterEvents()
         end)
     end
 
+    if EVENT_EFFECT_CHANGED then
+        local effectEvent = prefix .. "_LocalEffects"
+        EM:RegisterForEvent(effectEvent, EVENT_EFFECT_CHANGED, function(_, _, _, _, unitTag)
+            if unitTag == "player" then SC:ScheduleObservation() end
+        end)
+        if REGISTER_FILTER_UNIT_TAG then EM:AddFilterForEvent(effectEvent, EVENT_EFFECT_CHANGED, REGISTER_FILTER_UNIT_TAG, "player") end
+    end
+    if EVENT_INVENTORY_ITEM_USED then
+        EM:RegisterForEvent(prefix .. "_ConsumableUsed", EVENT_INVENTORY_ITEM_USED, function(_, soundCategory)
+            if SC.sv.enabled then SC:OnConsumableUsed(soundCategory) end
+        end)
+    end
+    -- Only committed build changes invalidate the heavier scanner.
+    for _, definition in ipairs({
+        {"Champion", EVENT_CHAMPION_PURCHASE_RESULT}, {"SkillPoints", EVENT_SKILL_POINTS_CHANGED},
+        {"SkillLines", EVENT_SKILL_LINE_ADDED}, {"Quickslot", EVENT_CURRENT_QUICKSLOT_CHANGED},
+    }) do
+        if definition[2] then EM:RegisterForEvent(prefix .. "_" .. definition[1], definition[2], Dirty) end
+    end
+
     if EVENT_SCREEN_RESIZED then
         EM:RegisterForEvent(prefix .. "_Screen", EVENT_SCREEN_RESIZED, function()
             zo_callLater(function()
@@ -352,6 +410,7 @@ function SC:RegisterEvents()
                     SC:ApplyAppearance()
                     SC:ClampToScreen(true)
                     SC:RefreshHUD()
+                    if SC.ResizeInspector then SC:ResizeInspector() end
                 end
             end, 50)
         end)
@@ -359,7 +418,9 @@ function SC:RegisterEvents()
 
     -- Slow recovery sync. Heavy scans only run when scanDirty is set.
     EM:RegisterForUpdate(prefix .. "_Safety", 2500, function()
-        if not SC or not SC.sv or not SC.sv.enabled then return end
+        if not SC or not SC.sv then return end
+        SC:CheckGroupSession()
+        if not SC.sv.enabled then return end
         if SC.uiObscured and not (SC.settingsPageVisible or false) then return end
         SC:Refresh("safety")
     end)
@@ -416,6 +477,31 @@ function SC:RegisterSlashCommands()
                 tonumber(c.coveredCount) or 0,
                 tonumber(c.requiredCount) or 0,
                 tonumber(c.limitedPlayers) or 0))
+        elseif lower == "history" then
+            SC:OpenInspector("HISTORY")
+        elseif lower == "report" then
+            local pulls = SC:GetHistoryPulls()
+            if pulls[#pulls] then SC:OpenPullReport(pulls[#pulls]) else SC:OpenInspector("HISTORY") end
+        elseif lower == "reset history" then
+            SC:ResetHistory("Manual reset")
+        elseif lower == "audit" or lower == "checks" then
+            SC:OpenInspector("CHECKS")
+        elseif lower == "build" then
+            SC:OpenInspector("BUILD")
+        elseif lower == "expected" then
+            SC:OpenInspector("EXPECTED")
+        elseif lower:match("^capture%s+") then
+            local role = string.upper(arg:sub(9))
+            local allowed = {MT=true, OT=true, H1=true, H2=true, ["DD PARSE"]=true, ["DD SUPPORT"]=true}
+            if allowed[role] then
+                local _, message = SC:CaptureExpectedBuild(role)
+                d("|cE66A19[AS SUPPORT]|r " .. message)
+            end
+        elseif lower:match("^mundus%s+%d+$") then
+            local id = lower:match("^mundus%s+(%d+)$")
+            SC.sv.mundusAbilityIds = SC.sv.mundusAbilityIds or {}
+            SC.sv.mundusAbilityIds[id] = true
+            SC:MarkScanDirty("Mundus identity")
         elseif lower == "matrix" then
             if SC.OpenMatrix then SC:OpenMatrix() end
         elseif lower == "saveprofile" then
@@ -437,6 +523,8 @@ end
 function SC:Initialize()
     if self.initialized then return end
     self:EnsureSavedVariables()
+    self:EnsureHistorySession()
+    self:RebuildEffectIndex()
     self.initialized = true
 
     if self.CreateHUD then self:CreateHUD() end

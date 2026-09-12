@@ -1,0 +1,57 @@
+name: Support Coverage branch tests
+on:
+  push:
+    branches: [support-coverage]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: support-coverage-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  validate:
+    if: github.ref == 'refs/heads/support-coverage'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Lua validators
+        run: sudo apt-get update && sudo apt-get install -y lua5.1 lua5.4 zip
+      - name: Validate Lua syntax
+        run: |
+          set -euo pipefail
+          find AlphaSquadUI -name '*.lua' -print0 | xargs -0 -n1 luac5.1 -p
+          find AlphaSquadUI -name '*.lua' -print0 | xargs -0 -n1 luac5.4 -p
+      - name: Validate manifest
+        run: |
+          python3 - <<'PY'
+          import pathlib,re
+          root=pathlib.Path('AlphaSquadUI')
+          text=(root/'AlphaSquadUI.txt').read_text()
+          paths=[line.strip() for line in text.splitlines() if line.strip() and not line.startswith('##')]
+          assert len(paths)==len(set(paths)), 'Duplicate manifest path'
+          assert all((root/path).is_file() for path in paths), 'Missing manifest file'
+          version=re.search(r'^## Version: (.+)$',text,re.M).group(1)
+          assert f'ASUI.version = "{version}"' in (root/'Core/Core.lua').read_text()
+          assert re.search(r'^## AddOnVersion: [0-9]+$',text,re.M)
+          print('Manifest and version checks passed')
+          PY
+      - name: Run regression tests when present
+        run: |
+          if test -f tests/support_coverage.lua; then
+            lua5.1 tests/support_coverage.lua
+            lua5.4 tests/support_coverage.lua
+          fi
+      - name: Package source for independent review
+        if: always()
+        run: zip -r SupportCoverage-review-source.zip AlphaSquadUI docs .github tests -x '*/.gitkeep' || test -f SupportCoverage-review-source.zip
+      - name: Package installable test addon
+        run: zip -r AlphaSquadUI-support-coverage-test.zip AlphaSquadUI -x '*/.gitkeep'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: SupportCoverage-review-source
+          path: SupportCoverage-review-source.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AlphaSquadUI-support-coverage-test
+          path: AlphaSquadUI-support-coverage-test.zip
