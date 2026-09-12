@@ -1616,17 +1616,18 @@ function AOT:CreateSettingsWindow()
 
     AddNavButton("overload", "Overload", 50)
     AddNavButton("ulttracker", "ULT Tracker", 94)
+    AddNavButton("supportcoverage", "Support Coverage", 138)
 
     local communityHeader = CreateLabel(sidebar, "AlphaSquadCommunityNavHeader", "ZoFontGameBold", "COMMUNITY", COLORS.orange)
     communityHeader:SetDimensions(158, 24)
-    communityHeader:SetAnchor(TOPLEFT, sidebar, TOPLEFT, 18, 156)
+    communityHeader:SetAnchor(TOPLEFT, sidebar, TOPLEFT, 18, 200)
     communityHeader:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
-    AddNavButton("community", "Website & About", 188)
+    AddNavButton("community", "Website & About", 232)
 
     local future = CreateLabel(sidebar, "AlphaSquadFutureModules", "ZoFontGameSmall",
         "Future Ąlpha Şquad modules\nwill appear here.", COLORS.muted)
     future:SetDimensions(154, 48)
-    future:SetAnchor(TOPLEFT, sidebar, TOPLEFT, 18, 249)
+    future:SetAnchor(TOPLEFT, sidebar, TOPLEFT, 18, 293)
     future:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
     future:SetVerticalAlignment(TEXT_ALIGN_TOP)
 
@@ -1734,6 +1735,28 @@ function AOT:CreateSettingsWindow()
             "ULT Tracker is not available in this build.", COLORS.muted)
         unavailable:SetDimensions(620, 80)
         unavailable:SetAnchor(TOPLEFT, ultTrackerPage, TOPLEFT, 9, 64)
+        unavailable:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
+    end
+
+    -- SUPPORT COVERAGE MODULE PAGE
+    local supportCoveragePage = CreatePage("supportcoverage")
+    local supportBuilder = AlphaSquadUI
+        and AlphaSquadUI.Settings
+        and AlphaSquadUI.Settings.GetPageBuilder
+        and AlphaSquadUI.Settings.GetPageBuilder("supportcoverage")
+
+    if supportBuilder then
+        supportBuilder(supportCoveragePage, pageUI)
+    else
+        local unavailableTitle = CreateLabel(supportCoveragePage, "AlphaSquadSupportUnavailableTitle", "ZoFontWinH2", "SUPPORT COVERAGE", COLORS.white)
+        unavailableTitle:SetDimensions(420, 32)
+        unavailableTitle:SetAnchor(TOPLEFT, supportCoveragePage, TOPLEFT, 8, 2)
+        unavailableTitle:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
+
+        local unavailable = CreateLabel(supportCoveragePage, "AlphaSquadSupportUnavailableText", "ZoFontGame",
+            "Support Coverage is not available in this build.", COLORS.muted)
+        unavailable:SetDimensions(620, 80)
+        unavailable:SetAnchor(TOPLEFT, supportCoveragePage, TOPLEFT, 9, 64)
         unavailable:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
     end
 
