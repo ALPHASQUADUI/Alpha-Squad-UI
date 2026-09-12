@@ -18,11 +18,10 @@ local COLORS = ULT.COLORS or {
     gold = {0.97, 0.78, 0.30, 1.00},
 }
 
-local ROW_W = 300
-local ROW_H = 36
+local BASE_self:GetListWidth() = 312
+local BASE_self:GetRowHeight() = 36
 local HEADER_H = 16
 local GAP = 1
-local WINDOW_W = 312
 
 local READY_ORANGE = {1.00, 0.46, 0.05, 1.00}
 local READY_GOLD = {1.00, 0.82, 0.18, 1.00}
@@ -49,9 +48,81 @@ local function Label(parent, name, font, text, color)
     return label
 end
 
+function Group:GetListWidth()
+    return ULT.Clamp(self.sv and self.sv.hudWidth or BASE_self:GetListWidth(), 240, 520)
+end
+
+function Group:GetRowHeight()
+    return ULT.Clamp(self.sv and self.sv.rowHeight or BASE_self:GetRowHeight(), 28, 56)
+end
+
+function Group:GetIconSize()
+    return ULT.Clamp(self:GetRowHeight() - 8, 20, 44)
+end
+
+function Group:GetRowWidth()
+    return math.max(228, self:GetListWidth() - 12)
+end
+
+function Group:ApplyRowGeometry(row)
+    if not row then return end
+
+    local width = self:GetRowWidth()
+    local height = self:GetRowHeight()
+    local iconSize = self:GetIconSize()
+    local iconBorder = iconSize + 4
+    local iconX = 7
+    local userX = iconX + iconBorder + 8
+    local percentWidth = 58
+    local rightPadding = 8
+    local userWidth = math.max(90, width - userX - percentWidth - rightPadding - 8)
+
+    row:SetDimensions(width, height)
+    row.accent:SetDimensions(4, height)
+
+    row.iconBorder:SetDimensions(iconBorder, iconBorder)
+    row.iconBorder:ClearAnchors()
+    row.iconBorder:SetAnchor(LEFT, row, LEFT, iconX, 0)
+
+    row.icon:SetDimensions(iconSize, iconSize)
+
+    row.user:SetDimensions(userWidth, height)
+    row.user:ClearAnchors()
+    row.user:SetAnchor(LEFT, row, LEFT, userX, 0)
+
+    row.percent:SetDimensions(percentWidth, height)
+    row.percent:ClearAnchors()
+    row.percent:SetAnchor(RIGHT, row, RIGHT, -rightPadding, 0)
+
+    local progressWidth = math.max(80, width - userX - 8)
+    row.progressBG:SetDimensions(progressWidth, 2)
+    row.progress:SetHeight(2)
+
+    row.geometryProgressWidth = progressWidth
+end
+
+function Group:ApplyListGeometry()
+    if not self.window then return end
+
+    local width = self:GetListWidth()
+    self.window:SetWidth(width)
+
+    if self.window.dragSurface then
+        self.window.dragSurface:SetWidth(width)
+    end
+
+    if self.window.empty then
+        self.window.empty:SetWidth(math.max(100, width - 20))
+    end
+
+    for _, row in ipairs(self.window.rows or {}) do
+        self:ApplyRowGeometry(row)
+    end
+end
+
 local function CreateRow(parent, index)
     local row = WINDOW_MANAGER:CreateControl("AlphaSquadULTGroupListRow" .. index, parent, CT_CONTROL)
-    row:SetDimensions(ROW_W, ROW_H)
+    row:SetDimensions(BASE_self:GetListWidth() - 12, BASE_self:GetRowHeight())
 
     row.bg = Solid(row, "AlphaSquadULTGroupListRow" .. index .. "BG", {0.016, 0.024, 0.042, 0.92})
 
@@ -61,7 +132,7 @@ local function CreateRow(parent, index)
     row.readyOverlay:SetColor(1.00, 0.46, 0.05, 0)
 
     row.accent = WINDOW_MANAGER:CreateControl("AlphaSquadULTGroupListRow" .. index .. "Accent", row, CT_TEXTURE)
-    row.accent:SetDimensions(4, ROW_H)
+    row.accent:SetDimensions(4, BASE_self:GetRowHeight())
     row.accent:SetAnchor(TOPLEFT, row, TOPLEFT, 0, 0)
     SetColor(row.accent, COLORS.cyan, 0.28)
 
@@ -76,7 +147,7 @@ local function CreateRow(parent, index)
     row.icon:SetTextureCoords(0.04, 0.96, 0.04, 0.96)
 
     row.user = Label(row, "AlphaSquadULTGroupListRow" .. index .. "User", "ZoFontGameBold", "", COLORS.white)
-    row.user:SetDimensions(184, ROW_H)
+    row.user:SetDimensions(184, BASE_self:GetRowHeight())
     row.user:SetAnchor(LEFT, row, LEFT, 47, 0)
     row.user:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
     row.user:SetMaxLineCount(1)
@@ -85,12 +156,12 @@ local function CreateRow(parent, index)
     end
 
     row.percent = Label(row, "AlphaSquadULTGroupListRow" .. index .. "Percent", "ZoFontGameBold", "", COLORS.white)
-    row.percent:SetDimensions(60, ROW_H)
+    row.percent:SetDimensions(60, BASE_self:GetRowHeight())
     row.percent:SetAnchor(RIGHT, row, RIGHT, -8, 0)
     row.percent:SetHorizontalAlignment(TEXT_ALIGN_RIGHT)
 
     row.progressBG = WINDOW_MANAGER:CreateControl("AlphaSquadULTGroupListRow" .. index .. "ProgressBG", row, CT_TEXTURE)
-    row.progressBG:SetDimensions(ROW_W - 52, 2)
+    row.progressBG:SetDimensions(BASE_self:GetListWidth() - 64, 2)
     row.progressBG:SetAnchor(BOTTOMRIGHT, row, BOTTOMRIGHT, -8, -3)
     row.progressBG:SetColor(0.04, 0.06, 0.09, 0.90)
 
@@ -105,13 +176,13 @@ local function CreateRow(parent, index)
 end
 
 function Group:GetWindowBaseWidth()
-    return WINDOW_W
+    return self:GetListWidth()
 end
 
 function Group:GetDefaultPosition()
     local rootW = GuiRoot and GuiRoot:GetWidth() or 1920
     local rootH = GuiRoot and GuiRoot:GetHeight() or 1080
-    return math.max(8, math.floor(rootW - WINDOW_W - 30)), math.floor(rootH * 0.16)
+    return math.max(8, math.floor(rootW - self:GetListWidth() - 30)), math.floor(rootH * 0.16)
 end
 
 function Group:GetEffectiveScale()
@@ -122,7 +193,7 @@ function Group:GetEffectiveScale()
     local requested = (self.sv.scale or 100) / 100
     local rootW = GuiRoot:GetWidth() or 1920
     local rootH = GuiRoot:GetHeight() or 1080
-    local baseW = self.window:GetWidth() or WINDOW_W
+    local baseW = self.window:GetWidth() or self:GetListWidth()
     local baseH = self.window:GetHeight() or 100
 
     local fitX = math.max(0.55, (rootW - 20) / math.max(1, baseW))
@@ -136,7 +207,7 @@ function Group:ClampToScreen(saveIfChanged)
     local rootW = GuiRoot:GetWidth() or 1920
     local rootH = GuiRoot:GetHeight() or 1080
     local scale = self.window:GetScale() or ((self.sv.scale or 100) / 100)
-    local width = (self.window:GetWidth() or WINDOW_W) * scale
+    local width = (self.window:GetWidth() or self:GetListWidth()) * scale
     local height = (self.window:GetHeight() or 100) * scale
     local left, top = self.window:GetLeft(), self.window:GetTop()
     if left == nil or top == nil then return end
@@ -358,12 +429,13 @@ end
 function Group:RefreshHUD()
     if not self.window or not self.sv then return end
 
+    self:ApplyListGeometry()
     local entries = self:GetTrackedEntries()
     local count = #entries
     local visibleRows = math.max(1, count)
-    local height = HEADER_H + 4 + (visibleRows * ROW_H) + ((visibleRows - 1) * GAP) + 4
+    local height = HEADER_H + 4 + (visibleRows * self:GetRowHeight()) + ((visibleRows - 1) * GAP) + 4
 
-    self.window:SetDimensions(WINDOW_W, height)
+    self.window:SetDimensions(self:GetListWidth(), height)
 
     local anyReady = false
 
@@ -372,7 +444,7 @@ function Group:RefreshHUD()
 
         if entry then
             row:ClearAnchors()
-            row:SetAnchor(TOPLEFT, self.window, TOPLEFT, 6, HEADER_H + 4 + ((index - 1) * (ROW_H + GAP)))
+            row:SetAnchor(TOPLEFT, self.window, TOPLEFT, 6, HEADER_H + 4 + ((index - 1) * (self:GetRowHeight() + GAP)))
         end
 
         if self:RefreshRow(row, entry) then
@@ -407,7 +479,7 @@ function Group:CreateHUD()
     local win = WINDOW_MANAGER:CreateTopLevelWindow("AlphaSquadULTGroupWindow")
     self.window = win
 
-    win:SetDimensions(WINDOW_W, 90)
+    win:SetDimensions(self:GetListWidth(), 90)
     win:SetClampedToScreen(true)
     win:SetMovable(true)
     win:SetMouseEnabled(true)
@@ -429,7 +501,7 @@ function Group:CreateHUD()
     win.dragHint:SetHorizontalAlignment(TEXT_ALIGN_RIGHT)
 
     win.empty = Label(win, "AlphaSquadULTGroupEmpty", "ZoFontGameSmall", "", COLORS.muted)
-    win.empty:SetDimensions(WINDOW_W - 20, 32)
+    win.empty:SetDimensions(self:GetListWidth() - 20, 32)
     win.empty:SetAnchor(TOPLEFT, win, TOPLEFT, 10, HEADER_H + 14)
     win.empty:SetHorizontalAlignment(TEXT_ALIGN_CENTER)
 
@@ -441,7 +513,7 @@ function Group:CreateHUD()
     end
 
     win.dragSurface = WINDOW_MANAGER:CreateControl("AlphaSquadULTGroupDragSurface", win, CT_CONTROL)
-    win.dragSurface:SetDimensions(WINDOW_W, HEADER_H)
+    win.dragSurface:SetDimensions(self:GetListWidth(), HEADER_H)
     win.dragSurface:SetAnchor(TOPLEFT, win, TOPLEFT, 0, 0)
     win.dragSurface:SetMouseEnabled(true)
 
@@ -464,6 +536,7 @@ function Group:CreateHUD()
         end
     end)
 
+    self:ApplyListGeometry()
     self:ApplyPosition()
     self:ApplyAppearance()
     self:UpdateLockState()
