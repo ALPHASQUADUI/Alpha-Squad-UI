@@ -201,8 +201,8 @@ function ULT:ClampToScreen(saveIfChanged)
 
     local maxX = math.max(0, rootW - width)
     local maxY = math.max(0, rootH - height)
-    local clampedX = Clamp(left, 0, maxX)
-    local clampedY = Clamp(top, 0, maxY)
+    local clampedX = ULT.Clamp(left, 0, maxX)
+    local clampedY = ULT.Clamp(top, 0, maxY)
 
     if math.abs(clampedX - left) > 0.5 or math.abs(clampedY - top) > 0.5 then
         self.window:ClearAnchors()
