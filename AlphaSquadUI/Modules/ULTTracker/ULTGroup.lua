@@ -23,6 +23,8 @@ Group.byKey = {}
 Group.refreshPending = false
 Group.readyState = {}
 Group.lastReadySoundAt = 0
+Group.previousUltValues = Group.previousUltValues or {}
+Group.recentlyUsedUntil = Group.recentlyUsedUntil or {}
 Group.initialized = false
 
 local EM = EVENT_MANAGER
@@ -73,6 +75,7 @@ function Group:GetDefaults()
         x = math.floor(rootW * 0.70),
         y = math.floor(rootH * 0.16),
         positionSaved = false,
+        trackedAbilities = {},
         assignments = {},
     }
 end
@@ -94,10 +97,91 @@ function Group:EnsureSavedVariables()
     if type(ULT.sv.group.assignments) ~= "table" then
         ULT.sv.group.assignments = {}
     end
+    if type(ULT.sv.group.trackedAbilities) ~= "table" then
+        ULT.sv.group.trackedAbilities = {}
+    end
 
     ULT.sv.group.scale = ULT.Clamp(ULT.sv.group.scale or 100, 70, 140)
     ULT.sv.group.opacity = ULT.Clamp(ULT.sv.group.opacity or 92, 30, 100)
     self.sv = ULT.sv.group
+end
+
+function Group:IsAbilityTracked(abilityId)
+    if not self.sv or type(self.sv.trackedAbilities) ~= "table" then return false end
+    abilityId = tonumber(abilityId) or 0
+    return abilityId > 0 and self.sv.trackedAbilities[tostring(abilityId)] == true
+end
+
+function Group:SetAbilityTracked(abilityId, tracked)
+    if not self.sv then return end
+    abilityId = tonumber(abilityId) or 0
+    if abilityId <= 0 then return end
+
+    local key = tostring(abilityId)
+    if tracked then
+        self.sv.trackedAbilities[key] = true
+    else
+        self.sv.trackedAbilities[key] = nil
+    end
+
+    self:Refresh("tracked ability changed")
+end
+
+function Group:GetAvailableAbilities()
+    local abilitiesById = {}
+
+    for _, entry in ipairs(self.roster or {}) do
+        if entry.shared then
+            for _, abilityId in ipairs({entry.ult1ID, entry.ult2ID}) do
+                abilityId = tonumber(abilityId) or 0
+                if abilityId > 0 and not abilitiesById[abilityId] then
+                    local name, icon = self:GetAbilityMeta(abilityId)
+                    abilitiesById[abilityId] = {
+                        id = abilityId,
+                        name = name,
+                        icon = icon,
+                        users = 0,
+                    }
+                end
+            end
+        end
+    end
+
+    for _, entry in ipairs(self.roster or {}) do
+        if entry.shared then
+            local seen = {}
+            for _, abilityId in ipairs({entry.ult1ID, entry.ult2ID}) do
+                abilityId = tonumber(abilityId) or 0
+                if abilityId > 0 and not seen[abilityId] and abilitiesById[abilityId] then
+                    abilitiesById[abilityId].users = abilitiesById[abilityId].users + 1
+                    seen[abilityId] = true
+                end
+            end
+        end
+    end
+
+    local result = {}
+    for _, ability in pairs(abilitiesById) do
+        table.insert(result, ability)
+    end
+
+    table.sort(result, function(a, b)
+        local an = string.lower(a.name or "")
+        local bn = string.lower(b.name or "")
+        if an == bn then return (a.id or 0) < (b.id or 0) end
+        return an < bn
+    end)
+
+    return result
+end
+
+function Group:GetTrackedAbilityCount()
+    local count = 0
+    if not self.sv or type(self.sv.trackedAbilities) ~= "table" then return 0 end
+    for _, enabled in pairs(self.sv.trackedAbilities) do
+        if enabled == true then count = count + 1 end
+    end
+    return count
 end
 
 function Group:GetAssignment(key)
@@ -327,32 +411,56 @@ function Group:GetSelectedUltimate(entry)
     return ultimates[1]
 end
 
+function Group:GetMatchingUltimates(entry)
+    local matches = {}
+    if not entry or not entry.shared then return matches end
+
+    local front = self:BuildUltimate(entry, "main")
+    local back = self:BuildUltimate(entry, "back")
+
+    if front and self:IsAbilityTracked(front.id) then
+        table.insert(matches, front)
+    end
+    if back and self:IsAbilityTracked(back.id) and back.id ~= (front and front.id or 0) then
+        table.insert(matches, back)
+    end
+
+    return matches
+end
+
 function Group:GetTrackedEntries()
     local result = {}
 
     for _, entry in ipairs(self.roster or {}) do
-        local assignment = entry.assignment or self:GetAssignment(entry.key)
-        local include = assignment and assignment.tracked == true
+        local include = true
 
         if entry.isPlayer and self.sv and not self.sv.includeSelf then
             include = false
         end
 
-        if include then
-            entry.selectedUltimates = self:GetSelectedUltimates(entry)
-            entry.selected = entry.selectedUltimates[1]
-            entry.anyReady = false
+        if include and entry.shared then
+            entry.matchingUltimates = self:GetMatchingUltimates(entry)
 
-            for _, ultimate in ipairs(entry.selectedUltimates) do
-                if ultimate and ultimate.ready then
-                    entry.anyReady = true
-                    break
+            if #entry.matchingUltimates > 0 then
+                entry.anyReady = false
+                for _, ultimate in ipairs(entry.matchingUltimates) do
+                    if ultimate.ready then
+                        entry.anyReady = true
+                        break
+                    end
                 end
-            end
 
-            table.insert(result, entry)
+                entry.recentlyUsed = NowMs() < (self.recentlyUsedUntil[entry.key] or 0)
+                table.insert(result, entry)
+            end
         end
     end
+
+    table.sort(result, function(a, b)
+        if a.anyReady ~= b.anyReady then return a.anyReady == true end
+        if a.recentlyUsed ~= b.recentlyUsed then return b.recentlyUsed == true end
+        return string.lower(a.displayName or a.key or "") < string.lower(b.displayName or b.key or "")
+    end)
 
     return result
 end
@@ -385,23 +493,44 @@ function Group:CheckReadyTransitions()
     if not self.sv or not self.sv.enabled then return end
 
     local activeKeys = {}
+    local now = NowMs()
 
-    for _, entry in ipairs(self:GetTrackedEntries()) do
+    for _, entry in ipairs(self.roster or {}) do
         if entry.shared then
-            for _, ultimate in ipairs(entry.selectedUltimates or {}) do
-                if ultimate then
-                    local stateKey = tostring(entry.key) .. ":" .. tostring(ultimate.slot)
-                    activeKeys[stateKey] = true
+            local value = tonumber(entry.ultValue) or 0
+            local previousValue = self.previousUltValues[entry.key]
 
-                    local ready = ultimate.ready == true
-                    local previous = self.readyState[stateKey] == true
+            if previousValue ~= nil and value < previousValue then
+                local matches = self:GetMatchingUltimates(entry)
+                local wasReadyForTracked = false
 
-                    if ready and not previous then
-                        self:PlayReadySound()
+                for _, ultimate in ipairs(matches) do
+                    local cost = tonumber(ultimate.cost) or 0
+                    if cost > 0 and previousValue >= cost then
+                        wasReadyForTracked = true
+                        break
                     end
-
-                    self.readyState[stateKey] = ready
                 end
+
+                if wasReadyForTracked and (previousValue - value) >= 20 then
+                    self.recentlyUsedUntil[entry.key] = now + 6000
+                end
+            end
+
+            self.previousUltValues[entry.key] = value
+
+            for _, ultimate in ipairs(self:GetMatchingUltimates(entry)) do
+                local stateKey = tostring(entry.key) .. ":" .. tostring(ultimate.id)
+                activeKeys[stateKey] = true
+
+                local readyNow = ultimate.ready == true
+                local previousReady = self.readyState[stateKey] == true
+
+                if readyNow and not previousReady then
+                    self:PlayReadySound()
+                end
+
+                self.readyState[stateKey] = readyNow
             end
         end
     end
