@@ -14,7 +14,7 @@ local COLORS = {
     orange = {1.00, 0.58, 0.16, 1.00},
     cyan = {0.20, 0.82, 1.00, 1.00},
     cyanDim = {0.10, 0.36, 0.49, 1.00},
-    green = {0.28, 1.00, 0.54, 1.00},
+    green = {0.34, 0.82, 0.52, 1.00},
     red = {1.00, 0.30, 0.35, 1.00},
     gold = {0.97, 0.78, 0.30, 1.00},
 }
@@ -91,6 +91,9 @@ local function CreateCard(parent, key, x)
     card.nameLabel:SetAnchor(TOPLEFT, card, TOPLEFT, 83, 27)
     card.nameLabel:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
     card.nameLabel:SetMaxLineCount(1)
+    if card.nameLabel.SetWrapMode and TEXT_WRAP_MODE_ELLIPSIS then
+        card.nameLabel:SetWrapMode(TEXT_WRAP_MODE_ELLIPSIS)
+    end
 
     card.statusLabel = Label(card, "AlphaSquadULTTracker_" .. key .. "_Status", "ZoFontGameBold", "EMPTY", COLORS.muted)
     card.statusLabel:SetDimensions(110, 20)
@@ -169,12 +172,12 @@ function ULT:ApplyLayout()
         self.window.ultCounter:SetAnchor(TOPRIGHT, self.window, TOPRIGHT, -14, 9)
         self.window.moveHint:SetText("DRAG")
         self.window.moveHint:SetDimensions(48, 20)
-        self.window.moveHint:SetAnchor(TOPRIGHT, self.window, TOPRIGHT, -86, 9)
+        self.window.moveHint:SetAnchor(TOPRIGHT, self.window, TOPRIGHT, -104, 9)
     end
 
     -- Never re-apply the saved position here. ApplyLayout runs on every HUD refresh;
     -- re-anchoring here would snap a freshly dragged window back to its old location.
-    self:ClampToScreen(false)
+    self:ClampToScreen(true)
 end
 
 function ULT:ApplyPosition()
@@ -188,7 +191,7 @@ function ULT:ClampToScreen(saveIfChanged)
 
     local rootW = GuiRoot:GetWidth() or 1920
     local rootH = GuiRoot:GetHeight() or 1080
-    local scale = (self.sv.scale or 100) / 100
+    local scale = self.window:GetScale() or ((self.sv.scale or 100) / 100)
     local width = (self.window:GetWidth() or self:GetWindowWidth()) * scale
     local height = (self.window:GetHeight() or 142) * scale
 
@@ -264,9 +267,27 @@ function ULT:ApplyVisibility()
     end
 end
 
+function ULT:GetEffectiveScale()
+    if not self.window or not self.sv or not GuiRoot then
+        return (self.sv and self.sv.scale or 100) / 100
+    end
+
+    local requested = (self.sv.scale or 100) / 100
+    local rootW = GuiRoot:GetWidth() or 1920
+    local rootH = GuiRoot:GetHeight() or 1080
+    local baseW = self.window:GetWidth() or self:GetWindowWidth()
+    local baseH = self.window:GetHeight() or 142
+
+    -- Preserve the player's chosen size on normal/large screens, but automatically
+    -- cap it when necessary so the full HUD can still fit on smaller resolutions.
+    local fitX = math.max(0.55, (rootW - 24) / math.max(1, baseW))
+    local fitY = math.max(0.55, (rootH - 24) / math.max(1, baseH))
+    return math.min(requested, fitX, fitY)
+end
+
 function ULT:ApplyAppearance()
     if not self.window or not self.sv then return end
-    self.window:SetScale((self.sv.scale or 100) / 100)
+    self.window:SetScale(self:GetEffectiveScale())
     self.window:SetAlpha(1)
     self.window.bg:SetAlpha((self.sv.opacity or 92) / 100)
     self:ClampToScreen(true)
@@ -318,8 +339,8 @@ function ULT:RefreshCard(card, bar)
 
     card.statusLabel:SetText(statusText)
     SetColor(card.statusLabel, color)
-    SetColor(card.iconBorder, color, state == "ready" and 1 or 0.72)
-    card.icon:SetAlpha(state == "ready" and 1 or (state == "active" and 1 or 0.72))
+    SetColor(card.iconBorder, color, state == "ready" and 0.88 or 0.72)
+    card.icon:SetAlpha(state == "ready" and 0.96 or (state == "active" and 1 or 0.72))
 
     local progress = 0
     if bar.cost > 0 then
