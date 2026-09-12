@@ -193,3 +193,23 @@ Rows are ordered:
 
 READY rows use a high-contrast orange/gold/white pulse. Recently spent rows are
 strongly dimmed for a short period.
+
+
+### Persistent HUD sizing
+
+Group Ultimate Config exposes explicit HUD sizing controls:
+
+- **Overall Scale**: 60%–180%
+- **List Width**: 240–520 px
+- **Row Height**: 28–56 px
+- **Background Opacity**: 30%–100%
+- **Reset Size**
+- **Reset Position**
+
+Row Height also scales the Ultimate icon automatically, keeping the compact list
+balanced and responsive.
+
+All group tracker preferences are stored in account-wide ESO SavedVariables for
+the current server/world, including tracked Ultimate filters, HUD scale, width,
+row height, opacity, position, lock state, visibility, self inclusion and ready
+sound preference. Values survive reloads, zoning and game restarts.
