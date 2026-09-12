@@ -15,7 +15,7 @@ if not ULT then return end
 ULT.Group = ULT.Group or {}
 local Group = ULT.Group
 
-Group.version = "0.1.0"
+Group.version = (AlphaSquadUI and AlphaSquadUI.version) or "2.6.0"
 Group.lgcs = nil
 Group.libraryAvailable = false
 Group.roster = {}
@@ -33,10 +33,6 @@ local EM = EVENT_MANAGER
 local function NowMs()
     if GetGameTimeMilliseconds then return GetGameTimeMilliseconds() end
     return 0
-end
-
-local function SafeText(value)
-    return tostring(value or "")
 end
 
 local function UnitExists(unitTag)
