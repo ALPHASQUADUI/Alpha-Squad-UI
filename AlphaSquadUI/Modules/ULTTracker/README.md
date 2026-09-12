@@ -136,19 +136,28 @@ For each Ultimate:
 
 The raidlead HUD is a compact vertical list with **one @UserID per line**.
 
-Each line can show:
+Each line shows:
 
 - @UserID
-- matching selected Ultimate icon(s)
-- exact matching Ultimate name(s)
-- current Ultimate points / relevant cost
-- READY state
+- one large icon for the most relevant selected Ultimate
+- charge percentage calculated against that Ultimate's real cost
+- a compact progress bar
+- READY visual state
 
-READY players are visually prioritized and receive a subtle pulse.
+The HUD intentionally does not display Ultimate names or raw Ultimate-point
+counts, keeping the raidlead list compact.
 
-When a tracked player spends an Ultimate after being ready, that row is strongly
-dimmed for a short period so the raidlead can immediately distinguish spent
-Ultimates from players who are ready.
+If a player matches multiple selected Ultimates, the HUD prioritizes a READY
+Ultimate first; otherwise it displays the matching Ultimate closest to READY.
+
+READY players are sorted to the top and receive a high-contrast orange/gold/white
+pulse.
+
+When a tracked player's shared Ultimate resource drops after previously being
+ready for a selected Ultimate, that row is strongly dimmed for a short period.
+Because ESO group sharing exposes resource/slot information rather than a
+guaranteed remote cast ID, this spent-Ultimate indicator is an informed visual
+signal rather than combat-log proof of which exact remote Ultimate was cast.
 
 ### Performance
 
