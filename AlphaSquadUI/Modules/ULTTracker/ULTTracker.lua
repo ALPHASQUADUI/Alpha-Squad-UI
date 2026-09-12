@@ -401,6 +401,19 @@ function ULT:RegisterEvents()
         end, 300)
     end)
 
+    if EVENT_SCREEN_RESIZED then
+        EM:RegisterForEvent(prefix .. "_ScreenResized", EVENT_SCREEN_RESIZED, function()
+            zo_callLater(function()
+                if ULT and ULT.window then
+                    ULT:ApplyLayout()
+                    ULT:ApplyAppearance()
+                    ULT:ClampToScreen(true)
+                    ULT:RefreshHUD()
+                end
+            end, 50)
+        end)
+    end
+
     -- Slow safety sync only. Event-driven updates do the real work.
     EM:RegisterForUpdate(prefix .. "_Safety", 1500, function()
         if ULT and ULT.sv and ULT.sv.enabled and not ULT.uiObscured then
