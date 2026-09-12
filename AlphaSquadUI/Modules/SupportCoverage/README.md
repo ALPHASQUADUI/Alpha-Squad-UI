@@ -1,104 +1,51 @@
-# Support Coverage
+# Support Coverage — controlled branch test
 
-**Support Coverage** is the Ąlpha Şquad UI raidlead planning, capability scanning and live coverage module.
+Version: **2.7.0-support-coverage-test.2**. Development target: **support-coverage**. This is not an in-game-certified release.
 
-Development branch: `support-coverage`
+## Open the module
 
-Current development version: `2.7.0-support-coverage-test`
+Settings > Alpha Squad > Support Coverage > **DETAILS / HISTORY**, or `/assupport audit`.
 
-## Purpose
+The paginated inspector contains CHECKS, BUILD, EXPECTED, EFFECTS, PLANNER and HISTORY. `/assupport matrix` opens the planning matrix; `/assupport history` reopens stored pulls; `/assupport report` opens the latest stored report.
 
-Support Coverage helps a raidlead understand whether a 12-player trial group has the important offensive, defensive, sustain, penetration, critical-damage and unique support coverage required by the selected profile.
+## Optional build checks
 
-The module is designed to answer:
+Sets, weapons, traits, enchantments, armor weights, Champion slottables, Class Masteries, skills, food, potion, poisons and Mundus each have OFF / WARN / REQUIRED modes. The detailed expectation checks default to OFF. No poison or meta loadout is mandatory.
 
-- What is covered?
-- What is missing?
-- Who can provide it?
-- Who is assigned to provide it?
-- Is there unnecessary duplication?
-- Is the group ready for the pull?
+Capture a verified build as the expected reference for a role/profile or a particular player. The Champion comparison defaults to the four Warfare slottables, ignores slot order and checks committed points. Fitness, Craft and all-discipline scopes are optional. An incomplete four-star reference is not accepted as a complete Champion expectation.
 
-## Components
+Sets are counted separately on each weapon bar; two-handed weapons count as two pieces and native normal/Perfected family mappings are used where available. Merely wearing one piece does not establish a five-piece capability. Some capability-source mappings still use explicitly labelled English name hints; the actual set IDs and counts are independent facts.
 
-- `SupportCoverage.lua` — lifecycle, events, SavedVariables and slash commands
-- `SupportCoverageCatalog.lua` — U50 support catalog and profiles
-- `SupportCoverageScanner.lua` — local build/capability scanner
-- `SupportCoverageShare.lua` — group capability/plan/live sharing
-- `SupportCoverageEngine.lua` — roster, evaluation and assignment engine
-- `SupportCoverageUI.lua` — compact raidlead HUD
-- `SupportCoverageSettings.lua` — settings page and detailed coverage matrix
+Class Masteries are read from committed skill data and eligibility, not searched for in action slots. Mundus uses the native active-buff index API. Missing APIs or missing peer fields produce UNKNOWN, not invented selections.
 
-## Profiles
+## Live coverage
 
-- Full
-- Progression
-- Damage
-- Trash
-- Boss
-- Custom
+Observable effects are collected by ID, with native buff-type classification for supported Major/Minor effects, session indexes and explicit custom IDs for other effects. Raw observations can be collected independently of the raid-focused display; retaining raw IDs in history is optional and off by default.
 
-## Roles
+Metrics distinguish individual recipients, individual boss targets and group recipient coverage. Six-target effects are not automatically required on twelve players. Required stacks, target roles, recipient counts and uptime goals are configurable. Unknown time is shown separately and excluded from uptime; a minimum measured-data threshold prevents sparse observations from passing an uptime goal.
 
-- MT
-- OT
-- H1
-- H2
-- DD PARSE
-- DD SUPPORT
-- UNKNOWN
+Boss targets are not OR-merged. Untargetable phases are observation gaps rather than proven downtime. The combat HUD prioritizes problems and shows UNVERIFIED when no reliable live conclusion is available.
 
-## Scanning
+## Potions and food
 
-The local scanner can inspect:
+Expected food/potion selection can be compared with actual available fields. Food expiry, selected potion stack and cooldown are visible when available. Combat reports separate potion-category use events from inferred cooldown starts. Buffs also supplied by skills or allies are not automatically attributed to a potion. Exact consumed-item attribution remains unverified where the API does not provide it.
 
-- worn sets
-- item/set data
-- armor enchants/glyphs
-- slotted skills
-- food
-- potion
-- inferred support capabilities
-- support score / role hint
+## Pull reports and history
 
-## Persistent settings
+Reports are named using observed encounter names, for example `Lokkestiiz - Pull 1`, and retain raid/zone, duration, profile and per-subject metrics. Closing a report does not delete it. It can be reopened in HISTORY. Automatic closing is configurable (20 seconds by default), and a new fight closes report/planning windows.
 
-Support Coverage uses:
+History is capped at 20 pulls by default (5–50 configurable), 1,024 metrics per pull, 20 subjects and 6,000 retained metrics overall. The tighter cap wins. Manual reset preserves settings. Leaving/disbanding the group clears reports and persisted session history; solo history is not retained. Optional reload recovery requires the same group fingerprint and expires after six hours.
 
-`AlphaSquadSupportCoverageSavedVariables`
+## Sharing and non-ASUI players
 
-Settings include visibility, locking, geometry, problems-only mode, auto assignment, sharing, active profile, role overrides, assignment locks, backups, manual capabilities, custom requirements/catalog and context profiles.
+Native group observations and the existing optional group Ultimate integration remain best-effort evidence. Without ASUI, unavailable equipment/CP/mastery/potion fields are clearly labelled missing. A witnessed positive buff does not establish a complete remote inventory or its caster.
 
-## Optional libraries
+Experimental sharing is OFF by default. Enable it on matching test clients in CHECKS only for controlled group tests. Protocol IDs 507–510 remain unreserved and must not be publicly released as registered IDs. Named build details, schema-checked live observations and potion evidence are bounded. Queuing/transit delays can make a field UNKNOWN; missing information is never replaced with a guessed value. Legacy wire positions are frozen; old clients cannot supply the new detailed fields.
 
-- LibGroupCombatStats
-- LibGroupBroadcast
-- LibFoodDrinkBuff
+## Planning and profiles
 
-The module must fail gracefully when optional libraries are unavailable.
+The planner selects whole current or recorded loadouts, not incompatible sets assembled independently. It prefers fewer changes, respects assignment constraints and never changes equipment. Recorded inventory availability still requires confirmation. Saved raid/boss context profiles include expectations, roles, locks and effect targets; optional auto-loading uses the observed context. Curated, patch-verified HM meta presets and a complete target-aware per-player penetration/critical-cap optimizer are not supplied by this test build. No guessed HM state or misleading final-cap number is displayed.
 
-## Important sharing warning
+## Validation
 
-The current development sharing implementation uses provisional LibGroupBroadcast protocol IDs:
-
-- 510 — build/capability sharing
-- 509 — plan sharing
-- 508 — live coverage sharing
-
-These IDs must be formally reserved/verified before a stable public release.
-
-## Performance
-
-Support Coverage should remain raid-safe:
-
-- event-driven updates where possible;
-- coalesced refreshes;
-- slow safety checks only;
-- compact payloads;
-- reusable controls;
-- no unnecessary combat-log parsing;
-- no fast hidden loops.
-
-## Release status
-
-This module is active feature work and must not be described as released on `main` until its PR has been tested and merged.
+Run `lua5.1 tests/support_coverage.lua` and `lua5.4 tests/support_coverage.lua` from the repository root. The branch-only GitHub workflow also validates syntax and manifest paths and packages an installable ZIP. These deterministic tests do not establish ESO runtime/API behavior, real frame times, network throughput or visual correctness. Use the in-game test checklist before requesting any PR.

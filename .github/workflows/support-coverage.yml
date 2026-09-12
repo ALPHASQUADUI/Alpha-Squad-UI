@@ -35,12 +35,10 @@ jobs:
           assert re.search(r'^## AddOnVersion: [0-9]+$',text,re.M)
           print('Manifest and version checks passed')
           PY
-      - name: Run regression tests when present
+      - name: Run Support Coverage regression tests
         run: |
-          if test -f tests/support_coverage.lua; then
-            lua5.1 tests/support_coverage.lua
-            lua5.4 tests/support_coverage.lua
-          fi
+          lua5.1 tests/support_coverage.lua
+          lua5.4 tests/support_coverage.lua
       - name: Package source for independent review
         if: always()
         run: zip -r SupportCoverage-review-source.zip AlphaSquadUI docs .github tests -x '*/.gitkeep' || test -f SupportCoverage-review-source.zip
