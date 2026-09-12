@@ -292,6 +292,7 @@ function ULT:SetEnabled(enabled)
     self.sv.enabled = enabled == true
     if not self.sv.enabled then self:SetFlashUpdate(false) end
     if self.ApplyVisibility then self:ApplyVisibility() end
+    if self.Group and self.Group.ApplyVisibility then self.Group:ApplyVisibility() end
     self:Refresh("enable changed")
 end
 
