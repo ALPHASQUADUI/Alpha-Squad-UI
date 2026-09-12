@@ -50,6 +50,6 @@ The READY pulse exists only while at least one visible tracked player is READY.
 
 ## Validation
 
-The GitHub workflow validates Lua syntax and manifest integrity and builds a test ZIP.
+The GitHub workflow validates Lua syntax, manifest integrity and release-version consistency, then builds a ZIP artifact.
 
 In-game validation remains mandatory because `luac` cannot verify ESO API semantics, scene behavior, protected-function rules or actual combat timing.
