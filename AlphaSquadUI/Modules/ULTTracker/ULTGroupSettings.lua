@@ -203,6 +203,8 @@ function Group:RefreshConfig()
     SetColor(self.configWindow.soundButton.label, g.readySound and COLORS.green or COLORS.muted)
 
     self.configWindow.scaleValue:SetText(tostring(g.scale or 100) .. "%")
+    self.configWindow.widthValue:SetText(tostring(g.hudWidth or 312) .. " px")
+    self.configWindow.rowHeightValue:SetText(tostring(g.rowHeight or 36) .. " px")
     self.configWindow.opacityValue:SetText(tostring(g.opacity or 92) .. "%")
 end
 
@@ -230,7 +232,7 @@ function Group:CreateConfigWindow()
     local win = WINDOW_MANAGER:CreateTopLevelWindow("AlphaSquadULTGroupConfigWindow")
     self.configWindow = win
 
-    win:SetDimensions(780, 650)
+    win:SetDimensions(780, 720)
     win:SetAnchor(CENTER, GuiRoot, CENTER, 0, 0)
     win:SetClampedToScreen(true)
     win:SetMovable(true)
@@ -323,7 +325,7 @@ function Group:CreateConfigWindow()
     win.empty:SetHorizontalAlignment(TEXT_ALIGN_CENTER)
     win.empty:SetHidden(true)
 
-    local controlsY = 570
+    local controlsY = 552
 
     Button(win, "AlphaSquadULTGroupSelectAll", "SELECT ALL", 22, controlsY, 110, 28, function()
         for _, ability in ipairs(Group:GetAvailableAbilities()) do
@@ -337,46 +339,130 @@ function Group:CreateConfigWindow()
         Group:Refresh("clear tracked abilities")
     end)
 
-    win.scaleMinus = Button(win, "AlphaSquadULTGroupScaleMinus", "−", 278, controlsY, 32, 28, function()
-        Group.sv.scale = ULT.Clamp((Group.sv.scale or 100) - 5, 70, 140)
+    local sizeHeader = Label(win, "AlphaSquadULTGroupSizeHeader", "ZoFontGameBold",
+        "HUD SIZE  •  All values are saved automatically", COLORS.orange)
+    sizeHeader:SetDimensions(470, 24)
+    sizeHeader:SetAnchor(TOPLEFT, win, TOPLEFT, 278, controlsY + 1)
+    sizeHeader:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
+
+    local sizeHelp = Label(win, "AlphaSquadULTGroupSizeHelp", "ZoFontGameSmall",
+        "Scale changes everything • Width changes horizontal size • Row Height changes line/icon size", COLORS.muted)
+    sizeHelp:SetDimensions(736, 20)
+    sizeHelp:SetAnchor(TOPLEFT, win, TOPLEFT, 22, 586)
+    sizeHelp:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
+
+    -- Overall Scale
+    local scaleLabel = Label(win, "AlphaSquadULTGroupScaleLabel", "ZoFontGameSmall", "OVERALL SCALE", COLORS.white)
+    scaleLabel:SetDimensions(118, 28)
+    scaleLabel:SetAnchor(TOPLEFT, win, TOPLEFT, 22, 610)
+    scaleLabel:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
+
+    win.scaleMinus = Button(win, "AlphaSquadULTGroupScaleMinus", "−", 142, 610, 30, 28, function()
+        Group.sv.scale = ULT.Clamp((Group.sv.scale or 100) - 5, 60, 180)
         Group:ApplyAppearance()
-        Group:RefreshConfig()
-    end)
-    win.scaleValue = Label(win, "AlphaSquadULTGroupScaleValue", "ZoFontGameBold", "", COLORS.cyan)
-    win.scaleValue:SetDimensions(54, 28)
-    win.scaleValue:SetAnchor(TOPLEFT, win, TOPLEFT, 314, controlsY)
-    win.scaleValue:SetHorizontalAlignment(TEXT_ALIGN_CENTER)
-    win.scalePlus = Button(win, "AlphaSquadULTGroupScalePlus", "+", 372, controlsY, 32, 28, function()
-        Group.sv.scale = ULT.Clamp((Group.sv.scale or 100) + 5, 70, 140)
-        Group:ApplyAppearance()
+        Group:RefreshHUD()
         Group:RefreshConfig()
     end)
 
-    win.opacityMinus = Button(win, "AlphaSquadULTGroupOpacityMinus", "−", 438, controlsY, 32, 28, function()
+    win.scaleValue = Label(win, "AlphaSquadULTGroupScaleValue", "ZoFontGameBold", "", COLORS.cyan)
+    win.scaleValue:SetDimensions(64, 28)
+    win.scaleValue:SetAnchor(TOPLEFT, win, TOPLEFT, 176, 610)
+    win.scaleValue:SetHorizontalAlignment(TEXT_ALIGN_CENTER)
+
+    win.scalePlus = Button(win, "AlphaSquadULTGroupScalePlus", "+", 244, 610, 30, 28, function()
+        Group.sv.scale = ULT.Clamp((Group.sv.scale or 100) + 5, 60, 180)
+        Group:ApplyAppearance()
+        Group:RefreshHUD()
+        Group:RefreshConfig()
+    end)
+
+    -- List Width
+    local widthLabel = Label(win, "AlphaSquadULTGroupWidthLabel", "ZoFontGameSmall", "LIST WIDTH", COLORS.white)
+    widthLabel:SetDimensions(104, 28)
+    widthLabel:SetAnchor(TOPLEFT, win, TOPLEFT, 296, 610)
+    widthLabel:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
+
+    win.widthMinus = Button(win, "AlphaSquadULTGroupWidthMinus", "−", 400, 610, 30, 28, function()
+        Group.sv.hudWidth = ULT.Clamp((Group.sv.hudWidth or 312) - 10, 240, 520)
+        Group:ApplyListGeometry()
+        Group:RefreshHUD()
+        Group:RefreshConfig()
+    end)
+
+    win.widthValue = Label(win, "AlphaSquadULTGroupWidthValue", "ZoFontGameBold", "", COLORS.cyan)
+    win.widthValue:SetDimensions(76, 28)
+    win.widthValue:SetAnchor(TOPLEFT, win, TOPLEFT, 434, 610)
+    win.widthValue:SetHorizontalAlignment(TEXT_ALIGN_CENTER)
+
+    win.widthPlus = Button(win, "AlphaSquadULTGroupWidthPlus", "+", 514, 610, 30, 28, function()
+        Group.sv.hudWidth = ULT.Clamp((Group.sv.hudWidth or 312) + 10, 240, 520)
+        Group:ApplyListGeometry()
+        Group:RefreshHUD()
+        Group:RefreshConfig()
+    end)
+
+    -- Row Height / Icon Size
+    local rowLabel = Label(win, "AlphaSquadULTGroupRowHeightLabel", "ZoFontGameSmall", "ROW HEIGHT", COLORS.white)
+    rowLabel:SetDimensions(118, 28)
+    rowLabel:SetAnchor(TOPLEFT, win, TOPLEFT, 22, 644)
+    rowLabel:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
+
+    win.rowHeightMinus = Button(win, "AlphaSquadULTGroupRowHeightMinus", "−", 142, 644, 30, 28, function()
+        Group.sv.rowHeight = ULT.Clamp((Group.sv.rowHeight or 36) - 2, 28, 56)
+        Group:ApplyListGeometry()
+        Group:RefreshHUD()
+        Group:RefreshConfig()
+    end)
+
+    win.rowHeightValue = Label(win, "AlphaSquadULTGroupRowHeightValue", "ZoFontGameBold", "", COLORS.cyan)
+    win.rowHeightValue:SetDimensions(64, 28)
+    win.rowHeightValue:SetAnchor(TOPLEFT, win, TOPLEFT, 176, 644)
+    win.rowHeightValue:SetHorizontalAlignment(TEXT_ALIGN_CENTER)
+
+    win.rowHeightPlus = Button(win, "AlphaSquadULTGroupRowHeightPlus", "+", 244, 644, 30, 28, function()
+        Group.sv.rowHeight = ULT.Clamp((Group.sv.rowHeight or 36) + 2, 28, 56)
+        Group:ApplyListGeometry()
+        Group:RefreshHUD()
+        Group:RefreshConfig()
+    end)
+
+    -- Background Opacity
+    local opacityLabel = Label(win, "AlphaSquadULTGroupOpacityLabel", "ZoFontGameSmall", "BACKGROUND", COLORS.white)
+    opacityLabel:SetDimensions(104, 28)
+    opacityLabel:SetAnchor(TOPLEFT, win, TOPLEFT, 296, 644)
+    opacityLabel:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
+
+    win.opacityMinus = Button(win, "AlphaSquadULTGroupOpacityMinus", "−", 400, 644, 30, 28, function()
         Group.sv.opacity = ULT.Clamp((Group.sv.opacity or 92) - 5, 30, 100)
         Group:ApplyAppearance()
         Group:RefreshConfig()
     end)
+
     win.opacityValue = Label(win, "AlphaSquadULTGroupOpacityValue", "ZoFontGameBold", "", COLORS.cyan)
-    win.opacityValue:SetDimensions(54, 28)
-    win.opacityValue:SetAnchor(TOPLEFT, win, TOPLEFT, 474, controlsY)
+    win.opacityValue:SetDimensions(76, 28)
+    win.opacityValue:SetAnchor(TOPLEFT, win, TOPLEFT, 434, 644)
     win.opacityValue:SetHorizontalAlignment(TEXT_ALIGN_CENTER)
-    win.opacityPlus = Button(win, "AlphaSquadULTGroupOpacityPlus", "+", 532, controlsY, 32, 28, function()
+
+    win.opacityPlus = Button(win, "AlphaSquadULTGroupOpacityPlus", "+", 514, 644, 30, 28, function()
         Group.sv.opacity = ULT.Clamp((Group.sv.opacity or 92) + 5, 30, 100)
         Group:ApplyAppearance()
         Group:RefreshConfig()
     end)
 
-    Button(win, "AlphaSquadULTGroupReset", "RESET HUD", 648, controlsY, 110, 28, function()
+    Button(win, "AlphaSquadULTGroupResetSize", "RESET SIZE", 566, 610, 92, 28, function()
+        Group:ResetSize()
+    end)
+
+    Button(win, "AlphaSquadULTGroupReset", "RESET POSITION", 664, 610, 94, 28, function()
         Group:ResetPosition()
     end)
 
-    local footer = Label(win, "AlphaSquadULTGroupConfigFooter", "ZoFontGameSmall",
-        "READY players pulse in the raid list. After an Ultimate is spent, that @UserID is strongly dimmed for a few seconds.", COLORS.muted)
-    footer:SetDimensions(736, 36)
-    footer:SetAnchor(TOPLEFT, win, TOPLEFT, 22, 607)
-    footer:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
-    footer:SetVerticalAlignment(TEXT_ALIGN_TOP)
+    local saveNote = Label(win, "AlphaSquadULTGroupSaveNote", "ZoFontGameSmall",
+        "Saved per account/server: Ultimate filters, HUD size, opacity, position, lock state, visibility and sound settings.", COLORS.muted)
+    saveNote:SetDimensions(736, 30)
+    saveNote:SetAnchor(TOPLEFT, win, TOPLEFT, 22, 682)
+    saveNote:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
+    saveNote:SetVerticalAlignment(TEXT_ALIGN_TOP)
 
     self:ApplyConfigWindowScale()
 end
