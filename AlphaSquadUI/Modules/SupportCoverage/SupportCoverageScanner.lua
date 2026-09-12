@@ -105,7 +105,7 @@ function SC:ScanEquipment()
             }
 
             local hasSet, setName, _, normalEquipped, maxEquipped, setId, perfectedEquipped =
-                SafeCall(GetItemLinkSetInfo, link, true)
+                SafeCall(GetItemLinkSetInfo, link)
             if hasSet and setName and setName ~= "" then
                 local setKey = tonumber(setId) and tostring(setId) or Normalize(setName)
                 if not setSeen[setKey] then
@@ -216,7 +216,15 @@ function SC:ScanSkills()
     end
 
     if HOTBAR_CATEGORY_CHAMPION ~= nil and GetSlotBoundId then
-        for slot = 1, 12 do
+        local startSlot, endSlot = 1, 12
+        if GetAssignableChampionBarStartAndEndSlots then
+            local a, b = SafeCall(GetAssignableChampionBarStartAndEndSlots)
+            if tonumber(a) and tonumber(b) then
+                startSlot, endSlot = tonumber(a), tonumber(b)
+            end
+        end
+
+        for slot = startSlot, endSlot do
             local starId = SafeCall(GetSlotBoundId, slot, HOTBAR_CATEGORY_CHAMPION)
             starId = tonumber(starId) or 0
             if starId > 0 then
@@ -306,11 +314,42 @@ function SC:ScanPotion()
     result.itemId = tonumber(SafeCall(GetItemLinkItemId, link)) or 0
 
     if GetItemLinkOnUseAbilityInfo then
-        local hasAbility, description = SafeCall(GetItemLinkOnUseAbilityInfo, link)
-        if hasAbility then result.effects = tostring(description or "") end
+        local hasAbility, header, description = SafeCall(GetItemLinkOnUseAbilityInfo, link)
+        if hasAbility then
+            result.effects = tostring(header or "") .. " " .. tostring(description or "")
+        end
     end
 
     return result
+end
+
+local SUPPORT_CP_HINTS = {
+    "enlivening overflow",
+    "from the brink",
+    "hope infusion",
+    "soothing tide",
+    "swift renewal",
+    "salve of renewal",
+    "focused mending",
+}
+
+function SC:GetSupportScore(capabilities, skills)
+    local score = 0
+    local count = 0
+    for _ in pairs(capabilities or {}) do count = count + 1 end
+    score = score + math.min(18, count * 3)
+
+    for _, star in ipairs(skills and skills.champion or {}) do
+        local name = Normalize(star.name)
+        for _, token in ipairs(SUPPORT_CP_HINTS) do
+            if name:find(token, 1, true) then
+                score = score + 3
+                break
+            end
+        end
+    end
+
+    return math.min(31, score)
 end
 
 function SC:GetRoleHint(unitTag, capabilities)
@@ -360,6 +399,7 @@ function SC:ScanLocalPlayer()
         classId = classId,
         className = className,
         role = self:GetRoleHint("player", capabilities),
+        supportScore = self:GetSupportScore(capabilities, skills),
         dataQuality = "ASUI",
         asui = true,
         connected = true,
