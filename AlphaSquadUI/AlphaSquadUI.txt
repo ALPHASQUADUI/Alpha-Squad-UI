@@ -1,11 +1,11 @@
 ## Title: |cE66A19Ąlpha Şquad UI|r
 ## APIVersion: 101050 101051
-## Version: 2.6.0
-## AddOnVersion: 20600
+## Version: 2.7.0-support-coverage-test
+## AddOnVersion: 20700
 ## Author: SeRuM1
-## Description: Modular Ąlpha Şquad ESO UI suite: Overload Tracker, personal ULT Tracker and optional raidlead Group Ultimate Tracker.
-## SavedVariables: AlphaSquadOverloadTrackerSavedVariables AlphaSquadULTTrackerSavedVariables
-## OptionalDependsOn: LibGroupCombatStats
+## Description: Modular Ąlpha Şquad ESO UI suite: Overload Tracker, ULT Tracker, Group ULT Tracker and Support Coverage raidlead planning.
+## SavedVariables: AlphaSquadOverloadTrackerSavedVariables AlphaSquadULTTrackerSavedVariables AlphaSquadSupportCoverageSavedVariables
+## OptionalDependsOn: LibGroupCombatStats LibGroupBroadcast LibFoodDrinkBuff
 
 Core/Core.lua
 Core/Theme.lua
@@ -19,5 +19,13 @@ Modules/ULTTracker/ULTGroup.lua
 Modules/ULTTracker/ULTGroupUI.lua
 Modules/ULTTracker/ULTGroupSettings.lua
 Modules/ULTTracker/ULTTrackerSettings.lua
+
+Modules/SupportCoverage/SupportCoverage.lua
+Modules/SupportCoverage/SupportCoverageCatalog.lua
+Modules/SupportCoverage/SupportCoverageScanner.lua
+Modules/SupportCoverage/SupportCoverageShare.lua
+Modules/SupportCoverage/SupportCoverageEngine.lua
+Modules/SupportCoverage/SupportCoverageUI.lua
+Modules/SupportCoverage/SupportCoverageSettings.lua
 
 Modules/Overload/Overload.lua
