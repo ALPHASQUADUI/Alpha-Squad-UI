@@ -71,11 +71,14 @@ local function NowMs()
     return 0
 end
 
-local function Clamp(value, minimum, maximum)
-    value = tonumber(value) or minimum
-    if value < minimum then return minimum end
-    if value > maximum then return maximum end
-    return value
+local Clamp = AlphaSquadUI.Utils and AlphaSquadUI.Utils.Clamp
+if not Clamp then
+    Clamp = function(value, minimum, maximum)
+        value = tonumber(value) or minimum
+        if value < minimum then return minimum end
+        if value > maximum then return maximum end
+        return value
+    end
 end
 
 ULT.Clamp = Clamp
@@ -509,7 +512,8 @@ function ULT:Initialize()
     end
 
     if self.CreateHUD then self:CreateHUD() end
-    if self.CreateSettings then self:CreateSettings() end
+    -- ULT settings now use the shared Ąlpha Şquad shell. The legacy standalone
+    -- window remains as fallback code but is not instantiated at runtime.
     if self.InitializeGroup then self:InitializeGroup() end
 
     self:RegisterSceneCallbacks()
