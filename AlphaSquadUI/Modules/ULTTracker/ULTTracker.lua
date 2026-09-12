@@ -1,7 +1,7 @@
 --[[
     Ąlpha Şquad UI - ULT Tracker
     Module author: SeRuM1
-    Version: 0.1.0
+    Version: 2.6.0
 
     Generic Ultimate tracker for the player's PRIMARY and BACKUP weapon bars.
     No hard-coded ability IDs are required: the module reads the slotted Ultimate,
