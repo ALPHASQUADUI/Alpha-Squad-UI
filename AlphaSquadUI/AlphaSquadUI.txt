@@ -1,7 +1,7 @@
 ## Title: |cE66A19Ąlpha Şquad UI|r
 ## APIVersion: 101050 101051
 ## Version: 2.5.0-ult-tracker-test
-## AddOnVersion: 20550
+## AddOnVersion: 20551
 ## Author: SeRuM1
 ## Description: Modular Ąlpha Şquad ESO UI suite. Modules: Overload Tracker + ULT Tracker. Event-driven, performance-focused and subclassing compatible.
 ## SavedVariables: AlphaSquadOverloadTrackerSavedVariables AlphaSquadULTTrackerSavedVariables
@@ -12,8 +12,8 @@ Core/Utils.lua
 Core/Events.lua
 Core/Settings.lua
 
-Modules/Overload/Overload.lua
-
 Modules/ULTTracker/ULTTracker.lua
 Modules/ULTTracker/ULTTrackerUI.lua
 Modules/ULTTracker/ULTTrackerSettings.lua
+
+Modules/Overload/Overload.lua
