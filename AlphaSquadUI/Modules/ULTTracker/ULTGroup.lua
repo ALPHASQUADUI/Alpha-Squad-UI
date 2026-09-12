@@ -107,14 +107,19 @@ function Group:GetAssignment(key)
     if type(assignment) ~= "table" then
         assignment = {
             tracked = true,
-            mode = "auto",
+            mode = "both",
         }
         self.sv.assignments[key] = assignment
     end
 
     if assignment.tracked == nil then assignment.tracked = true end
-    if assignment.mode ~= "auto" and assignment.mode ~= "main" and assignment.mode ~= "back" then
-        assignment.mode = "auto"
+
+    -- AUTO from the first prototype is migrated to BOTH so the raidlead can
+    -- explicitly see both shared bar Ultimates and their individual READY states.
+    if assignment.mode == "auto" then assignment.mode = "both" end
+
+    if assignment.mode ~= "main" and assignment.mode ~= "back" and assignment.mode ~= "both" then
+        assignment.mode = "both"
     end
 
     return assignment
@@ -130,7 +135,7 @@ function Group:SetMemberTracked(key, tracked)
 end
 
 function Group:SetMemberMode(key, mode)
-    if mode ~= "auto" and mode ~= "main" and mode ~= "back" then return end
+    if mode ~= "main" and mode ~= "back" and mode ~= "both" then return end
     local assignment = self:GetAssignment(key)
     if not assignment then return end
     assignment.mode = mode
@@ -277,52 +282,49 @@ function Group:BuildRoster()
     return roster
 end
 
-function Group:GetSelectedUltimate(entry)
+function Group:BuildUltimate(entry, slot)
     if not entry then return nil end
 
+    local isMain = slot == "main"
+    local id = tonumber(isMain and entry.ult1ID or entry.ult2ID) or 0
+    local cost = tonumber(isMain and entry.ult1Cost or entry.ult2Cost) or 0
+    local value = tonumber(entry.ultValue) or 0
+    local name, icon = self:GetAbilityMeta(id)
+
+    return {
+        slot = isMain and "main" or "back",
+        id = id,
+        cost = cost,
+        value = value,
+        name = name,
+        icon = icon,
+        ready = id > 0 and cost > 0 and value >= cost,
+    }
+end
+
+function Group:GetSelectedUltimates(entry)
+    if not entry then return {} end
+
     local assignment = entry.assignment or self:GetAssignment(entry.key)
-    local mode = assignment and assignment.mode or "auto"
-
-    local main = {
-        slot = "main",
-        id = tonumber(entry.ult1ID) or 0,
-        cost = tonumber(entry.ult1Cost) or 0,
-    }
-    local back = {
-        slot = "back",
-        id = tonumber(entry.ult2ID) or 0,
-        cost = tonumber(entry.ult2Cost) or 0,
-    }
-
-    local selected = nil
+    local mode = assignment and assignment.mode or "both"
+    local result = {}
 
     if mode == "main" then
-        selected = main
+        table.insert(result, self:BuildUltimate(entry, "main"))
     elseif mode == "back" then
-        selected = back
+        table.insert(result, self:BuildUltimate(entry, "back"))
     else
-        if main.id <= 0 then
-            selected = back
-        elseif back.id <= 0 then
-            selected = main
-        elseif main.cost <= 0 then
-            selected = back
-        elseif back.cost <= 0 then
-            selected = main
-        else
-            local value = tonumber(entry.ultValue) or 0
-            local mainRatio = value / math.max(1, main.cost)
-            local backRatio = value / math.max(1, back.cost)
-            selected = mainRatio >= backRatio and main or back
-        end
+        table.insert(result, self:BuildUltimate(entry, "main"))
+        table.insert(result, self:BuildUltimate(entry, "back"))
     end
 
-    selected = selected or main
-    local name, icon = self:GetAbilityMeta(selected.id)
-    selected.name = name
-    selected.icon = icon
-    selected.ready = selected.id > 0 and selected.cost > 0 and (tonumber(entry.ultValue) or 0) >= selected.cost
-    return selected
+    return result
+end
+
+-- Kept for compatibility with any code that still expects one selected Ultimate.
+function Group:GetSelectedUltimate(entry)
+    local ultimates = self:GetSelectedUltimates(entry)
+    return ultimates[1]
 end
 
 function Group:GetTrackedEntries()
@@ -337,7 +339,17 @@ function Group:GetTrackedEntries()
         end
 
         if include then
-            entry.selected = self:GetSelectedUltimate(entry)
+            entry.selectedUltimates = self:GetSelectedUltimates(entry)
+            entry.selected = entry.selectedUltimates[1]
+            entry.anyReady = false
+
+            for _, ultimate in ipairs(entry.selectedUltimates) do
+                if ultimate and ultimate.ready then
+                    entry.anyReady = true
+                    break
+                end
+            end
+
             table.insert(result, entry)
         end
     end
@@ -375,16 +387,23 @@ function Group:CheckReadyTransitions()
     local activeKeys = {}
 
     for _, entry in ipairs(self:GetTrackedEntries()) do
-        local selected = entry.selected
-        local key = entry.key
-        local ready = entry.shared and selected and selected.ready == true
-        activeKeys[key] = true
+        if entry.shared then
+            for _, ultimate in ipairs(entry.selectedUltimates or {}) do
+                if ultimate then
+                    local stateKey = tostring(entry.key) .. ":" .. tostring(ultimate.slot)
+                    activeKeys[stateKey] = true
 
-        local previous = self.readyState[key] == true
-        if ready and not previous then
-            self:PlayReadySound()
+                    local ready = ultimate.ready == true
+                    local previous = self.readyState[stateKey] == true
+
+                    if ready and not previous then
+                        self:PlayReadySound()
+                    end
+
+                    self.readyState[stateKey] = ready
+                end
+            end
         end
-        self.readyState[key] = ready
     end
 
     for key in pairs(self.readyState) do
