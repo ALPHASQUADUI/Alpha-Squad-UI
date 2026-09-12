@@ -1564,6 +1564,8 @@ function AOT:CreateSettingsWindow()
         AOT:ApplyVisualSettings()
         local ult = AlphaSquadUI and AlphaSquadUI.Modules and AlphaSquadUI.Modules.ULTTracker
         if ult and ult.ApplyVisibility then ult:ApplyVisibility() end
+        local support = AlphaSquadUI and AlphaSquadUI.Modules and AlphaSquadUI.Modules.SupportCoverage
+        if support and support.ApplyVisibility then support:ApplyVisibility() end
     end)
 
     local separator = WINDOW_MANAGER:CreateControl("AlphaSquadSettingsSeparator", win, CT_TEXTURE)
