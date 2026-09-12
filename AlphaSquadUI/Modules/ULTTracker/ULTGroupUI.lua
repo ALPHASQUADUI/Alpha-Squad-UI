@@ -478,7 +478,7 @@ function Group:ApplyConfigWindowScale()
     local rootW = GuiRoot:GetWidth() or 1920
     local rootH = GuiRoot:GetHeight() or 1080
     local fitX = math.max(0.65, (rootW - 30) / 780)
-    local fitY = math.max(0.65, (rootH - 30) / 690)
+    local fitY = math.max(0.65, (rootH - 30) / 720)
 
     self.configWindow:SetScale(math.min(1, fitX, fitY))
 end
