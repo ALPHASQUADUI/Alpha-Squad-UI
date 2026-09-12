@@ -69,3 +69,147 @@ update exists only while a tracked Ultimate is actually READY.
 - `/asult disable`
 - `/asult reset`
 - `/asult status`
+
+
+## Group Ultimate Tracking
+
+ULT Tracker includes an optional raidlead-oriented group Ultimate list.
+
+### How tracking works
+
+The raidlead does **not** configure players manually.
+
+The configuration scans the current group and builds a unique list of every
+shared Ultimate ability currently slotted by group members. The raidlead then
+selects the **Ultimate abilities** to monitor.
+
+Examples:
+
+- Aggressive Horn
+- Glacial Colossus
+- Reviving Barrier
+- Shooting Star
+
+If a player has one of the selected Ultimates slotted on either weapon bar,
+their **@UserID** is automatically added to the raidlead list. If the player no
+longer has a selected Ultimate slotted, they disappear automatically.
+
+There is no FRONT/BACK distinction in the raidlead workflow.
+
+### Data source
+
+ESO does not expose another player's live Ultimate resource directly to arbitrary
+addons. Group tracking therefore integrates with **LibGroupCombatStats**, which
+shares Ultimate data through the official ZOS group broadcast API.
+
+The personal MAIN/BACK tracker does not require this library.
+
+When LibGroupCombatStats is available, AlphaSquadUI registers for **ULT only**.
+No DPS or HPS data is requested.
+
+Compatible group data can come from AlphaSquadUI, Hodor Reflexes, or another
+addon registered with LibGroupCombatStats.
+
+### Raidlead configuration
+
+Open:
+
+`Settings > Ąlpha Şquad > ULT Tracker > CONFIGURE GROUP`
+
+or:
+
+`/asult group`
+
+The configuration shows up to 24 unique Ultimates from the current 12-player
+group in a compact two-column list.
+
+For each Ultimate:
+
+- icon
+- exact localized Ultimate name
+- number of group members currently slotting it
+- ON/OFF tracking state
+
+`SELECT ALL` and `CLEAR ALL` are available.
+
+### Group HUD
+
+The raidlead HUD is a compact vertical list with **one @UserID per line**.
+
+Each line can show:
+
+- @UserID
+- matching selected Ultimate icon(s)
+- exact matching Ultimate name(s)
+- current Ultimate points / relevant cost
+- READY state
+
+READY players are visually prioritized and receive a subtle pulse.
+
+When a tracked player spends an Ultimate after being ready, that row is strongly
+dimmed for a short period so the raidlead can immediately distinguish spent
+Ultimates from players who are ready.
+
+### Performance
+
+Group tracking remains event-driven through LibGroupCombatStats Ultimate events.
+
+- incoming updates are coalesced
+- hidden settings panels are not refreshed
+- disabled group HUDs do not rebuild rows
+- only READY rows use a lightweight pulse update
+- one 2-second safety refresh runs only while Group Tracking is enabled
+- row controls are created once and reused
+- no combat-log parsing is required
+
+### Commands
+
+- `/asult group` — open Group Ultimate configuration
+- `/asult group show`
+- `/asult group hide`
+- `/asult group lock`
+- `/asult group unlock`
+- `/asult group reset`
+
+
+### Compact percentage HUD
+
+The group HUD is intentionally minimal for raidlead use:
+
+- one @UserID per row
+- large tracked Ultimate icon
+- charge percentage only
+- no Ultimate name in the HUD
+- no raw Ultimate point count
+
+Percentage is calculated against the real cost of the tracked Ultimate and is
+capped at 100%.
+
+Rows are ordered:
+
+1. READY players first
+2. charging players by highest percentage
+3. recently spent Ultimates last
+
+READY rows use a high-contrast orange/gold/white pulse. Recently spent rows are
+strongly dimmed for a short period.
+
+
+### Persistent HUD sizing
+
+Group Ultimate Config exposes explicit HUD sizing controls:
+
+- **Overall Scale**: 60%–180%
+- **List Width**: 240–520 px
+- **Row Height**: 28–56 px
+- **Background Opacity**: 30%–100%
+- **Reset Size**
+- **Reset Position**
+
+Row Height also scales the Ultimate icon automatically, keeping the compact list
+balanced and responsive.
+
+All group tracker preferences are stored in account-wide ESO SavedVariables for
+the current server/world, including tracked Ultimate filters, HUD scale, width,
+row height, opacity, position, lock state, visibility, self inclusion and ready
+sound preference. Values survive reloads, zoning and game restarts.
