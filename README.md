@@ -177,10 +177,6 @@ It checks:
 
 Syntax validation does not replace in-game ESO testing.
 
-## Release status
-
-The `alpha-squad-ui-audit` branch is an integration/test branch for the 2.6.0 cleanup. `main` remains the stable branch until the audit build has been validated in game and merged by pull request.
-
 ## Author
 
 **SeRuM1**
