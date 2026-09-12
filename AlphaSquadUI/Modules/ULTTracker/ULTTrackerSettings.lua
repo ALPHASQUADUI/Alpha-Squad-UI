@@ -336,14 +336,23 @@ function ULT:BuildIntegratedSettingsPage(page, ui)
     modeLabel:SetAnchor(TOPLEFT, tracking, TOPLEFT, 14, 42)
     modeLabel:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
 
+    local function SelectTrackMode(mode)
+        if not ULT.sv then return end
+        ULT:SetTrackMode(mode)
+        local refreshMain = AlphaSquadUI
+            and AlphaSquadUI.Settings
+            and AlphaSquadUI.Settings.RefreshMain
+        if refreshMain then refreshMain() end
+    end
+
     local mainButton = CreateButton(tracking, "AlphaSquadULTIntegratedModeMain", "MAIN", 14, 74, 88, 32, function()
-        if ULT.sv then ULT:SetTrackMode("main") end
+        SelectTrackMode("main")
     end)
     local backButton = CreateButton(tracking, "AlphaSquadULTIntegratedModeBack", "BACK", 116, 74, 88, 32, function()
-        if ULT.sv then ULT:SetTrackMode("back") end
+        SelectTrackMode("back")
     end)
     local bothButton = CreateButton(tracking, "AlphaSquadULTIntegratedModeBoth", "BOTH", 218, 74, 88, 32, function()
-        if ULT.sv then ULT:SetTrackMode("both") end
+        SelectTrackMode("both")
     end)
 
     RegisterRefresher(function()
