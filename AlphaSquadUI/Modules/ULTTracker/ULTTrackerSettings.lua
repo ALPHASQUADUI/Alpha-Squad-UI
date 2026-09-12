@@ -87,7 +87,7 @@ end
 
 function ULT:ToggleSettings()
     local settings = AlphaSquadUI and AlphaSquadUI.Settings
-    if settings and settings.OpenPage and settings:OpenPage("ulttracker") then
+    if settings and settings.OpenPage and settings.OpenPage("ulttracker") then
         self:ApplyVisibility()
         return
     end
