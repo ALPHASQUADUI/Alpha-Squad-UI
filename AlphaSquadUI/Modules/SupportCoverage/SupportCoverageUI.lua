@@ -108,9 +108,12 @@ end
 
 function SC:ApplyVisibility()
     if not self.window or not self.sv then return end
+    local settings = AlphaSquadUI and AlphaSquadUI.Settings
+    local sharedSettingsVisible = settings and settings.mainWindow and not settings.mainWindow:IsHidden() or false
     local hidden = not self.sv.enabled
         or not self.sv.visible
         or (self.sv.hideInMenus and self.uiObscured)
+        or sharedSettingsVisible
         or (self.settingsPageVisible == true)
     self.window:SetHidden(hidden)
     if hidden and self.banner then self.banner:SetHidden(true) end
@@ -140,7 +143,8 @@ function SC:GetHUDIssues()
                 result[#result + 1] = {
                     severity = "warning",
                     text = row.effect.label,
-                    value = string.format("%d/%d", row.liveCount, row.liveTotal),
+                    value = string.format("%d/%d%s", row.liveCount, row.liveTotal,
+                        (row.liveUnknown or 0) > 0 and (" +" .. tostring(row.liveUnknown) .. "?") or ""),
                 }
             end
         end
@@ -248,6 +252,57 @@ function SC:HideReadyBanner()
     if self.banner then self.banner:SetHidden(true) end
 end
 
+function SC:ShowPersonalAssignmentBanner()
+    if not self.assignmentBanner or self.inCombat then return end
+    local assignments = self.GetMyRemoteAssignments and self:GetMyRemoteAssignments() or {}
+    local role = self.remotePlan and self.remotePlan.myRole or nil
+    if #assignments == 0 and (not role or role == "UNKNOWN") then return end
+
+    local parts = {}
+    if role and role ~= "UNKNOWN" then parts[#parts + 1] = role end
+    for i = 1, math.min(3, #assignments) do parts[#parts + 1] = assignments[i] end
+    if #assignments > 3 then parts[#parts + 1] = "+" .. tostring(#assignments - 3) end
+
+    self.assignmentBanner.label:SetText("YOUR ASSIGNMENT  •  " .. table.concat(parts, "  •  "))
+    SetColor(self.assignmentBanner.label, C.orange)
+    self.assignmentBanner:SetHidden(false)
+
+    local stamp = self.NowMs()
+    self.assignmentBannerStamp = stamp
+    zo_callLater(function()
+        if SC and SC.assignmentBanner and SC.assignmentBannerStamp == stamp and not SC.inCombat then
+            SC.assignmentBanner:SetHidden(true)
+        end
+    end, 5000)
+end
+
+function SC:ShowPullSummaryBanner(pull)
+    if not self.assignmentBanner or not pull or self.inCombat then return end
+
+    local worstKey, worstUptime, worstGap = nil, 101, 0
+    for key, data in pairs(pull.summary or {}) do
+        if data.uptime and data.uptime < worstUptime then
+            worstKey, worstUptime, worstGap = key, data.uptime, data.longestGapMs or 0
+        end
+    end
+
+    if not worstKey or not Catalog or not Catalog.effects[worstKey] then return end
+    local effect = Catalog.effects[worstKey]
+    self.assignmentBanner.label:SetText(string.format(
+        "PULL SUPPORT  •  LOWEST %s %.1f%%  •  GAP %.1fs",
+        effect.label, worstUptime, worstGap / 1000))
+    SetColor(self.assignmentBanner.label, C.gold)
+    self.assignmentBanner:SetHidden(false)
+
+    local stamp = self.NowMs()
+    self.assignmentBannerStamp = stamp
+    zo_callLater(function()
+        if SC and SC.assignmentBanner and SC.assignmentBannerStamp == stamp and not SC.inCombat then
+            SC.assignmentBanner:SetHidden(true)
+        end
+    end, 6000)
+end
+
 function SC:CreateHUD()
     local win = WINDOW_MANAGER:CreateTopLevelWindow("AlphaSquadSupportCoverageHUD")
     self.window = win
@@ -343,6 +398,19 @@ function SC:CreateHUD()
     banner.label = Label(banner, "AlphaSquadSupportCoverageBannerLabel", "ZoFontGameBold", "", C.green)
     banner.label:SetAnchorFill(banner)
     banner.label:SetHorizontalAlignment(TEXT_ALIGN_CENTER)
+
+    local assignment = WINDOW_MANAGER:CreateTopLevelWindow("AlphaSquadSupportAssignmentBanner")
+    self.assignmentBanner = assignment
+    assignment:SetDimensions(620, 42)
+    assignment:SetAnchor(TOP, GuiRoot, TOP, 0, 168)
+    assignment:SetDrawTier(DT_HIGH)
+    assignment:SetDrawLayer(DL_OVERLAY)
+    assignment:SetDrawLevel(91)
+    assignment:SetHidden(true)
+    assignment.bg = Solid(assignment, "AlphaSquadSupportAssignmentBG", C.bg)
+    assignment.label = Label(assignment, "AlphaSquadSupportAssignmentLabel", "ZoFontGameBold", "", C.orange)
+    assignment.label:SetAnchorFill(assignment)
+    assignment.label:SetHorizontalAlignment(TEXT_ALIGN_CENTER)
 
     self:ApplyAppearance()
     self:ApplyVisibility()
