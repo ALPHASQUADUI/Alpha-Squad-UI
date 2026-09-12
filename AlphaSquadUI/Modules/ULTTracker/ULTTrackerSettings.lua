@@ -446,11 +446,38 @@ function ULT:BuildIntegratedSettingsPage(page, ui)
         current:SetText(string.format("CURRENT ULTIMATE: %d", tonumber(ULT.currentUltimate) or 0))
     end)
 
-    local performance = CreateCard(page, "AlphaSquadULTIntegratedPerformance", 8, 540, 658, 78, "PERFORMANCE", C.green)
-    local perf = CreateLabel(performance, "AlphaSquadULTIntegratedPerformanceText", "ZoFontGameSmall",
-        "Event-driven tracking. Fast pulse updates run only while a tracked Ultimate is READY; a slow 1.5 s safety sync handles rare missed transitions.", C.muted)
-    perf:SetDimensions(622, 38)
-    perf:SetAnchor(TOPLEFT, performance, TOPLEFT, 14, 34)
-    perf:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
-    perf:SetVerticalAlignment(TEXT_ALIGN_TOP)
+    local groupCard = CreateCard(page, "AlphaSquadULTIntegratedGroup", 8, 540, 658, 78, "GROUP TRACKING • RAIDLEAD TOOL", C.gold)
+
+    local groupStatus = CreateLabel(groupCard, "AlphaSquadULTIntegratedGroupStatus", "ZoFontGameSmall", "", C.muted)
+    groupStatus:SetDimensions(410, 38)
+    groupStatus:SetAnchor(TOPLEFT, groupCard, TOPLEFT, 14, 34)
+    groupStatus:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
+    groupStatus:SetVerticalAlignment(TEXT_ALIGN_TOP)
+
+    CreateButton(groupCard, "AlphaSquadULTIntegratedGroupConfig", "CONFIGURE GROUP", 466, 34, 176, 32, function()
+        if ULT.Group and ULT.Group.OpenConfig then
+            ULT.Group:OpenConfig()
+        end
+    end)
+
+    RegisterRefresher(function()
+        local group = ULT.Group
+        if not group or not group.sv then
+            groupStatus:SetText("Group tracker initializing...")
+            SetColor(groupStatus, C.muted)
+            return
+        end
+
+        local shared, total = group:GetSharingCount()
+        if not group.libraryAvailable then
+            groupStatus:SetText("OFFLINE • LibGroupCombatStats required for live group Ultimate values")
+            SetColor(groupStatus, C.red)
+        elseif not group.sv.enabled then
+            groupStatus:SetText(string.format("DISABLED • %d/%d group members sharing ULT data", shared, total))
+            SetColor(groupStatus, C.muted)
+        else
+            groupStatus:SetText(string.format("ENABLED • %d/%d sharing • Event-driven raidlead list", shared, total))
+            SetColor(groupStatus, C.green)
+        end
+    end)
 end
