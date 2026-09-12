@@ -1,0 +1,48 @@
+name: Validate ULT Group Tracker
+
+on:
+  push:
+    branches:
+      - ult-group-tracker
+
+permissions:
+  contents: read
+
+jobs:
+  validate-and-package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+
+      - name: Install Lua and ZIP
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lua5.4 zip
+
+      - name: Validate Lua syntax
+        run: |
+          set -e
+          find AlphaSquadUI -type f -name '*.lua' -print0 | sort -z | xargs -0 -n1 luac5.4 -p
+
+      - name: Validate addon manifest paths
+        run: |
+          set -e
+          cd AlphaSquadUI
+          while IFS= read -r line; do
+            case "$line" in
+              ""|"##"*) continue ;;
+            esac
+            test -f "$line" || { echo "Missing manifest file: $line"; exit 1; }
+          done < AlphaSquadUI.txt
+
+      - name: Build test ZIP
+        run: |
+          zip -r AlphaSquadUI_ULT_Group_Tracker_TEST.zip AlphaSquadUI             -x '*/.gitkeep'
+
+      - name: Upload test build
+        uses: actions/upload-artifact@v4
+        with:
+          name: AlphaSquadUI-ULT-Group-Tracker-TEST
+          path: AlphaSquadUI_ULT_Group_Tracker_TEST.zip
+          if-no-files-found: error
