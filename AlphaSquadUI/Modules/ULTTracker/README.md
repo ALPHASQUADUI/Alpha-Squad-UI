@@ -73,7 +73,28 @@ update exists only while a tracked Ultimate is actually READY.
 
 ## Group Ultimate Tracking
 
-ULT Tracker also contains an optional raidlead-oriented group window.
+ULT Tracker includes an optional raidlead-oriented group Ultimate list.
+
+### How tracking works
+
+The raidlead does **not** configure players manually.
+
+The configuration scans the current group and builds a unique list of every
+shared Ultimate ability currently slotted by group members. The raidlead then
+selects the **Ultimate abilities** to monitor.
+
+Examples:
+
+- Aggressive Horn
+- Glacial Colossus
+- Reviving Barrier
+- Shooting Star
+
+If a player has one of the selected Ultimates slotted on either weapon bar,
+their **@UserID** is automatically added to the raidlead list. If the player no
+longer has a selected Ultimate slotted, they disappear automatically.
+
+There is no FRONT/BACK distinction in the raidlead workflow.
 
 ### Data source
 
@@ -86,11 +107,8 @@ The personal MAIN/BACK tracker does not require this library.
 When LibGroupCombatStats is available, AlphaSquadUI registers for **ULT only**.
 No DPS or HPS data is requested.
 
-Compatible group data can come from:
-
-- another AlphaSquadUI user with LibGroupCombatStats installed
-- Hodor Reflexes
-- another addon registered with LibGroupCombatStats
+Compatible group data can come from AlphaSquadUI, Hodor Reflexes, or another
+addon registered with LibGroupCombatStats.
 
 ### Raidlead configuration
 
@@ -102,54 +120,47 @@ or:
 
 `/asult group`
 
-Each current group member can be configured independently:
+The configuration shows up to 24 unique Ultimates from the current 12-player
+group in a compact two-column list.
 
-- **TRACK** — show this player
-- **HIDE** — exclude this player
-- **FRONT** — track the Ultimate currently shared from the player's front bar
-- **BACK** — track the Ultimate currently shared from the player's back bar
-- **BOTH** — display and track both shared bar Ultimates independently
+For each Ultimate:
 
-The selector uses the actual shared ability IDs, localized names, icons and
-costs. This means any Ultimate or morph can be displayed without maintaining a
-hard-coded ability list.
+- icon
+- exact localized Ultimate name
+- number of group members currently slotting it
+- ON/OFF tracking state
+
+`SELECT ALL` and `CLEAR ALL` are available.
 
 ### Group HUD
 
-The dedicated group window is a compact 3×4 raid grid for up to 12 players.
+The raidlead HUD is a compact vertical list with **one @UserID per line**.
 
-Each player card displays:
+Each line can show:
 
-- character name
-- exact selected Ultimate name(s)
-- FRONT/BACK source
-- live Ultimate points and cost
-- independent READY state for each tracked Ultimate
-- subtle READY pulse only on the Ultimate line that is ready
-- NO DATA / EMPTY states when appropriate
+- @UserID
+- matching selected Ultimate icon(s)
+- exact matching Ultimate name(s)
+- current Ultimate points / relevant cost
+- READY state
 
-The group window is:
+READY players are visually prioritized and receive a subtle pulse.
 
-- movable
-- lockable
-- position-persistent
-- scalable
-- background-opacity configurable
-- screen-clamped and responsive
-- automatically hidden with major UI menus when configured
-
-Group READY sound is optional and disabled by default. The group configuration uses an internal selector panel; no external ESO popup menu is used.
+When a tracked player spends an Ultimate after being ready, that row is strongly
+dimmed for a short period so the raidlead can immediately distinguish spent
+Ultimates from players who are ready.
 
 ### Performance
 
-Group tracking is event-driven through LibGroupCombatStats Ultimate events.
+Group tracking remains event-driven through LibGroupCombatStats Ultimate events.
 
 - incoming updates are coalesced
 - hidden settings panels are not refreshed
 - disabled group HUDs do not rebuild rows
-- no permanent READY animation loop is used for the group list
+- only READY rows use a lightweight pulse update
 - one 2-second safety refresh runs only while Group Tracking is enabled
-- row controls are pooled instead of recreated during combat
+- row controls are created once and reused
+- no combat-log parsing is required
 
 ### Commands
 
