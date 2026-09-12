@@ -325,6 +325,7 @@ function ULT:RefreshUIObscured()
     self.uiObscured = not (SceneVisible(HUD_SCENE) or SceneVisible(HUD_UI_SCENE))
     if self.uiObscured then self:SetFlashUpdate(false) end
     if self.ApplyVisibility then self:ApplyVisibility() end
+    if self.Group and self.Group.ApplyVisibility then self.Group:ApplyVisibility() end
     if not self.uiObscured then self:Refresh("hud visible") end
 end
 
@@ -410,6 +411,11 @@ function ULT:RegisterEvents()
                     ULT:ClampToScreen(true)
                     ULT:RefreshHUD()
                 end
+                if ULT and ULT.Group and ULT.Group.window then
+                    ULT.Group:ApplyAppearance()
+                    ULT.Group:ClampToScreen(true)
+                    ULT.Group:RefreshHUD()
+                end
             end, 50)
         end)
     end
@@ -449,6 +455,18 @@ function ULT:RegisterSlashCommands()
             ULT:SetTrackMode("both")
         elseif lower == "reset" then
             if ULT.ResetPosition then ULT:ResetPosition() end
+        elseif lower == "group" or lower == "group config" or lower == "group settings" then
+            if ULT.Group and ULT.Group.ToggleConfig then ULT.Group:ToggleConfig() end
+        elseif lower == "group show" then
+            if ULT.Group then ULT.Group:SetEnabled(true); ULT.Group:SetVisible(true) end
+        elseif lower == "group hide" then
+            if ULT.Group then ULT.Group:SetVisible(false) end
+        elseif lower == "group lock" then
+            if ULT.Group then ULT.Group:SetLocked(true) end
+        elseif lower == "group unlock" or lower == "group move" then
+            if ULT.Group then ULT.Group:SetLocked(false); ULT.Group:SetVisible(true) end
+        elseif lower == "group reset" then
+            if ULT.Group and ULT.Group.ResetPosition then ULT.Group:ResetPosition() end
         elseif lower == "status" then
             local p, b = ULT.bars.primary, ULT.bars.backup
             d(string.format("|cE66A19[ĄS ULT]|r ULT %d | MAIN: %s (%d) %s | BACK: %s (%d) %s",
@@ -456,7 +474,7 @@ function ULT:RegisterSlashCommands()
                 p.name ~= "" and p.name or "EMPTY", p.cost or 0, p.state or "",
                 b.name ~= "" and b.name or "EMPTY", b.cost or 0, b.state or ""))
         else
-            d("|cE66A19[ĄS ULT]|r /asult • lock • unlock • show • hide • enable • disable • main • back • both • reset • status")
+            d("|cE66A19[ĄS ULT]|r /asult • main • back • both • group • group show/hide • group lock/unlock • reset • status")
         end
     end
 end
@@ -491,6 +509,7 @@ function ULT:Initialize()
 
     if self.CreateHUD then self:CreateHUD() end
     if self.CreateSettings then self:CreateSettings() end
+    if self.InitializeGroup then self:InitializeGroup() end
 
     self:RegisterSceneCallbacks()
     self:RegisterEvents()
