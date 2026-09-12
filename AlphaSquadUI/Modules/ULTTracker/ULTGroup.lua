@@ -428,6 +428,36 @@ function Group:GetMatchingUltimates(entry)
     return matches
 end
 
+function Group:GetBestMatchingUltimate(entry)
+    local matches = entry and (entry.matchingUltimates or self:GetMatchingUltimates(entry)) or {}
+    local best = nil
+    local bestPercent = -1
+
+    for _, ultimate in ipairs(matches) do
+        local cost = tonumber(ultimate.cost) or 0
+        local value = tonumber(ultimate.value) or tonumber(entry and entry.ultValue) or 0
+        local percent = 0
+
+        if cost > 0 then
+            percent = math.min(100, math.max(0, math.floor(((value / cost) * 100) + 0.5)))
+        end
+
+        if ultimate.ready then
+            percent = 100
+        end
+
+        if not best
+            or (ultimate.ready == true and best.ready ~= true)
+            or (ultimate.ready == best.ready and percent > bestPercent)
+        then
+            best = ultimate
+            bestPercent = percent
+        end
+    end
+
+    return best, math.max(0, bestPercent)
+end
+
 function Group:GetTrackedEntries()
     local result = {}
 
@@ -451,14 +481,24 @@ function Group:GetTrackedEntries()
                 end
 
                 entry.recentlyUsed = NowMs() < (self.recentlyUsedUntil[entry.key] or 0)
+                entry.bestUltimate, entry.chargePercent = self:GetBestMatchingUltimate(entry)
                 table.insert(result, entry)
             end
         end
     end
 
     table.sort(result, function(a, b)
+        -- READY always at the top for raidlead visibility.
         if a.anyReady ~= b.anyReady then return a.anyReady == true end
-        if a.recentlyUsed ~= b.recentlyUsed then return b.recentlyUsed == true end
+
+        -- Recently spent Ultimates are deliberately pushed to the bottom.
+        if a.recentlyUsed ~= b.recentlyUsed then return a.recentlyUsed == false end
+
+        -- Among charging players, show the closest-to-ready players first.
+        local aPercent = tonumber(a.chargePercent) or 0
+        local bPercent = tonumber(b.chargePercent) or 0
+        if aPercent ~= bPercent then return aPercent > bPercent end
+
         return string.lower(a.displayName or a.key or "") < string.lower(b.displayName or b.key or "")
     end)
 
