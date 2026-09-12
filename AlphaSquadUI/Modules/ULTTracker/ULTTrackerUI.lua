@@ -117,7 +117,8 @@ end
 
 function ULT:GetWindowWidth()
     if not self.sv then return 610 end
-    return self.sv.trackMode == "both" and 610 or 318
+    -- A single-card layout keeps enough header room for brand, counter and drag hint.
+    return self.sv.trackMode == "both" and 610 or 360
 end
 
 function ULT:ApplyLayout()
@@ -149,17 +150,66 @@ function ULT:ApplyLayout()
     end
 
     self.window.ultCounter:ClearAnchors()
-    self.window.ultCounter:SetAnchor(TOPRIGHT, self.window, TOPRIGHT, -15, 10)
     self.window.moveHint:ClearAnchors()
-    self.window.moveHint:SetAnchor(TOPRIGHT, self.window, TOPRIGHT, -96, 10)
 
-    self:ApplyPosition()
+    if both then
+        self.window.brand:SetFont("ZoFontGameBold")
+        self.window.brand:SetText("ĄLPHA ŞQUAD  •  ULT TRACKER")
+        self.window.brand:SetDimensions(300, 24)
+        self.window.ultCounter:SetAnchor(TOPRIGHT, self.window, TOPRIGHT, -15, 10)
+        self.window.moveHint:SetText("CLICK + DRAG")
+        self.window.moveHint:SetDimensions(105, 22)
+        self.window.moveHint:SetAnchor(TOPRIGHT, self.window, TOPRIGHT, -96, 10)
+    else
+        -- Compact header for MAIN-only / BACK-only mode. Avoids text collisions
+        -- and keeps the window readable at smaller resolutions/UI scales.
+        self.window.brand:SetFont("ZoFontGameSmall")
+        self.window.brand:SetText("ĄLPHA ŞQUAD  •  ULT TRACKER")
+        self.window.brand:SetDimensions(188, 22)
+        self.window.ultCounter:SetAnchor(TOPRIGHT, self.window, TOPRIGHT, -14, 9)
+        self.window.moveHint:SetText("DRAG")
+        self.window.moveHint:SetDimensions(48, 20)
+        self.window.moveHint:SetAnchor(TOPRIGHT, self.window, TOPRIGHT, -86, 9)
+    end
+
+    -- Never re-apply the saved position here. ApplyLayout runs on every HUD refresh;
+    -- re-anchoring here would snap a freshly dragged window back to its old location.
+    self:ClampToScreen(false)
 end
 
 function ULT:ApplyPosition()
     if not self.window or not self.sv then return end
     self.window:ClearAnchors()
     self.window:SetAnchor(TOPLEFT, GuiRoot, TOPLEFT, self.sv.x, self.sv.y)
+end
+
+function ULT:ClampToScreen(saveIfChanged)
+    if not self.window or not self.sv or not GuiRoot then return end
+
+    local rootW = GuiRoot:GetWidth() or 1920
+    local rootH = GuiRoot:GetHeight() or 1080
+    local scale = (self.sv.scale or 100) / 100
+    local width = (self.window:GetWidth() or self:GetWindowWidth()) * scale
+    local height = (self.window:GetHeight() or 142) * scale
+
+    local left = self.window:GetLeft()
+    local top = self.window:GetTop()
+    if left == nil or top == nil then return end
+
+    local maxX = math.max(0, rootW - width)
+    local maxY = math.max(0, rootH - height)
+    local clampedX = Clamp(left, 0, maxX)
+    local clampedY = Clamp(top, 0, maxY)
+
+    if math.abs(clampedX - left) > 0.5 or math.abs(clampedY - top) > 0.5 then
+        self.window:ClearAnchors()
+        self.window:SetAnchor(TOPLEFT, GuiRoot, TOPLEFT, clampedX, clampedY)
+        if saveIfChanged then
+            self.sv.x = math.floor(clampedX + 0.5)
+            self.sv.y = math.floor(clampedY + 0.5)
+            self.sv.positionSaved = true
+        end
+    end
 end
 
 function ULT:SavePosition()
@@ -169,6 +219,7 @@ function ULT:SavePosition()
         self.sv.x = math.floor(left + 0.5)
         self.sv.y = math.floor(top + 0.5)
         self.sv.positionSaved = true
+        self:ClampToScreen(true)
     end
 end
 
@@ -218,6 +269,7 @@ function ULT:ApplyAppearance()
     self.window:SetScale((self.sv.scale or 100) / 100)
     self.window:SetAlpha(1)
     self.window.bg:SetAlpha((self.sv.opacity or 92) / 100)
+    self:ClampToScreen(true)
 end
 
 function ULT:RefreshCard(card, bar)
@@ -293,16 +345,17 @@ function ULT:UpdateReadyPulse()
     if not self.window or not self.sv or not self.sv.readyFlash or self.window:IsHidden() then return end
 
     local t = (GetGameTimeMilliseconds and GetGameTimeMilliseconds() or 0) / 1000
-    local pulse = (math.sin(t * 7.0) + 1) * 0.5
-    local alpha = 0.16 + (pulse * 0.72)
-    local scaleBoost = 1 + (pulse * 0.035)
+    -- Slow, restrained breathing pulse: readable without a fluorescent/neon effect.
+    local pulse = (math.sin(t * 2.8) + 1) * 0.5
+    local alpha = 0.06 + (pulse * 0.22)
+    local borderAlpha = 0.76 + (pulse * 0.14)
 
     for key, card in pairs(self.window.cards) do
         local bar = self.bars[key]
         if self:ShouldTrackBar(key) and bar and bar.ready then
-            card.readyGlow:SetColor(COLORS.green[1], COLORS.green[2], COLORS.green[3], alpha)
-            card.iconBorder:SetColor(COLORS.green[1], COLORS.green[2], COLORS.green[3], 0.75 + pulse * 0.25)
-            card.icon:SetScale(scaleBoost)
+            card.readyGlow:SetColor(0.24, 0.78, 0.46, alpha)
+            card.iconBorder:SetColor(0.32, 0.90, 0.55, borderAlpha)
+            card.icon:SetScale(1)
         else
             card.readyGlow:SetColor(COLORS.green[1], COLORS.green[2], COLORS.green[3], 0)
             card.icon:SetScale(1)
@@ -366,10 +419,19 @@ function ULT:CreateHUD()
     win.dragSurface:SetHandler("OnMouseUp", function()
         if ULT.sv and not ULT.sv.locked then
             win:StopMovingOrResizing()
+            ULT:SavePosition()
+        end
+    end)
+
+    -- Covers releases outside the drag surface and movement stopped by the UI system.
+    win:SetHandler("OnMoveStop", function()
+        if ULT.sv and not ULT.sv.locked then
+            ULT:SavePosition()
         end
     end)
 
     self:ApplyLayout()
+    self:ApplyPosition()
     self:ApplyAppearance()
     self:UpdateLockState()
     self:ApplyVisibility()
