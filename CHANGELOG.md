@@ -2,13 +2,13 @@
 
 All notable changes to Ąlpha Şquad UI are documented here.
 
-## 2.6.0-audit-test — Unreleased
+## 2.6.0 — 2026-09-12
 
 ### Suite / Core
 - Added a real shared settings page registry and shell bridge in Core.
 - ULT Tracker now registers its integrated page through Core instead of being directly wired by Overload.
 - Reused shared Core clamp/theme infrastructure where safe.
-- Unified the audit build version across suite metadata.
+- Unified the stable 2.6.0 version across suite metadata.
 - Normal `/asult` settings use the shared Ąlpha Şquad settings shell.
 
 ### ULT Tracker
