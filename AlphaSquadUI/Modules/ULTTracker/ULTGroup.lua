@@ -71,6 +71,8 @@ function Group:GetDefaults()
         readySound = false,
         hideInMenus = true,
         scale = 100,
+        hudWidth = 312,
+        rowHeight = 36,
         opacity = 92,
         x = math.floor(rootW * 0.70),
         y = math.floor(rootH * 0.16),
@@ -101,7 +103,10 @@ function Group:EnsureSavedVariables()
         ULT.sv.group.trackedAbilities = {}
     end
 
-    ULT.sv.group.scale = ULT.Clamp(ULT.sv.group.scale or 100, 70, 140)
+    -- Persistent per-account HUD geometry. Existing users keep their saved values.
+    ULT.sv.group.scale = ULT.Clamp(ULT.sv.group.scale or 100, 60, 180)
+    ULT.sv.group.hudWidth = ULT.Clamp(ULT.sv.group.hudWidth or 312, 240, 520)
+    ULT.sv.group.rowHeight = ULT.Clamp(ULT.sv.group.rowHeight or 36, 28, 56)
     ULT.sv.group.opacity = ULT.Clamp(ULT.sv.group.opacity or 92, 30, 100)
     self.sv = ULT.sv.group
 end
