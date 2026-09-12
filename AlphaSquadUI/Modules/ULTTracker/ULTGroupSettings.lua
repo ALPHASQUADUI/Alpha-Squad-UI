@@ -259,7 +259,7 @@ function Group:CreateConfigWindow()
     local win = WINDOW_MANAGER:CreateTopLevelWindow("AlphaSquadULTGroupConfigWindow")
     self.configWindow = win
 
-    win:SetDimensions(780, 690)
+    win:SetDimensions(780, 760)
     win:SetAnchor(CENTER, GuiRoot, CENTER, 0, 0)
     win:SetClampedToScreen(true)
     win:SetMovable(true)
