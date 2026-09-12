@@ -13,5 +13,6 @@ Features include the movable HUD, Ultimate counter, emergency reserve alerts,
 ready reminder, PvP suppression option, menu auto-hide and dormant behavior
 when no Overload morph is slotted.
 
-The gameplay implementation remains consolidated in `Overload.lua` during the
-first architecture migration to minimize regression risk.
+The gameplay implementation intentionally remains consolidated in `Overload.lua`
+to minimize regression risk. Any future file split should preserve gameplay
+behavior and SavedVariables exactly.
