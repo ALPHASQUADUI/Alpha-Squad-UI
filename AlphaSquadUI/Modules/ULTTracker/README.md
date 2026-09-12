@@ -106,9 +106,9 @@ Each current group member can be configured independently:
 
 - **TRACK** — show this player
 - **HIDE** — exclude this player
-- **AUTO** — display whichever of the two shared Ultimates is closest to READY
-- **MAIN** — track the Ultimate currently shared from the player's front bar
+- **FRONT** — track the Ultimate currently shared from the player's front bar
 - **BACK** — track the Ultimate currently shared from the player's back bar
+- **BOTH** — display and track both shared bar Ultimates independently
 
 The selector uses the actual shared ability IDs, localized names, icons and
 costs. This means any Ultimate or morph can be displayed without maintaining a
@@ -116,14 +116,17 @@ hard-coded ability list.
 
 ### Group HUD
 
-The dedicated group window displays:
+The dedicated group window is a compact 3×4 raid grid for up to 12 players.
 
-- character and account name
-- selected Ultimate icon/name
-- MAIN/BACK source
+Each player card displays:
+
+- character name
+- exact selected Ultimate name(s)
+- FRONT/BACK source
 - live Ultimate points and cost
-- readiness progress
-- READY / CHARGE / NO DATA / EMPTY state
+- independent READY state for each tracked Ultimate
+- subtle READY pulse only on the Ultimate line that is ready
+- NO DATA / EMPTY states when appropriate
 
 The group window is:
 
@@ -135,7 +138,7 @@ The group window is:
 - screen-clamped and responsive
 - automatically hidden with major UI menus when configured
 
-Group READY sound is optional and disabled by default.
+Group READY sound is optional and disabled by default. The group configuration uses an internal selector panel; no external ESO popup menu is used.
 
 ### Performance
 
