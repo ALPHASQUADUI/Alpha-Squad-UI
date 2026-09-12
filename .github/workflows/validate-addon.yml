@@ -7,7 +7,8 @@ on:
   push:
     branches:
       - main
-      - alpha-squad-ui-audit
+      - 'release-*'
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -40,21 +41,35 @@ jobs:
             test -f "$line" || { echo "Missing manifest file: $line"; exit 1; }
           done < AlphaSquadUI.txt
 
-      - name: Validate required metadata
+      - name: Validate release metadata
         run: |
           set -euo pipefail
-          grep -q '^## Version:' AlphaSquadUI/AlphaSquadUI.txt
-          grep -q '^## AddOnVersion:' AlphaSquadUI/AlphaSquadUI.txt
+          manifest_version="$(sed -n 's/^## Version: //p' AlphaSquadUI/AlphaSquadUI.txt)"
+          core_version="$(sed -n 's/^ASUI.version = "\([^"]*\)"/\1/p' AlphaSquadUI/Core/Core.lua)"
+          addon_version="$(sed -n 's/^## AddOnVersion: //p' AlphaSquadUI/AlphaSquadUI.txt)"
+
+          test -n "$manifest_version"
+          test -n "$core_version"
+          test -n "$addon_version"
+          test "$manifest_version" = "$core_version" || {
+            echo "Version mismatch: manifest=$manifest_version core=$core_version"
+            exit 1
+          }
+
+          case "$addon_version" in
+            *[!0-9]*|"") echo "AddOnVersion must be numeric"; exit 1 ;;
+          esac
+
           grep -q '^## SavedVariables:' AlphaSquadUI/AlphaSquadUI.txt
 
       - name: Build addon ZIP
         run: |
           set -euo pipefail
-          zip -r AlphaSquadUI_TEST.zip AlphaSquadUI -x '*/.gitkeep'
+          zip -r AlphaSquadUI.zip AlphaSquadUI -x '*/.gitkeep'
 
-      - name: Upload test build
+      - name: Upload validated build
         uses: actions/upload-artifact@v4
         with:
-          name: AlphaSquadUI-TEST
-          path: AlphaSquadUI_TEST.zip
+          name: AlphaSquadUI
+          path: AlphaSquadUI.zip
           if-no-files-found: error

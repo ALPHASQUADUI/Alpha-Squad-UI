@@ -51,19 +51,19 @@ Modules register page builders through:
 AlphaSquadUI.Settings.RegisterPage(id, builder)
 ```
 
-The visual shell is still created by the proven Overload implementation during this audit cycle. Modules no longer need to know that ownership detail; they interact through the Core settings bridge. Moving the visual shell itself out of Overload is a future isolated refactor, not part of runtime behavior changes.
+The visual shell is currently created by the proven Overload implementation. Modules do not depend on that ownership detail; they interact through the Core settings bridge. Moving the visual shell itself out of Overload can be handled later as an isolated refactor.
 
 ## Module boundaries
 
 ### Overload
 Owns Sorcerer Overload detection, reserve logic, alerts, HUD and existing settings shell implementation.
 
-The file remains intentionally monolithic during the audit because splitting a proven 2,000+ line gameplay module purely for aesthetics would create unnecessary regression risk. A future split should preserve behavior and SavedVariables exactly.
+The file remains intentionally monolithic because splitting a proven 2,000+ line gameplay module purely for aesthetics would create unnecessary regression risk. A future split should preserve behavior and SavedVariables exactly.
 
 ### ULT Tracker
 Owns the player's generic MAIN/BACK Ultimate tracking, HUD, events and integrated settings page.
 
-The old standalone ULT settings implementation is retained only as a defensive fallback for unusual partial development installs. Normal runtime uses the shared Ąlpha Şquad settings shell.
+ULT Tracker settings are provided exclusively through the shared Ąlpha Şquad settings shell.
 
 ### Group Ultimate Tracker
 Lives under ULT Tracker and owns optional group Ultimate sharing, ability filters, raidlead HUD and group configuration.

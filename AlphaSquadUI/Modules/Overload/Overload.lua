@@ -1,7 +1,7 @@
 --[[
     Ąlpha Şquad - Overload Tracker
     Author: SeRuM1
-    Version: 2.5.0
+    Version: 2.6.0
 
     Tracks all Sorcerer Overload variants (Overload, Energy Overload, Power Overload),
     provides a movable/lockable HUD, an emergency reserve alarm starting at 160 Ultimate,
@@ -19,7 +19,7 @@
 local ADDON_NAME = "AlphaSquadUI"
 local DISPLAY_NAME = "Ąlpha Şquad UI - Overload"
 local SETTINGS_MENU_NAME = "|cE66A19Ą|cEA7628l|cEE8237p|cF18E47h|cF49A58a |cF6A968Ş|cF8B77Aq|cFAC58Cu|cFCD49Ea|cFFF3D0d|r"
-local VERSION = (AlphaSquadUI and AlphaSquadUI.version) or "2.6.0-audit-test"
+local VERSION = (AlphaSquadUI and AlphaSquadUI.version) or "2.6.0"
 
 AlphaSquadUI = AlphaSquadUI or {}
 AlphaSquadUI.Modules = AlphaSquadUI.Modules or {}
@@ -104,16 +104,22 @@ local function SetColor(control, color)
     control:SetColor(color[1], color[2], color[3], color[4])
 end
 
-local function Clamp(value, minimum, maximum)
-    value = tonumber(value) or minimum
-    if value < minimum then return minimum end
-    if value > maximum then return maximum end
-    return value
+local Clamp = AlphaSquadUI.Utils and AlphaSquadUI.Utils.Clamp
+if not Clamp then
+    Clamp = function(value, minimum, maximum)
+        value = tonumber(value) or minimum
+        if value < minimum then return minimum end
+        if value > maximum then return maximum end
+        return value
+    end
 end
 
-local function Normalize(value)
-    if not value then return "" end
-    return string.lower(tostring(value)):gsub("\\", "/")
+local Normalize = AlphaSquadUI.Utils and AlphaSquadUI.Utils.Normalize
+if not Normalize then
+    Normalize = function(value)
+        if not value then return "" end
+        return string.lower(tostring(value)):gsub("\\", "/")
+    end
 end
 
 local function Chat(message)
