@@ -1487,6 +1487,11 @@ function AOT:CreateSettingsWindow()
     AlphaSquadUI = AlphaSquadUI or {}
     AlphaSquadUI.Settings = AlphaSquadUI.Settings or {}
     AlphaSquadUI.Settings.mainWindow = win
+    AlphaSquadUI.Settings.RefreshMain = function()
+        if AOT and AOT.RefreshSettingsWindow then
+            AOT:RefreshSettingsWindow()
+        end
+    end
     win:SetDimensions(900, 720)
     win:SetAnchor(CENTER, GuiRoot, CENTER, 0, 0)
     win:SetClampedToScreen(true)
