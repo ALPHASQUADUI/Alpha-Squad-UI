@@ -67,6 +67,8 @@ Catalog.effects = {
     symphony = E("symphony", "Symphony of Blades", "sustain", "unique", {priority="progression", group=true}),
     yolnahkriin = E("yolnahkriin", "Yolnahkriin", "offense", "unique", {priority="situational", group=true}),
     master_restoration = E("master_restoration", "Grand Rejuvenation", "sustain", "unique", {priority="progression", group=true}),
+    jorvulds_guidance = E("jorvulds_guidance", "Jorvuld's Guidance", "sustain", "unique", {priority="situational", group=true}),
+    serpents_disdain = E("serpents_disdain", "Serpent's Disdain", "debuff", "unique", {priority="situational", boss=true}),
 
     -- Sustain / ultimate economy
     major_heroism = E("major_heroism", "Major Heroism", "sustain", "buff", {priority="advanced", group=true}),
@@ -127,7 +129,7 @@ Catalog.setSources = {
     {token="roaring opportunist", provides={"major_slayer"}},
     {token="master architect", provides={"major_slayer"}},
     {token="war machine", provides={"major_slayer"}},
-    {token="jorvuld", provides={"major_slayer"}},
+    {token="jorvuld", provides={"jorvulds_guidance"}},
     {token="pillager", provides={"pillagers_profit"}},
     {token="xoryn", provides={"xoryns_masterpiece"}},
     {token="spaulder of ruin", provides={"spaulder_of_ruin"}},
@@ -139,8 +141,8 @@ Catalog.setSources = {
     {token="tremorscale", provides={"tremorscale"}},
     {token="yolnahkriin", provides={"yolnahkriin","minor_courage"}},
     {token="saxhleel", provides={"major_force"}},
-    {token="serpent's disdain", provides={"major_brittle"}},
-    {token="serpents disdain", provides={"major_brittle"}},
+    {token="serpent's disdain", provides={"serpents_disdain"}},
+    {token="serpents disdain", provides={"serpents_disdain"}},
     {token="grand rejuvenation", provides={"master_restoration"}},
     {token="master's restoration", provides={"master_restoration"}},
     {token="masters restoration", provides={"master_restoration"}},
@@ -150,6 +152,7 @@ Catalog.setSources = {
 Catalog.skillSources = {
     {token="aggressive horn", provides={"major_force"}},
     {token="war horn", provides={"major_force"}},
+    {token="ferocious roar", provides={"major_courage"}},
     {token="combat prayer", provides={"minor_berserk","minor_resolve"}},
     {token="elemental drain", provides={"major_breach","minor_magickasteal"}},
     {token="weakness to elements", provides={"major_breach"}},
