@@ -466,7 +466,7 @@ function SC:InitializeSharing()
 
         local protocol = handler:DeclareProtocol(LGB_BUILD_PROTOCOL_ID, LGB_BUILD_PROTOCOL_NAME)
         protocol:AddField(LGB.CreateNumericField("version", {minValue=0,maxValue=7}))
-        protocol:AddField(LGB.CreateNumericField("role", {minValue=0,maxValue=7}))
+        protocol:AddField(LGB.CreateNumericField("role", {minValue=0,maxValue=15}))
         protocol:AddField(LGB.CreateNumericField("classId", {minValue=0,maxValue=15}))
         protocol:AddField(LGB.CreateFlagField("food"))
         protocol:AddField(LGB.CreateFlagField("foodVerified"))
