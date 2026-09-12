@@ -1,0 +1,60 @@
+name: Validate AlphaSquadUI
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+      - alpha-squad-ui-audit
+
+permissions:
+  contents: read
+
+jobs:
+  validate-and-package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Lua and ZIP
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lua5.4 zip
+
+      - name: Validate Lua syntax
+        run: |
+          set -euo pipefail
+          find AlphaSquadUI -type f -name '*.lua' -print0 | sort -z | xargs -0 -n1 luac5.4 -p
+
+      - name: Validate addon manifest paths
+        run: |
+          set -euo pipefail
+          cd AlphaSquadUI
+          while IFS= read -r line; do
+            case "$line" in
+              ""|"##"*) continue ;;
+            esac
+            test -f "$line" || { echo "Missing manifest file: $line"; exit 1; }
+          done < AlphaSquadUI.txt
+
+      - name: Validate required metadata
+        run: |
+          set -euo pipefail
+          grep -q '^## Version:' AlphaSquadUI/AlphaSquadUI.txt
+          grep -q '^## AddOnVersion:' AlphaSquadUI/AlphaSquadUI.txt
+          grep -q '^## SavedVariables:' AlphaSquadUI/AlphaSquadUI.txt
+
+      - name: Build addon ZIP
+        run: |
+          set -euo pipefail
+          zip -r AlphaSquadUI_TEST.zip AlphaSquadUI -x '*/.gitkeep'
+
+      - name: Upload test build
+        uses: actions/upload-artifact@v4
+        with:
+          name: AlphaSquadUI-TEST
+          path: AlphaSquadUI_TEST.zip
+          if-no-files-found: error
