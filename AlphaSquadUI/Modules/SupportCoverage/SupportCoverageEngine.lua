@@ -127,14 +127,14 @@ local function RoleScore(effectKey, role)
 
     local score = 0
     if role == "DD SUPPORT" then score = score + 35 end
-    if role == "HEAL" then score = score + 25 end
+    if role == "HEAL" or role == "H1" or role == "H2" then score = score + 25 end
     if role == "OT" or role == "MT/OT" then score = score + 20 end
     if role == "MT" then score = score + 15 end
     if role == "DD PARSE" then score = score + 5 end
 
     if effect.category == "penetration" and (role == "MT" or role == "OT" or role == "MT/OT") then score = score + 30 end
-    if effect.category == "sustain" and role == "HEAL" then score = score + 20 end
-    if effect.category == "defense" and (role == "HEAL" or role == "MT" or role == "OT" or role == "MT/OT") then score = score + 20 end
+    if effect.category == "sustain" and (role == "HEAL" or role == "H1" or role == "H2") then score = score + 20 end
+    if effect.category == "defense" and (role == "HEAL" or role == "H1" or role == "H2" or role == "MT" or role == "OT" or role == "MT/OT") then score = score + 20 end
 
     return score
 end
@@ -329,7 +329,11 @@ function SC:EvaluateCoverage(reason)
     return result
 end
 
-local function MatchObservedEffect(name, effect)
+local function MatchObservedEffect(name, effect, abilityId)
+    if SC.sv and SC.sv.customCatalog and effect and SC.sv.customCatalog[effect.key] then
+        if SC.sv.customCatalog[effect.key][tostring(tonumber(abilityId) or 0)] then return true end
+    end
+
     local observed = Normalize(name)
     local target = Normalize(effect.label)
     if observed == target then return true end
@@ -362,7 +366,7 @@ function SC:ObserveEffectsOnUnit(unitTag)
             pcall(GetUnitBuffInfo, unitTag, i)
         if success and name and name ~= "" then
             for key, effect in pairs(Catalog.effects) do
-                if MatchObservedEffect(name, effect) then
+                if MatchObservedEffect(name, effect, abilityId) then
                     observed[key] = {
                         name = name,
                         abilityId = tonumber(abilityId) or 0,
@@ -420,8 +424,8 @@ function SC:SampleLiveCoverage()
 
         if self.pull and known then
             self.pull.samples = (self.pull.samples or 0) + 1
-            self.pull.effectKnownMs[key] = (self.pull.effectKnownMs and self.pull.effectKnownMs[key] or 0) + sampleMs
             self.pull.effectKnownMs = self.pull.effectKnownMs or {}
+            self.pull.effectKnownMs[key] = (self.pull.effectKnownMs[key] or 0) + sampleMs
             self.pull.effectUpMs[key] = self.pull.effectUpMs[key] or 0
             self.pull.longestGapMs[key] = self.pull.longestGapMs[key] or 0
             self.pull.gapStartedAt[key] = self.pull.gapStartedAt[key]
