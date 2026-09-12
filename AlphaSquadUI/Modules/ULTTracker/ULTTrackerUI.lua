@@ -5,7 +5,7 @@ AlphaSquadUI.Modules = AlphaSquadUI.Modules or {}
 local ULT = AlphaSquadUI.Modules.ULTTracker
 if not ULT then return end
 
-local COLORS = {
+local COLORS = (AlphaSquadUI.Theme and AlphaSquadUI.Theme.colors) or {
     bg = {0.010, 0.016, 0.030, 0.96},
     panel = {0.020, 0.030, 0.052, 0.98},
     panelActive = {0.050, 0.035, 0.020, 0.99},
@@ -264,6 +264,10 @@ function ULT:ApplyVisibility()
             (self:ShouldTrackBar("primary") and self.bars.primary.ready)
             or (self:ShouldTrackBar("backup") and self.bars.backup.ready)
         self:SetFlashUpdate(anyReady and self.sv.readyFlash)
+    end
+
+    if self.Group and self.Group.ApplyVisibility then
+        self.Group:ApplyVisibility()
     end
 end
 
