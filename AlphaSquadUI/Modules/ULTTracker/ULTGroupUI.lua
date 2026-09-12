@@ -1,4 +1,4 @@
--- Ąlpha Şquad UI - ULT Tracker / Group HUD
+-- Ąlpha Şquad UI - ULT Tracker / Compact Group Grid
 
 AlphaSquadUI = AlphaSquadUI or {}
 AlphaSquadUI.Modules = AlphaSquadUI.Modules or {}
@@ -7,6 +7,7 @@ local ULT = AlphaSquadUI.Modules.ULTTracker
 if not ULT or not ULT.Group then return end
 
 local Group = ULT.Group
+local EM = EVENT_MANAGER
 
 local COLORS = ULT.COLORS or {
     bg = {0.010, 0.016, 0.030, 0.96},
@@ -20,6 +21,13 @@ local COLORS = ULT.COLORS or {
     red = {1.00, 0.30, 0.35, 1.00},
     gold = {0.97, 0.78, 0.30, 1.00},
 }
+
+local CARD_W = 188
+local CARD_H = 64
+local GAP = 6
+local COLS = 3
+local HEADER_H = 24
+local WINDOW_W = 588
 
 local function SetColor(control, color, alpha)
     if not control or not color then return end
@@ -42,82 +50,75 @@ local function Label(parent, name, font, text, color)
     return label
 end
 
-local function CreateRow(parent, index)
-    local row = WINDOW_MANAGER:CreateControl("AlphaSquadULTGroupRow" .. index, parent, CT_CONTROL)
-    row:SetDimensions(452, 42)
+local function CreateUltimateLine(card, cardIndex, lineIndex, y)
+    local prefix = "AlphaSquadULTGroupCard" .. cardIndex .. "Line" .. lineIndex
+    local line = WINDOW_MANAGER:CreateControl(prefix, card, CT_CONTROL)
+    line:SetDimensions(CARD_W - 10, 19)
+    line:SetAnchor(TOPLEFT, card, TOPLEFT, 5, y)
 
-    row.bg = Solid(row, "AlphaSquadULTGroupRow" .. index .. "BG", {0.018, 0.027, 0.047, 0.94})
+    line.bg = Solid(line, prefix .. "BG", {0.025, 0.036, 0.058, 0.72})
 
-    row.accent = WINDOW_MANAGER:CreateControl("AlphaSquadULTGroupRow" .. index .. "Accent", row, CT_TEXTURE)
-    row.accent:SetAnchor(TOPLEFT, row, TOPLEFT, 0, 0)
-    row.accent:SetDimensions(3, 42)
-    SetColor(row.accent, COLORS.cyanDim)
+    line.slot = Label(line, prefix .. "Slot", "ZoFontGameSmall", "", COLORS.muted)
+    line.slot:SetDimensions(22, 18)
+    line.slot:SetAnchor(LEFT, line, LEFT, 3, 0)
+    line.slot:SetHorizontalAlignment(TEXT_ALIGN_CENTER)
 
-    row.iconBorder = WINDOW_MANAGER:CreateControl("AlphaSquadULTGroupRow" .. index .. "IconBorder", row, CT_TEXTURE)
-    row.iconBorder:SetDimensions(34, 34)
-    row.iconBorder:SetAnchor(LEFT, row, LEFT, 8, 0)
-    SetColor(row.iconBorder, COLORS.cyanDim, 0.55)
+    line.icon = WINDOW_MANAGER:CreateControl(prefix .. "Icon", line, CT_TEXTURE)
+    line.icon:SetDimensions(16, 16)
+    line.icon:SetAnchor(LEFT, line, LEFT, 27, 0)
+    line.icon:SetTextureCoords(0.05, 0.95, 0.05, 0.95)
 
-    row.icon = WINDOW_MANAGER:CreateControl("AlphaSquadULTGroupRow" .. index .. "Icon", row, CT_TEXTURE)
-    row.icon:SetDimensions(30, 30)
-    row.icon:SetAnchor(CENTER, row.iconBorder, CENTER, 0, 0)
-    row.icon:SetTextureCoords(0.05, 0.95, 0.05, 0.95)
+    line.name = Label(line, prefix .. "Name", "ZoFontGameSmall", "", COLORS.white)
+    line.name:SetDimensions(86, 18)
+    line.name:SetAnchor(LEFT, line, LEFT, 47, 0)
+    line.name:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
+    line.name:SetMaxLineCount(1)
+    if line.name.SetWrapMode and TEXT_WRAP_MODE_ELLIPSIS then
+        line.name:SetWrapMode(TEXT_WRAP_MODE_ELLIPSIS)
+    end
 
-    row.player = Label(row, "AlphaSquadULTGroupRow" .. index .. "Player", "ZoFontGameSmall", "", COLORS.white)
-    row.player:SetDimensions(118, 18)
-    row.player:SetAnchor(TOPLEFT, row, TOPLEFT, 50, 4)
-    row.player:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
-    row.player:SetMaxLineCount(1)
+    line.value = Label(line, prefix .. "Value", "ZoFontGameSmall", "", COLORS.muted)
+    line.value:SetDimensions(48, 18)
+    line.value:SetAnchor(RIGHT, line, RIGHT, -3, 0)
+    line.value:SetHorizontalAlignment(TEXT_ALIGN_RIGHT)
 
-    row.account = Label(row, "AlphaSquadULTGroupRow" .. index .. "Account", "ZoFontGameSmall", "", COLORS.muted)
-    row.account:SetDimensions(118, 16)
-    row.account:SetAnchor(TOPLEFT, row, TOPLEFT, 50, 21)
-    row.account:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
-    row.account:SetMaxLineCount(1)
+    line.ready = false
+    return line
+end
 
-    row.ability = Label(row, "AlphaSquadULTGroupRow" .. index .. "Ability", "ZoFontGameSmall", "", COLORS.white)
-    row.ability:SetDimensions(145, 20)
-    row.ability:SetAnchor(TOPLEFT, row, TOPLEFT, 174, 4)
-    row.ability:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
-    row.ability:SetMaxLineCount(1)
+local function CreateCard(parent, index)
+    local card = WINDOW_MANAGER:CreateControl("AlphaSquadULTGroupCard" .. index, parent, CT_CONTROL)
+    card:SetDimensions(CARD_W, CARD_H)
 
-    row.slot = Label(row, "AlphaSquadULTGroupRow" .. index .. "Slot", "ZoFontGameSmall", "", COLORS.muted)
-    row.slot:SetDimensions(145, 16)
-    row.slot:SetAnchor(TOPLEFT, row, TOPLEFT, 174, 22)
-    row.slot:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
+    card.bg = Solid(card, "AlphaSquadULTGroupCard" .. index .. "BG", {0.016, 0.024, 0.042, 0.96})
 
-    row.value = Label(row, "AlphaSquadULTGroupRow" .. index .. "Value", "ZoFontGameBold", "", COLORS.white)
-    row.value:SetDimensions(66, 20)
-    row.value:SetAnchor(TOPRIGHT, row, TOPRIGHT, -66, 4)
-    row.value:SetHorizontalAlignment(TEXT_ALIGN_RIGHT)
+    card.accent = WINDOW_MANAGER:CreateControl("AlphaSquadULTGroupCard" .. index .. "Accent", card, CT_TEXTURE)
+    card.accent:SetAnchor(TOPLEFT, card, TOPLEFT, 0, 0)
+    card.accent:SetDimensions(3, CARD_H)
+    SetColor(card.accent, COLORS.cyanDim, 0.55)
 
-    row.status = Label(row, "AlphaSquadULTGroupRow" .. index .. "Status", "ZoFontGameBold", "", COLORS.muted)
-    row.status:SetDimensions(62, 20)
-    row.status:SetAnchor(TOPRIGHT, row, TOPRIGHT, -5, 4)
-    row.status:SetHorizontalAlignment(TEXT_ALIGN_RIGHT)
+    card.player = Label(card, "AlphaSquadULTGroupCard" .. index .. "Player", "ZoFontGameBold", "", COLORS.white)
+    card.player:SetDimensions(CARD_W - 14, 18)
+    card.player:SetAnchor(TOPLEFT, card, TOPLEFT, 7, 1)
+    card.player:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
+    card.player:SetMaxLineCount(1)
+    if card.player.SetWrapMode and TEXT_WRAP_MODE_ELLIPSIS then
+        card.player:SetWrapMode(TEXT_WRAP_MODE_ELLIPSIS)
+    end
 
-    row.progressBG = WINDOW_MANAGER:CreateControl("AlphaSquadULTGroupRow" .. index .. "ProgressBG", row, CT_TEXTURE)
-    row.progressBG:SetDimensions(128, 3)
-    row.progressBG:SetAnchor(BOTTOMRIGHT, row, BOTTOMRIGHT, -7, -7)
-    row.progressBG:SetColor(0.05, 0.08, 0.12, 1)
-
-    row.progress = WINDOW_MANAGER:CreateControl("AlphaSquadULTGroupRow" .. index .. "Progress", row, CT_TEXTURE)
-    row.progress:SetDimensions(0, 3)
-    row.progress:SetAnchor(LEFT, row.progressBG, LEFT, 0, 0)
-    SetColor(row.progress, COLORS.cyan)
-
-    return row
+    card.line1 = CreateUltimateLine(card, index, 1, 21)
+    card.line2 = CreateUltimateLine(card, index, 2, 42)
+    return card
 end
 
 function Group:GetWindowBaseWidth()
-    return 476
+    return WINDOW_W
 end
 
 function Group:GetDefaultPosition()
     local rootW = GuiRoot and GuiRoot:GetWidth() or 1920
     local rootH = GuiRoot and GuiRoot:GetHeight() or 1080
-    local width = self:GetWindowBaseWidth()
-    return math.max(10, math.floor(rootW - width - 40)), math.floor(rootH * 0.17)
+    return math.max(8, math.floor(rootW - WINDOW_W - 30)), math.floor(rootH * 0.16)
 end
 
 function Group:GetEffectiveScale()
@@ -128,11 +129,11 @@ function Group:GetEffectiveScale()
     local requested = (self.sv.scale or 100) / 100
     local rootW = GuiRoot:GetWidth() or 1920
     local rootH = GuiRoot:GetHeight() or 1080
-    local baseW = self.window:GetWidth() or self:GetWindowBaseWidth()
-    local baseH = self.window:GetHeight() or 120
+    local baseW = self.window:GetWidth() or WINDOW_W
+    local baseH = self.window:GetHeight() or 100
 
-    local fitX = math.max(0.55, (rootW - 24) / math.max(1, baseW))
-    local fitY = math.max(0.55, (rootH - 24) / math.max(1, baseH))
+    local fitX = math.max(0.55, (rootW - 20) / math.max(1, baseW))
+    local fitY = math.max(0.55, (rootH - 20) / math.max(1, baseH))
     return math.min(requested, fitX, fitY)
 end
 
@@ -142,22 +143,19 @@ function Group:ClampToScreen(saveIfChanged)
     local rootW = GuiRoot:GetWidth() or 1920
     local rootH = GuiRoot:GetHeight() or 1080
     local scale = self.window:GetScale() or ((self.sv.scale or 100) / 100)
-    local width = (self.window:GetWidth() or self:GetWindowBaseWidth()) * scale
-    local height = (self.window:GetHeight() or 120) * scale
+    local width = (self.window:GetWidth() or WINDOW_W) * scale
+    local height = (self.window:GetHeight() or 100) * scale
     local left = self.window:GetLeft()
     local top = self.window:GetTop()
 
     if left == nil or top == nil then return end
 
-    local maxX = math.max(0, rootW - width)
-    local maxY = math.max(0, rootH - height)
-    local x = ULT.Clamp(left, 0, maxX)
-    local y = ULT.Clamp(top, 0, maxY)
+    local x = ULT.Clamp(left, 0, math.max(0, rootW - width))
+    local y = ULT.Clamp(top, 0, math.max(0, rootH - height))
 
     if math.abs(x - left) > 0.5 or math.abs(y - top) > 0.5 then
         self.window:ClearAnchors()
         self.window:SetAnchor(TOPLEFT, GuiRoot, TOPLEFT, x, y)
-
         if saveIfChanged then
             self.sv.x = math.floor(x + 0.5)
             self.sv.y = math.floor(y + 0.5)
@@ -171,11 +169,9 @@ function Group:ApplyPosition()
 
     local x = tonumber(self.sv.x)
     local y = tonumber(self.sv.y)
-
     if x == nil or y == nil then
         x, y = self:GetDefaultPosition()
-        self.sv.x = x
-        self.sv.y = y
+        self.sv.x, self.sv.y = x, y
     end
 
     self.window:ClearAnchors()
@@ -186,9 +182,7 @@ end
 function Group:SavePosition()
     if not self.window or not self.sv then return end
 
-    local left = self.window:GetLeft()
-    local top = self.window:GetTop()
-
+    local left, top = self.window:GetLeft(), self.window:GetTop()
     if left ~= nil and top ~= nil then
         self.sv.x = math.floor(left + 0.5)
         self.sv.y = math.floor(top + 0.5)
@@ -199,12 +193,9 @@ end
 
 function Group:ResetPosition()
     if not self.sv then return end
-
     local x, y = self:GetDefaultPosition()
-    self.sv.x = x
-    self.sv.y = y
+    self.sv.x, self.sv.y = x, y
     self.sv.positionSaved = true
-
     self:ApplyPosition()
     self:RefreshIntegratedSettings()
 end
@@ -218,22 +209,18 @@ function Group:UpdateLockState()
     if self.window.dragSurface then
         self.window.dragSurface:SetMouseEnabled(movable)
     end
-
-    if self.window.moveHint then
-        self.window.moveHint:SetHidden(not movable)
+    if self.window.dragHint then
+        self.window.dragHint:SetHidden(not movable)
     end
 end
 
 function Group:ApplyAppearance()
     if not self.window or not self.sv then return end
-
     self.window:SetScale(self:GetEffectiveScale())
     self.window:SetAlpha(1)
-
     if self.window.bg then
         self.window.bg:SetAlpha((self.sv.opacity or 92) / 100)
     end
-
     self:ClampToScreen(true)
 end
 
@@ -253,75 +240,142 @@ function Group:ApplyVisibility()
         or (self.sv.hideInMenus and ULT.uiObscured)
 
     self.window:SetHidden(hidden)
+
+    if hidden then
+        self:SetReadyPulseActive(false)
+    end
 end
 
-function Group:RefreshRow(row, entry)
-    if not row then return end
+function Group:RefreshUltimateLine(line, ultimate, shared)
+    if not line then return false end
+
+    if not shared then
+        line:SetHidden(false)
+        line.slot:SetText("--")
+        line.icon:SetHidden(true)
+        line.name:SetText("NO DATA")
+        line.value:SetText("")
+        line.ready = false
+        line.bg:SetColor(0.025, 0.036, 0.058, 0.35)
+        return false
+    end
+
+    if not ultimate or ultimate.id <= 0 then
+        line:SetHidden(false)
+        line.slot:SetText(ultimate and ultimate.slot == "back" and "B" or "F")
+        line.icon:SetHidden(true)
+        line.name:SetText("EMPTY")
+        line.value:SetText("")
+        line.ready = false
+        line.bg:SetColor(0.025, 0.036, 0.058, 0.45)
+        return false
+    end
+
+    line:SetHidden(false)
+    line.slot:SetText(ultimate.slot == "back" and "B" or "F")
+    line.icon:SetHidden(false)
+    if ultimate.icon and ultimate.icon ~= "" then line.icon:SetTexture(ultimate.icon) end
+    line.name:SetText(ultimate.name or "Ultimate")
+
+    local value = tonumber(ultimate.value) or 0
+    local cost = tonumber(ultimate.cost) or 0
+    line.value:SetText(cost > 0 and string.format("%d/%d", value, cost) or tostring(value))
+
+    line.ready = ultimate.ready == true
+    if line.ready then
+        SetColor(line.slot, COLORS.green)
+        SetColor(line.value, COLORS.green)
+        line.bg:SetColor(0.055, 0.120, 0.080, 0.80)
+    else
+        SetColor(line.slot, COLORS.muted)
+        SetColor(line.value, COLORS.muted)
+        line.bg:SetColor(0.025, 0.036, 0.058, 0.72)
+    end
+
+    return line.ready
+end
+
+function Group:RefreshCard(card, entry)
+    if not card then return false end
 
     if not entry then
-        row:SetHidden(true)
-        return
+        card:SetHidden(true)
+        card.line1.ready = false
+        card.line2.ready = false
+        return false
     end
 
-    row:SetHidden(false)
+    card:SetHidden(false)
+    card.player:SetText(entry.characterName or entry.displayName or entry.key or "Unknown")
 
-    local selected = entry.selected or self:GetSelectedUltimate(entry)
-    local color = COLORS.cyan
-    local status = "CHARGE"
-    local abilityName = selected and selected.name or "No Ultimate"
-    local abilityIcon = selected and selected.icon or ""
-    local slotText = selected and string.upper(selected.slot or "auto") or "AUTO"
+    local ultimates = entry.selectedUltimates or self:GetSelectedUltimates(entry)
+    local ready = false
 
-    row.player:SetText(entry.characterName or entry.key or "Unknown")
-    row.account:SetText(entry.displayName ~= "" and entry.displayName or entry.unitTag or "")
-
-    if not entry.shared then
-        row.icon:SetHidden(true)
-        row.ability:SetText("NO SHARED DATA")
-        row.slot:SetText("Install/share ULT data")
-        row.value:SetText("-- / --")
-        row.status:SetText("NO DATA")
-        SetColor(row.status, COLORS.muted)
-        SetColor(row.accent, COLORS.muted, 0.40)
-        SetColor(row.iconBorder, COLORS.muted, 0.28)
-        row.progress:SetWidth(0)
-        return
+    if #ultimates <= 1 then
+        card.line1:ClearAnchors()
+        card.line1:SetAnchor(TOPLEFT, card, TOPLEFT, 5, 31)
+        card.line2:SetHidden(true)
+        card.line2.ready = false
+        ready = self:RefreshUltimateLine(card.line1, ultimates[1], entry.shared)
+    else
+        card.line1:ClearAnchors()
+        card.line1:SetAnchor(TOPLEFT, card, TOPLEFT, 5, 21)
+        card.line2:ClearAnchors()
+        card.line2:SetAnchor(TOPLEFT, card, TOPLEFT, 5, 42)
+        local ready1 = self:RefreshUltimateLine(card.line1, ultimates[1], entry.shared)
+        local ready2 = self:RefreshUltimateLine(card.line2, ultimates[2], entry.shared)
+        ready = ready1 or ready2
     end
 
-    if not selected or selected.id <= 0 then
-        row.icon:SetHidden(true)
-        row.ability:SetText("ULTIMATE NOT SLOTTED")
-        row.slot:SetText(slotText)
-        row.value:SetText(tostring(entry.ultValue or 0))
-        row.status:SetText("EMPTY")
-        SetColor(row.status, COLORS.muted)
-        SetColor(row.accent, COLORS.muted, 0.45)
-        row.progress:SetWidth(0)
-        return
+    SetColor(card.accent, ready and COLORS.green or COLORS.cyanDim, ready and 0.90 or 0.45)
+    return ready
+end
+
+function Group:SetReadyPulseActive(enabled)
+    enabled = enabled == true
+    if self.readyPulseActive == enabled then return end
+    self.readyPulseActive = enabled
+
+    local updateName = "AlphaSquadUI_ULTGroup_ReadyPulse"
+    if enabled then
+        EM:RegisterForUpdate(updateName, 180, function()
+            if Group and Group.UpdateReadyPulse then Group:UpdateReadyPulse() end
+        end)
+    else
+        EM:UnregisterForUpdate(updateName)
+        self:ResetReadyPulse()
     end
+end
 
-    row.icon:SetHidden(false)
-    if abilityIcon ~= "" then row.icon:SetTexture(abilityIcon) end
-    row.ability:SetText(abilityName)
-    row.slot:SetText(slotText .. " ULTIMATE")
+function Group:UpdateReadyPulse()
+    if not self.window or self.window:IsHidden() then return end
 
-    local value = tonumber(entry.ultValue) or 0
-    local cost = tonumber(selected.cost) or 0
-    local ratio = cost > 0 and math.min(1, math.max(0, value / cost)) or 0
+    local t = (GetGameTimeMilliseconds and GetGameTimeMilliseconds() or 0) / 1000
+    local pulse = (math.sin(t * 3.2) + 1) * 0.5
+    local alpha = 0.50 + (pulse * 0.28)
 
-    row.value:SetText(cost > 0 and string.format("%d/%d", value, cost) or tostring(value))
-
-    if selected.ready then
-        status = "READY"
-        color = COLORS.green
+    for _, card in ipairs(self.window.cards or {}) do
+        if not card:IsHidden() then
+            for _, line in ipairs({card.line1, card.line2}) do
+                if line and not line:IsHidden() and line.ready then
+                    line.bg:SetColor(0.055, 0.145, 0.090, alpha)
+                end
+            end
+        end
     end
+end
 
-    row.status:SetText(status)
-    SetColor(row.status, color)
-    SetColor(row.accent, color, selected.ready and 0.95 or 0.65)
-    SetColor(row.iconBorder, color, selected.ready and 0.90 or 0.55)
-    row.progress:SetWidth(math.floor(128 * ratio))
-    SetColor(row.progress, color)
+function Group:ResetReadyPulse()
+    if not self.window then return end
+    for _, card in ipairs(self.window.cards or {}) do
+        if not card:IsHidden() then
+            for _, line in ipairs({card.line1, card.line2}) do
+                if line and not line:IsHidden() and line.ready then
+                    line.bg:SetColor(0.055, 0.120, 0.080, 0.80)
+                end
+            end
+        end
+    end
 end
 
 function Group:RefreshHUD()
@@ -329,38 +383,37 @@ function Group:RefreshHUD()
 
     local entries = self:GetTrackedEntries()
     local count = #entries
-    local visibleRows = math.max(1, count)
-    local height = 50 + (visibleRows * 44) + 24
+    local rows = math.max(1, math.ceil(count / COLS))
+    local height = HEADER_H + 6 + (rows * CARD_H) + ((rows - 1) * GAP) + 6
 
-    self.window:SetDimensions(self:GetWindowBaseWidth(), height)
-    self.window.title:SetText(string.format("ĄLPHA ŞQUAD  •  GROUP ULTIMATES  •  %d", count))
+    self.window:SetDimensions(WINDOW_W, height)
 
     local shared, total = self:GetSharingCount()
-    if not self.libraryAvailable then
-        self.window.source:SetText("SHARING UNAVAILABLE  •  LibGroupCombatStats not detected")
-        SetColor(self.window.source, COLORS.red)
-    else
-        self.window.source:SetText(string.format("ULT SHARING  •  %d/%d members reporting", shared, total))
-        SetColor(self.window.source, shared > 0 and COLORS.green or COLORS.muted)
-    end
+    self.window.status:SetText(string.format("GROUP ULT  •  %d tracked", count))
+    self.window.share:SetText(self.libraryAvailable and string.format("%d/%d share", shared, total) or "NO SHARE LIB")
 
-    if count == 0 then
-        self.window.empty:SetHidden(false)
-        self.window.empty:SetText(total > 0 and "NO PLAYERS SELECTED  •  Configure Group Tracking" or "JOIN A GROUP TO TRACK ULTIMATES")
-    else
-        self.window.empty:SetHidden(true)
-    end
+    local anyReady = false
 
-    for index, row in ipairs(self.window.rows) do
+    for index, card in ipairs(self.window.cards) do
         local entry = entries[index]
-        self:RefreshRow(row, entry)
-
         if entry then
-            row:ClearAnchors()
-            row:SetAnchor(TOPLEFT, self.window, TOPLEFT, 12, 46 + ((index - 1) * 44))
+            local col = (index - 1) % COLS
+            local row = math.floor((index - 1) / COLS)
+            card:ClearAnchors()
+            card:SetAnchor(TOPLEFT, self.window, TOPLEFT,
+                6 + (col * (CARD_W + GAP)),
+                HEADER_H + 6 + (row * (CARD_H + GAP)))
         end
+
+        if self:RefreshCard(card, entry) then anyReady = true end
     end
 
+    self.window.empty:SetHidden(count > 0)
+    if count == 0 then
+        self.window.empty:SetText(total > 0 and "No players selected" or "Join a group")
+    end
+
+    self:SetReadyPulseActive(anyReady and not self.window:IsHidden())
     self:ApplyAppearance()
     self:UpdateLockState()
     self:ApplyVisibility()
@@ -368,11 +421,10 @@ end
 
 function Group:ApplyConfigWindowScale()
     if not self.configWindow or not GuiRoot then return end
-
     local rootW = GuiRoot:GetWidth() or 1920
     local rootH = GuiRoot:GetHeight() or 1080
     local fitX = math.max(0.65, (rootW - 30) / 780)
-    local fitY = math.max(0.65, (rootH - 30) / 760)
+    local fitY = math.max(0.65, (rootH - 30) / 720)
     self.configWindow:SetScale(math.min(1, fitX, fitY))
 end
 
@@ -380,7 +432,7 @@ function Group:CreateHUD()
     local win = WINDOW_MANAGER:CreateTopLevelWindow("AlphaSquadULTGroupWindow")
     self.window = win
 
-    win:SetDimensions(self:GetWindowBaseWidth(), 118)
+    win:SetDimensions(WINDOW_W, 100)
     win:SetClampedToScreen(true)
     win:SetMovable(true)
     win:SetMouseEnabled(true)
@@ -394,44 +446,41 @@ function Group:CreateHUD()
     top:SetAnchor(TOPLEFT, win, TOPLEFT, 0, 0)
     top:SetAnchor(TOPRIGHT, win, TOPRIGHT, 0, 0)
     top:SetHeight(2)
-    SetColor(top, COLORS.orange)
+    SetColor(top, COLORS.orange, 0.75)
 
-    win.title = Label(win, "AlphaSquadULTGroupTitle", "ZoFontGameBold",
-        "ĄLPHA ŞQUAD  •  GROUP ULTIMATES", COLORS.orange)
-    win.title:SetDimensions(360, 22)
-    win.title:SetAnchor(TOPLEFT, win, TOPLEFT, 14, 6)
-    win.title:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
+    win.status = Label(win, "AlphaSquadULTGroupStatus", "ZoFontGameSmall", "GROUP ULT", COLORS.muted)
+    win.status:SetDimensions(250, 20)
+    win.status:SetAnchor(TOPLEFT, win, TOPLEFT, 7, 2)
+    win.status:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
 
-    win.moveHint = Label(win, "AlphaSquadULTGroupMoveHint", "ZoFontGameSmall", "DRAG", COLORS.gold)
-    win.moveHint:SetDimensions(55, 20)
-    win.moveHint:SetAnchor(TOPRIGHT, win, TOPRIGHT, -12, 7)
-    win.moveHint:SetHorizontalAlignment(TEXT_ALIGN_RIGHT)
+    win.share = Label(win, "AlphaSquadULTGroupShare", "ZoFontGameSmall", "", COLORS.muted)
+    win.share:SetDimensions(120, 20)
+    win.share:SetAnchor(TOPRIGHT, win, TOPRIGHT, -48, 2)
+    win.share:SetHorizontalAlignment(TEXT_ALIGN_RIGHT)
 
-    win.source = Label(win, "AlphaSquadULTGroupSource", "ZoFontGameSmall", "", COLORS.muted)
-    win.source:SetDimensions(440, 17)
-    win.source:SetAnchor(TOPLEFT, win, TOPLEFT, 14, 27)
-    win.source:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
+    win.dragHint = Label(win, "AlphaSquadULTGroupDragHint", "ZoFontGameSmall", "DRAG", COLORS.gold)
+    win.dragHint:SetDimensions(42, 20)
+    win.dragHint:SetAnchor(TOPRIGHT, win, TOPRIGHT, -5, 2)
+    win.dragHint:SetHorizontalAlignment(TEXT_ALIGN_RIGHT)
 
-    win.empty = Label(win, "AlphaSquadULTGroupEmpty", "ZoFontGame", "", COLORS.muted)
-    win.empty:SetDimensions(440, 40)
-    win.empty:SetAnchor(TOPLEFT, win, TOPLEFT, 18, 54)
+    win.empty = Label(win, "AlphaSquadULTGroupEmpty", "ZoFontGameSmall", "", COLORS.muted)
+    win.empty:SetDimensions(WINDOW_W - 20, 42)
+    win.empty:SetAnchor(TOPLEFT, win, TOPLEFT, 10, HEADER_H + 18)
     win.empty:SetHorizontalAlignment(TEXT_ALIGN_CENTER)
 
-    win.rows = {}
-    for i = 1, 12 do
-        win.rows[i] = CreateRow(win, i)
-        win.rows[i]:SetHidden(true)
+    win.cards = {}
+    for index = 1, 12 do
+        win.cards[index] = CreateCard(win, index)
+        win.cards[index]:SetHidden(true)
     end
 
     win.dragSurface = WINDOW_MANAGER:CreateControl("AlphaSquadULTGroupDragSurface", win, CT_CONTROL)
-    win.dragSurface:SetDimensions(self:GetWindowBaseWidth(), 44)
+    win.dragSurface:SetDimensions(WINDOW_W, HEADER_H)
     win.dragSurface:SetAnchor(TOPLEFT, win, TOPLEFT, 0, 0)
     win.dragSurface:SetMouseEnabled(true)
 
     win.dragSurface:SetHandler("OnMouseDown", function()
-        if Group.sv and not Group.sv.locked then
-            win:StartMoving()
-        end
+        if Group.sv and not Group.sv.locked then win:StartMoving() end
     end)
 
     win.dragSurface:SetHandler("OnMouseUp", function()
@@ -442,9 +491,7 @@ function Group:CreateHUD()
     end)
 
     win:SetHandler("OnMoveStop", function()
-        if Group.sv and not Group.sv.locked then
-            Group:SavePosition()
-        end
+        if Group.sv and not Group.sv.locked then Group:SavePosition() end
     end)
 
     self:ApplyPosition()
