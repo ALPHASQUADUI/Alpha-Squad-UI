@@ -228,6 +228,17 @@ function Group:RefreshConfig()
 
     self.configWindow.selfButton.label:SetText(g.includeSelf and "SELF: INCLUDED" or "SELF: HIDDEN")
     SetColor(self.configWindow.selfButton.label, g.includeSelf and COLORS.green or COLORS.muted)
+
+    if self.configWindow.scaleValue then
+        self.configWindow.scaleValue:SetText(tostring(g.scale or 100) .. "%")
+    end
+    if self.configWindow.opacityValue then
+        self.configWindow.opacityValue:SetText(tostring(g.opacity or 92) .. "%")
+    end
+    if self.configWindow.soundButton then
+        self.configWindow.soundButton.label:SetText(g.readySound and "SOUND ON" or "SOUND OFF")
+        SetColor(self.configWindow.soundButton.label, g.readySound and COLORS.green or COLORS.muted)
+    end
 end
 
 function Group:OpenConfig()
@@ -362,10 +373,53 @@ function Group:CreateConfigWindow()
     win.empty:SetHorizontalAlignment(TEXT_ALIGN_CENTER)
     win.empty:SetHidden(true)
 
+    win.scaleMinus = Button(win, "AlphaSquadULTGroupScaleMinus", "SCALE −", 22, 666, 82, 30, function()
+        Group.sv.scale = ULT.Clamp((Group.sv.scale or 100) - 5, 70, 140)
+        Group:ApplyAppearance()
+        Group:RefreshConfig()
+    end)
+
+    win.scaleValue = Label(win, "AlphaSquadULTGroupScaleValue", "ZoFontGameBold", "", COLORS.cyan)
+    win.scaleValue:SetDimensions(62, 30)
+    win.scaleValue:SetAnchor(TOPLEFT, win, TOPLEFT, 108, 666)
+    win.scaleValue:SetHorizontalAlignment(TEXT_ALIGN_CENTER)
+
+    win.scalePlus = Button(win, "AlphaSquadULTGroupScalePlus", "SCALE +", 174, 666, 82, 30, function()
+        Group.sv.scale = ULT.Clamp((Group.sv.scale or 100) + 5, 70, 140)
+        Group:ApplyAppearance()
+        Group:RefreshConfig()
+    end)
+
+    win.opacityMinus = Button(win, "AlphaSquadULTGroupOpacityMinus", "OPACITY −", 274, 666, 96, 30, function()
+        Group.sv.opacity = ULT.Clamp((Group.sv.opacity or 92) - 5, 30, 100)
+        Group:ApplyAppearance()
+        Group:RefreshConfig()
+    end)
+
+    win.opacityValue = Label(win, "AlphaSquadULTGroupOpacityValue", "ZoFontGameBold", "", COLORS.cyan)
+    win.opacityValue:SetDimensions(62, 30)
+    win.opacityValue:SetAnchor(TOPLEFT, win, TOPLEFT, 374, 666)
+    win.opacityValue:SetHorizontalAlignment(TEXT_ALIGN_CENTER)
+
+    win.opacityPlus = Button(win, "AlphaSquadULTGroupOpacityPlus", "OPACITY +", 440, 666, 96, 30, function()
+        Group.sv.opacity = ULT.Clamp((Group.sv.opacity or 92) + 5, 30, 100)
+        Group:ApplyAppearance()
+        Group:RefreshConfig()
+    end)
+
+    win.soundButton = Button(win, "AlphaSquadULTGroupReadySound", "", 550, 666, 96, 30, function()
+        Group.sv.readySound = not Group.sv.readySound
+        Group:RefreshConfig()
+    end)
+
+    win.resetButton = Button(win, "AlphaSquadULTGroupReset", "RESET HUD", 656, 666, 102, 30, function()
+        Group:ResetPosition()
+    end)
+
     local footer = Label(win, "AlphaSquadULTGroupConfigFooter", "ZoFontGameSmall",
         "AUTO follows the Ultimate closest to READY. MAIN/BACK follows that player's shared weapon-bar Ultimate. Players without shared data remain selectable but show NO DATA.", COLORS.muted)
-    footer:SetDimensions(736, 44)
-    footer:SetAnchor(BOTTOMLEFT, win, BOTTOMLEFT, 22, -16)
+    footer:SetDimensions(736, 38)
+    footer:SetAnchor(TOPLEFT, win, TOPLEFT, 22, 708)
     footer:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
     footer:SetVerticalAlignment(TEXT_ALIGN_TOP)
 end
