@@ -234,6 +234,7 @@ function SC:OnPeerShareData(unitTag, data)
         role = ID_TO_ROLE[tonumber(data.role) or 0] or "UNKNOWN",
         supportScore = tonumber(data.supportScore) or 0,
         dataQuality = "ASUI",
+        buildVerified = true,
         asui = true,
         connected = IsUnitOnline and IsUnitOnline(unitTag) or true,
         dead = IsUnitDead and IsUnitDead(unitTag) or false,
@@ -326,7 +327,11 @@ function SC:OnPeerLiveData(unitTag, data)
         self.peerData[key] = peer
     end
     peer.asui = true
-    peer.dataQuality = "ASUI"
+    if peer.buildVerified == true then
+        peer.dataQuality = "ASUI"
+    else
+        peer.dataQuality = "ASUI LIVE"
+    end
     peer.liveCapabilities = DecodeCapabilities(data)
     peer.liveUpdatedAt = self.NowMs()
     peer.unitTag = unitTag
@@ -334,6 +339,35 @@ end
 
 function SC:GetMyHash()
     return HashUserId(self:GetPlayerKey("player"))
+end
+
+function SC:GetPlanSignature()
+    local parts = {tostring(self.sv and self.sv.activeProfile or "full")}
+    local coverage = self.coverage or {}
+
+    for _, row in ipairs(coverage.entries or {}) do
+        local owner = row.assigned and row.assigned.key or ""
+        parts[#parts + 1] = tostring(row.key) .. "=" .. tostring(owner)
+    end
+
+    local roleKeys = {}
+    for playerKey in pairs(self.sv and self.sv.roleOverrides or {}) do
+        roleKeys[#roleKeys + 1] = playerKey
+    end
+    table.sort(roleKeys)
+    for _, playerKey in ipairs(roleKeys) do
+        parts[#parts + 1] = "role:" .. tostring(playerKey) .. "=" .. tostring(self.sv.roleOverrides[playerKey])
+    end
+
+    return table.concat(parts, "|")
+end
+
+function SC:MaybeBroadcastPlan()
+    if not self:IsRaidLead() or self.inCombat then return end
+    local signature = self:GetPlanSignature()
+    if signature == self.lastPlanSignature then return end
+    self.lastPlanSignature = signature
+    self:SchedulePlanBroadcast()
 end
 
 function SC:SchedulePlanBroadcast()
