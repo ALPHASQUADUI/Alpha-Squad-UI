@@ -1484,6 +1484,9 @@ function AOT:CreateSettingsWindow()
 
     local win = WINDOW_MANAGER:CreateTopLevelWindow("AlphaSquadOverloadTrackerSettings")
     self.settingsWindow = win
+    AlphaSquadUI = AlphaSquadUI or {}
+    AlphaSquadUI.Settings = AlphaSquadUI.Settings or {}
+    AlphaSquadUI.Settings.mainWindow = win
     win:SetDimensions(900, 720)
     win:SetAnchor(CENTER, GuiRoot, CENTER, 0, 0)
     win:SetClampedToScreen(true)
@@ -1530,6 +1533,8 @@ function AOT:CreateSettingsWindow()
         end
         win:SetHidden(true)
         AOT:ApplyVisualSettings()
+        local ult = AlphaSquadUI and AlphaSquadUI.Modules and AlphaSquadUI.Modules.ULTTracker
+        if ult and ult.ApplyVisibility then ult:ApplyVisibility() end
     end)
 
     local separator = WINDOW_MANAGER:CreateControl("AlphaSquadSettingsSeparator", win, CT_TEXTURE)
@@ -1581,17 +1586,18 @@ function AOT:CreateSettingsWindow()
     end
 
     AddNavButton("overload", "Overload", 50)
+    AddNavButton("ulttracker", "ULT Tracker", 94)
 
     local communityHeader = CreateLabel(sidebar, "AlphaSquadCommunityNavHeader", "ZoFontGameBold", "COMMUNITY", COLORS.orange)
     communityHeader:SetDimensions(158, 24)
-    communityHeader:SetAnchor(TOPLEFT, sidebar, TOPLEFT, 18, 112)
+    communityHeader:SetAnchor(TOPLEFT, sidebar, TOPLEFT, 18, 156)
     communityHeader:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
-    AddNavButton("community", "Website & About", 144)
+    AddNavButton("community", "Website & About", 188)
 
     local future = CreateLabel(sidebar, "AlphaSquadFutureModules", "ZoFontGameSmall",
         "Future Ąlpha Şquad modules\nwill appear here.", COLORS.muted)
     future:SetDimensions(154, 48)
-    future:SetAnchor(TOPLEFT, sidebar, TOPLEFT, 18, 205)
+    future:SetAnchor(TOPLEFT, sidebar, TOPLEFT, 18, 249)
     future:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
     future:SetVerticalAlignment(TEXT_ALIGN_TOP)
 
@@ -1666,6 +1672,37 @@ function AOT:CreateSettingsWindow()
         table.insert(self.settingsRefreshers, function()
             value:SetText(tostring(getter()) .. (suffix or ""))
         end)
+    end
+
+    -- ULT TRACKER MODULE PAGE
+    local ultTrackerPage = CreatePage("ulttracker")
+    local ultTrackerModule = AlphaSquadUI
+        and AlphaSquadUI.Modules
+        and AlphaSquadUI.Modules.ULTTracker
+
+    if ultTrackerModule and ultTrackerModule.BuildIntegratedSettingsPage then
+        ultTrackerModule:BuildIntegratedSettingsPage(ultTrackerPage, {
+            CreateLabel = CreateLabel,
+            CreateCard = CreateCard,
+            AddToggleRow = AddToggleRow,
+            AddStepperRow = AddStepperRow,
+            CreateButton = CreateButton,
+            RegisterRefresher = function(fn)
+                table.insert(self.settingsRefreshers, fn)
+            end,
+            colors = COLORS,
+        })
+    else
+        local unavailableTitle = CreateLabel(ultTrackerPage, "AlphaSquadULTUnavailableTitle", "ZoFontWinH2", "ULT TRACKER", COLORS.white)
+        unavailableTitle:SetDimensions(420, 32)
+        unavailableTitle:SetAnchor(TOPLEFT, ultTrackerPage, TOPLEFT, 8, 2)
+        unavailableTitle:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
+
+        local unavailable = CreateLabel(ultTrackerPage, "AlphaSquadULTUnavailableText", "ZoFontGame",
+            "ULT Tracker is not available in this build.", COLORS.muted)
+        unavailable:SetDimensions(620, 80)
+        unavailable:SetAnchor(TOPLEFT, ultTrackerPage, TOPLEFT, 9, 64)
+        unavailable:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
     end
 
     -- OVERLOAD MODULE PAGE
@@ -1848,7 +1885,11 @@ function AOT:RegisterDirectSettingsPanel()
         SCENE_MANAGER:AddFragment(AOT.settingsFragment)
         KEYBOARD_OPTIONS:ChangePanels(panelId)
         AOT:RefreshSettingsWindow()
-        zo_callLater(function() AOT:ApplyVisualSettings() end, 0)
+        zo_callLater(function()
+            AOT:ApplyVisualSettings()
+            local ult = AlphaSquadUI and AlphaSquadUI.Modules and AlphaSquadUI.Modules.ULTTracker
+            if ult and ult.ApplyVisibility then ult:ApplyVisibility() end
+        end, 0)
     end
 
     panelData.unselectedCallback = function()
@@ -1857,7 +1898,11 @@ function AOT:RegisterDirectSettingsPanel()
         end
         AOT.settingsOpenedFromGameMenu = false
         AOT.settingsWindow:SetMovable(true)
-        zo_callLater(function() AOT:ApplyVisualSettings() end, 0)
+        zo_callLater(function()
+            AOT:ApplyVisualSettings()
+            local ult = AlphaSquadUI and AlphaSquadUI.Modules and AlphaSquadUI.Modules.ULTTracker
+            if ult and ult.ApplyVisibility then ult:ApplyVisibility() end
+        end, 0)
         if SetCameraOptionsPreviewModeEnabled then
             SetCameraOptionsPreviewModeEnabled(false, CAMERA_OPTIONS_PREVIEW_NONE)
         end
@@ -1895,6 +1940,8 @@ function AOT:ToggleSettingsWindow()
     self.settingsWindow:SetHidden(not hidden)
     if hidden then self:RefreshSettingsWindow() end
     self:ApplyVisualSettings()
+    local ult = AlphaSquadUI and AlphaSquadUI.Modules and AlphaSquadUI.Modules.ULTTracker
+    if ult and ult.ApplyVisibility then ult:ApplyVisibility() end
 end
 
 function AOT:PrintHelp()
