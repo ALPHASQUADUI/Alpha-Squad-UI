@@ -69,3 +69,90 @@ update exists only while a tracked Ultimate is actually READY.
 - `/asult disable`
 - `/asult reset`
 - `/asult status`
+
+
+## Group Ultimate Tracking
+
+ULT Tracker also contains an optional raidlead-oriented group window.
+
+### Data source
+
+ESO does not expose another player's live Ultimate resource directly to arbitrary
+addons. Group tracking therefore integrates with **LibGroupCombatStats**, which
+shares Ultimate data through the official ZOS group broadcast API.
+
+The personal MAIN/BACK tracker does not require this library.
+
+When LibGroupCombatStats is available, AlphaSquadUI registers for **ULT only**.
+No DPS or HPS data is requested.
+
+Compatible group data can come from:
+
+- another AlphaSquadUI user with LibGroupCombatStats installed
+- Hodor Reflexes
+- another addon registered with LibGroupCombatStats
+
+### Raidlead configuration
+
+Open:
+
+`Settings > Ąlpha Şquad > ULT Tracker > CONFIGURE GROUP`
+
+or:
+
+`/asult group`
+
+Each current group member can be configured independently:
+
+- **TRACK** — show this player
+- **HIDE** — exclude this player
+- **AUTO** — display whichever of the two shared Ultimates is closest to READY
+- **MAIN** — track the Ultimate currently shared from the player's front bar
+- **BACK** — track the Ultimate currently shared from the player's back bar
+
+The selector uses the actual shared ability IDs, localized names, icons and
+costs. This means any Ultimate or morph can be displayed without maintaining a
+hard-coded ability list.
+
+### Group HUD
+
+The dedicated group window displays:
+
+- character and account name
+- selected Ultimate icon/name
+- MAIN/BACK source
+- live Ultimate points and cost
+- readiness progress
+- READY / CHARGE / NO DATA / EMPTY state
+
+The group window is:
+
+- movable
+- lockable
+- position-persistent
+- scalable
+- background-opacity configurable
+- screen-clamped and responsive
+- automatically hidden with major UI menus when configured
+
+Group READY sound is optional and disabled by default.
+
+### Performance
+
+Group tracking is event-driven through LibGroupCombatStats Ultimate events.
+
+- incoming updates are coalesced
+- hidden settings panels are not refreshed
+- disabled group HUDs do not rebuild rows
+- no permanent READY animation loop is used for the group list
+- one 2-second safety refresh runs only while Group Tracking is enabled
+- row controls are pooled instead of recreated during combat
+
+### Commands
+
+- `/asult group` — open Group Ultimate configuration
+- `/asult group show`
+- `/asult group hide`
+- `/asult group lock`
+- `/asult group unlock`
+- `/asult group reset`
