@@ -1,6 +1,37 @@
 # Changelog
 
-All notable changes to Ąlpha Şquad UI will be documented here.
+All notable changes to Ąlpha Şquad UI are documented here.
+
+## 2.6.0-audit-test — Unreleased
+
+### Suite / Core
+- Added a real shared settings page registry and shell bridge in Core.
+- ULT Tracker now registers its integrated page through Core instead of being directly wired by Overload.
+- Reused shared Core clamp/theme infrastructure where safe.
+- Unified the audit build version across suite metadata.
+- Normal `/asult` settings use the shared Ąlpha Şquad settings shell.
+
+### ULT Tracker
+- Generic MAIN/BACK/BOTH Ultimate tracking for all slotted Ultimate abilities and morphs.
+- READY sound and subtle pulse.
+- Active-bar indication.
+- Responsive movable HUD with persistent settings.
+
+### Group Ultimate Tracker
+- Added optional LibGroupCombatStats ULT-only integration.
+- Added ability-driven raidlead filters.
+- Automatically tracks @UserIDs who currently slot selected Ultimates.
+- READY players sort to the top; charging players sort by percentage.
+- Recently spent Ultimates are dimmed.
+- Added persistent configurable HUD scale, width, row height, opacity, position and lock state.
+- Removed retired per-player FRONT/BACK assignment SavedVariables.
+- Group ULT updates now update the affected cached player instead of rescanning the complete roster every callback.
+- Uses lightweight `GetUnitULT()` reads during full roster rebuilds.
+
+### Repository
+- Replaced branch-specific validation with repository-wide PR/main validation.
+- Updated README, architecture and performance documentation.
+- Removed the stale committed Overload-only ZIP from the active release path.
 
 ## 2.5.0
 
