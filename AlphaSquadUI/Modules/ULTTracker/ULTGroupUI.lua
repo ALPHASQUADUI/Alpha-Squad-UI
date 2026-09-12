@@ -269,7 +269,6 @@ function Group:ResetSize()
     self.sv.scale = 100
     self.sv.hudWidth = BASE_WINDOW_W
     self.sv.rowHeight = BASE_ROW_H
-    self.sv.opacity = 92
 
     self:ApplyListGeometry()
     self:ApplyAppearance()

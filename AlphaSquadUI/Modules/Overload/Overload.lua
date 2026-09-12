@@ -19,7 +19,7 @@
 local ADDON_NAME = "AlphaSquadUI"
 local DISPLAY_NAME = "Ąlpha Şquad UI - Overload"
 local SETTINGS_MENU_NAME = "|cE66A19Ą|cEA7628l|cEE8237p|cF18E47h|cF49A58a |cF6A968Ş|cF8B77Aq|cFAC58Cu|cFCD49Ea|cFFF3D0d|r"
-local VERSION = "2.5.0"
+local VERSION = (AlphaSquadUI and AlphaSquadUI.version) or "2.6.0-audit-test"
 
 AlphaSquadUI = AlphaSquadUI or {}
 AlphaSquadUI.Modules = AlphaSquadUI.Modules or {}
@@ -1486,10 +1486,28 @@ function AOT:CreateSettingsWindow()
     self.settingsWindow = win
     AlphaSquadUI = AlphaSquadUI or {}
     AlphaSquadUI.Settings = AlphaSquadUI.Settings or {}
-    AlphaSquadUI.Settings.mainWindow = win
-    AlphaSquadUI.Settings.RefreshMain = function()
-        if AOT and AOT.RefreshSettingsWindow then
-            AOT:RefreshSettingsWindow()
+
+    if AlphaSquadUI.Settings.AttachShell then
+        AlphaSquadUI.Settings.AttachShell(
+            win,
+            function(pageId)
+                if AOT and AOT.ShowSettingsPage then
+                    AOT:ShowSettingsPage(pageId)
+                end
+            end,
+            function()
+                if AOT and AOT.RefreshSettingsWindow then
+                    AOT:RefreshSettingsWindow()
+                end
+            end
+        )
+    else
+        -- Compatibility fallback for partial development installs.
+        AlphaSquadUI.Settings.mainWindow = win
+        AlphaSquadUI.Settings.RefreshMain = function()
+            if AOT and AOT.RefreshSettingsWindow then
+                AOT:RefreshSettingsWindow()
+            end
         end
     end
     win:SetDimensions(900, 720)
@@ -1681,22 +1699,25 @@ function AOT:CreateSettingsWindow()
 
     -- ULT TRACKER MODULE PAGE
     local ultTrackerPage = CreatePage("ulttracker")
-    local ultTrackerModule = AlphaSquadUI
-        and AlphaSquadUI.Modules
-        and AlphaSquadUI.Modules.ULTTracker
+    local pageBuilder = AlphaSquadUI
+        and AlphaSquadUI.Settings
+        and AlphaSquadUI.Settings.GetPageBuilder
+        and AlphaSquadUI.Settings.GetPageBuilder("ulttracker")
 
-    if ultTrackerModule and ultTrackerModule.BuildIntegratedSettingsPage then
-        ultTrackerModule:BuildIntegratedSettingsPage(ultTrackerPage, {
-            CreateLabel = CreateLabel,
-            CreateCard = CreateCard,
-            AddToggleRow = AddToggleRow,
-            AddStepperRow = AddStepperRow,
-            CreateButton = CreateButton,
-            RegisterRefresher = function(fn)
-                table.insert(self.settingsRefreshers, fn)
-            end,
-            colors = COLORS,
-        })
+    local pageUI = {
+        CreateLabel = CreateLabel,
+        CreateCard = CreateCard,
+        AddToggleRow = AddToggleRow,
+        AddStepperRow = AddStepperRow,
+        CreateButton = CreateButton,
+        RegisterRefresher = function(fn)
+            table.insert(self.settingsRefreshers, fn)
+        end,
+        colors = COLORS,
+    }
+
+    if pageBuilder then
+        pageBuilder(ultTrackerPage, pageUI)
     else
         local unavailableTitle = CreateLabel(ultTrackerPage, "AlphaSquadULTUnavailableTitle", "ZoFontWinH2", "ULT TRACKER", COLORS.white)
         unavailableTitle:SetDimensions(420, 32)

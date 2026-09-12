@@ -20,6 +20,7 @@ Group.lgcs = nil
 Group.libraryAvailable = false
 Group.roster = {}
 Group.byKey = {}
+Group.byUnitTag = {}
 Group.refreshPending = false
 Group.readyState = {}
 Group.lastReadySoundAt = 0
@@ -78,7 +79,6 @@ function Group:GetDefaults()
         y = math.floor(rootH * 0.16),
         positionSaved = false,
         trackedAbilities = {},
-        assignments = {},
     }
 end
 
@@ -91,14 +91,15 @@ function Group:EnsureSavedVariables()
 
     local defaults = self:GetDefaults()
     for key, value in pairs(defaults) do
-        if key ~= "assignments" and ULT.sv.group[key] == nil then
+        if ULT.sv.group[key] == nil then
             ULT.sv.group[key] = value
         end
     end
 
-    if type(ULT.sv.group.assignments) ~= "table" then
-        ULT.sv.group.assignments = {}
-    end
+    -- Cleanup migration from the retired per-player FRONT/BACK prototype.
+    -- The current raidlead workflow stores only selected Ultimate ability IDs.
+    ULT.sv.group.assignments = nil
+
     if type(ULT.sv.group.trackedAbilities) ~= "table" then
         ULT.sv.group.trackedAbilities = {}
     end
@@ -189,49 +190,6 @@ function Group:GetTrackedAbilityCount()
     return count
 end
 
-function Group:GetAssignment(key)
-    if not self.sv or not key then return nil end
-
-    local assignment = self.sv.assignments[key]
-    if type(assignment) ~= "table" then
-        assignment = {
-            tracked = true,
-            mode = "both",
-        }
-        self.sv.assignments[key] = assignment
-    end
-
-    if assignment.tracked == nil then assignment.tracked = true end
-
-    -- AUTO from the first prototype is migrated to BOTH so the raidlead can
-    -- explicitly see both shared bar Ultimates and their individual READY states.
-    if assignment.mode == "auto" then assignment.mode = "both" end
-
-    if assignment.mode ~= "main" and assignment.mode ~= "back" and assignment.mode ~= "both" then
-        assignment.mode = "both"
-    end
-
-    return assignment
-end
-
-function Group:SetMemberTracked(key, tracked)
-    local assignment = self:GetAssignment(key)
-    if not assignment then return end
-    assignment.tracked = tracked == true
-    self:RefreshHUD()
-    self:RefreshConfig()
-    self:RefreshIntegratedSettings()
-end
-
-function Group:SetMemberMode(key, mode)
-    if mode ~= "main" and mode ~= "back" and mode ~= "both" then return end
-    local assignment = self:GetAssignment(key)
-    if not assignment then return end
-    assignment.mode = mode
-    self:RefreshHUD()
-    self:RefreshConfig()
-end
-
 function Group:GetAbilityMeta(abilityId)
     abilityId = tonumber(abilityId) or 0
     if abilityId <= 0 then return "No Ultimate", "", 0 end
@@ -262,34 +220,33 @@ function Group:InitializeSharing()
     self.lgcs = result
     self.libraryAvailable = true
 
-    if result.RegisterForEvent and LibGroupCombatStats.EVENT_GROUP_ULT_UPDATE then
-        result:RegisterForEvent(LibGroupCombatStats.EVENT_GROUP_ULT_UPDATE, function(unitTag, data)
-            Group:OnGroupUltUpdate(unitTag, data)
-        end)
+    if result.RegisterForEvent then
+        if LibGroupCombatStats.EVENT_GROUP_ULT_UPDATE then
+            result:RegisterForEvent(LibGroupCombatStats.EVENT_GROUP_ULT_UPDATE, function(unitTag, data)
+                Group:OnGroupUltUpdate(unitTag, data)
+            end)
+        end
+
+        -- Keep Include Self equally responsive without waiting for the safety sync.
+        if LibGroupCombatStats.EVENT_PLAYER_ULT_UPDATE then
+            result:RegisterForEvent(LibGroupCombatStats.EVENT_PLAYER_ULT_UPDATE, function(unitTag, data)
+                Group:OnGroupUltUpdate(unitTag, data)
+            end)
+        end
     end
 
     return true
 end
 
-function Group:GetStatsForUnit(unitTag)
-    if not self.lgcs then return nil, nil end
+function Group:GetUltForUnit(unitTag)
+    if not self.lgcs or not self.lgcs.GetUnitULT then return nil end
 
-    local stats = nil
-    local ult = nil
+    local ok, ult = pcall(function()
+        return self.lgcs:GetUnitULT(unitTag)
+    end)
 
-    if self.lgcs.GetUnitStats then
-        local ok, value = pcall(function() return self.lgcs:GetUnitStats(unitTag) end)
-        if ok then stats = value end
-    end
-
-    if stats and stats.ult then
-        ult = stats.ult
-    elseif self.lgcs.GetUnitULT then
-        local ok, value = pcall(function() return self.lgcs:GetUnitULT(unitTag) end)
-        if ok then ult = value end
-    end
-
-    return stats, ult
+    if ok then return ult end
+    return nil
 end
 
 function Group:GetUnitTagByIndex(index)
@@ -306,11 +263,13 @@ end
 function Group:BuildRoster()
     local roster = {}
     local byKey = {}
+    local byUnitTag = {}
     local groupSize = GetGroupSize and GetGroupSize() or 0
 
     if groupSize <= 0 then
         self.roster = roster
         self.byKey = byKey
+        self.byUnitTag = byUnitTag
         return roster
     end
 
@@ -321,19 +280,9 @@ function Group:BuildRoster()
             local displayName = GetDisplayNameSafe(unitTag)
             local characterName = GetCharacterName(unitTag)
             local stableKey = displayName ~= "" and displayName or characterName
-
             if stableKey == "" then stableKey = unitTag end
 
-            local stats, ult = self:GetStatsForUnit(unitTag)
-            if stats then
-                if stats.displayName and stats.displayName ~= "" then
-                    displayName = stats.displayName
-                    stableKey = displayName
-                end
-                if stats.name and stats.name ~= "" then
-                    characterName = zo_strformat("<<C:1>>", stats.name)
-                end
-            end
+            local ult = self:GetUltForUnit(unitTag)
 
             local isPlayer = unitTag == "player"
             if AreUnitsEqual then
@@ -357,18 +306,47 @@ function Group:BuildRoster()
                 lastUpdated = ult and ult._lastUpdated or nil,
             }
 
-            entry.assignment = self:GetAssignment(entry.key)
-
             table.insert(roster, entry)
             byKey[entry.key] = entry
+            byUnitTag[unitTag] = entry
         end
     end
 
-    table.sort(roster, function(a, b) return (a.index or 999) < (b.index or 999) end)
+    table.sort(roster, function(a, b)
+        return (a.index or 999) < (b.index or 999)
+    end)
 
     self.roster = roster
     self.byKey = byKey
+    self.byUnitTag = byUnitTag
     return roster
+end
+
+function Group:UpdateEntryFromUltData(unitTag, data)
+    if not unitTag or not data then return false end
+
+    local entry = self.byUnitTag and self.byUnitTag[unitTag] or nil
+    if not entry and AreUnitsEqual then
+        for tag, candidate in pairs(self.byUnitTag or {}) do
+            local ok, same = pcall(AreUnitsEqual, tag, unitTag)
+            if ok and same then
+                entry = candidate
+                break
+            end
+        end
+    end
+
+    if not entry then return false end
+
+    entry.shared = data.ultValue ~= nil
+    entry.ultValue = tonumber(data.ultValue) or entry.ultValue or 0
+    entry.ult1ID = tonumber(data.ult1ID) or entry.ult1ID or 0
+    entry.ult2ID = tonumber(data.ult2ID) or entry.ult2ID or 0
+    entry.ult1Cost = tonumber(data.ult1Cost) or entry.ult1Cost or 0
+    entry.ult2Cost = tonumber(data.ult2Cost) or entry.ult2Cost or 0
+    entry.lastUpdated = data._lastUpdated or entry.lastUpdated
+
+    return true
 end
 
 function Group:BuildUltimate(entry, slot)
@@ -389,31 +367,6 @@ function Group:BuildUltimate(entry, slot)
         icon = icon,
         ready = id > 0 and cost > 0 and value >= cost,
     }
-end
-
-function Group:GetSelectedUltimates(entry)
-    if not entry then return {} end
-
-    local assignment = entry.assignment or self:GetAssignment(entry.key)
-    local mode = assignment and assignment.mode or "both"
-    local result = {}
-
-    if mode == "main" then
-        table.insert(result, self:BuildUltimate(entry, "main"))
-    elseif mode == "back" then
-        table.insert(result, self:BuildUltimate(entry, "back"))
-    else
-        table.insert(result, self:BuildUltimate(entry, "main"))
-        table.insert(result, self:BuildUltimate(entry, "back"))
-    end
-
-    return result
-end
-
--- Kept for compatibility with any code that still expects one selected Ultimate.
-function Group:GetSelectedUltimate(entry)
-    local ultimates = self:GetSelectedUltimates(entry)
-    return ultimates[1]
 end
 
 function Group:GetMatchingUltimates(entry)
@@ -594,7 +547,7 @@ function Group:RefreshIntegratedSettings()
     if refresh then refresh() end
 end
 
-function Group:ScheduleRefresh()
+function Group:ScheduleRefresh(rebuildRoster)
     if not self.sv then return end
 
     local configVisible = self.configWindow and not self.configWindow:IsHidden() or false
@@ -605,19 +558,27 @@ function Group:ScheduleRefresh()
         return
     end
 
+    if rebuildRoster then
+        self.pendingRosterRebuild = true
+    end
+
     if self.refreshPending then return end
     self.refreshPending = true
 
     zo_callLater(function()
+        local needsRoster = Group.pendingRosterRebuild == true
+        Group.pendingRosterRebuild = false
         Group.refreshPending = false
-        Group:Refresh("scheduled")
+        Group:Refresh("scheduled", needsRoster)
     end, 40)
 end
 
-function Group:Refresh(reason)
+function Group:Refresh(reason, rebuildRoster)
     if not self.initialized or not self.sv then return end
 
-    self:BuildRoster()
+    if rebuildRoster ~= false then
+        self:BuildRoster()
+    end
 
     if self.sv.enabled then
         self:CheckReadyTransitions()
@@ -631,7 +592,12 @@ function Group:Refresh(reason)
 end
 
 function Group:OnGroupUltUpdate(unitTag, data)
-    self:ScheduleRefresh()
+    if self:UpdateEntryFromUltData(unitTag, data) then
+        self:ScheduleRefresh(false)
+    else
+        -- Unit tags can change when the roster is rebuilt; recover safely.
+        self:ScheduleRefresh(true)
+    end
 end
 
 function Group:RegisterRosterEvents()
@@ -639,7 +605,7 @@ function Group:RegisterRosterEvents()
 
     local function RosterChanged()
         zo_callLater(function()
-            if Group then Group:Refresh("group roster") end
+            if Group then Group:Refresh("group roster", true) end
         end, 100)
     end
 
@@ -664,7 +630,7 @@ function Group:RegisterRosterEvents()
             and Group.sv.enabled
             and not ULT.uiObscured
         then
-            Group:Refresh("group safety")
+            Group:Refresh("group safety", true)
         end
     end)
 end
@@ -672,7 +638,7 @@ end
 function Group:SetEnabled(enabled)
     if not self.sv then return end
     self.sv.enabled = enabled == true
-    self:Refresh("enabled")
+    self:Refresh("enabled", true)
     self:ApplyVisibility()
 end
 
@@ -705,7 +671,7 @@ function Group:Initialize()
     self.initialized = true
 
     zo_callLater(function()
-        if Group then Group:Refresh("initial") end
+        if Group then Group:Refresh("initial", true) end
     end, 600)
 end
 

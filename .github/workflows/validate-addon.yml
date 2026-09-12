@@ -1,9 +1,13 @@
-name: Validate ULT Group Tracker
+name: Validate AlphaSquadUI
 
 on:
+  pull_request:
+    branches:
+      - main
   push:
     branches:
-      - ult-group-tracker
+      - main
+      - alpha-squad-ui-audit
 
 permissions:
   contents: read
@@ -12,7 +16,7 @@ jobs:
   validate-and-package:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout branch
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Install Lua and ZIP
@@ -22,12 +26,12 @@ jobs:
 
       - name: Validate Lua syntax
         run: |
-          set -e
+          set -euo pipefail
           find AlphaSquadUI -type f -name '*.lua' -print0 | sort -z | xargs -0 -n1 luac5.4 -p
 
       - name: Validate addon manifest paths
         run: |
-          set -e
+          set -euo pipefail
           cd AlphaSquadUI
           while IFS= read -r line; do
             case "$line" in
@@ -36,13 +40,21 @@ jobs:
             test -f "$line" || { echo "Missing manifest file: $line"; exit 1; }
           done < AlphaSquadUI.txt
 
-      - name: Build test ZIP
+      - name: Validate required metadata
         run: |
-          zip -r AlphaSquadUI_ULT_Group_Tracker_TEST.zip AlphaSquadUI             -x '*/.gitkeep'
+          set -euo pipefail
+          grep -q '^## Version:' AlphaSquadUI/AlphaSquadUI.txt
+          grep -q '^## AddOnVersion:' AlphaSquadUI/AlphaSquadUI.txt
+          grep -q '^## SavedVariables:' AlphaSquadUI/AlphaSquadUI.txt
+
+      - name: Build addon ZIP
+        run: |
+          set -euo pipefail
+          zip -r AlphaSquadUI_TEST.zip AlphaSquadUI -x '*/.gitkeep'
 
       - name: Upload test build
         uses: actions/upload-artifact@v4
         with:
-          name: AlphaSquadUI-ULT-Group-Tracker-TEST
-          path: AlphaSquadUI_ULT_Group_Tracker_TEST.zip
+          name: AlphaSquadUI-TEST
+          path: AlphaSquadUI_TEST.zip
           if-no-files-found: error
