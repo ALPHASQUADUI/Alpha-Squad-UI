@@ -1,4 +1,4 @@
--- Ąlpha Şquad UI - ULT Tracker / Group Configuration
+-- Ąlpha Şquad UI - ULT Tracker / Group Ultimate Filter Configuration
 
 AlphaSquadUI = AlphaSquadUI or {}
 AlphaSquadUI.Modules = AlphaSquadUI.Modules or {}
@@ -67,224 +67,89 @@ local function Button(parent, name, text, x, y, w, h, callback)
     return button
 end
 
-local function AbilityMeta(id)
-    id = tonumber(id) or 0
-    if id <= 0 then return "No Ultimate", "", 0 end
+local function CreateAbilityRow(parent, index)
+    local row = WINDOW_MANAGER:CreateControl("AlphaSquadULTGroupAbilityRow" .. index, parent, CT_CONTROL)
+    row:SetDimensions(354, 32)
+    row:SetMouseEnabled(true)
 
-    local name = GetAbilityName and GetAbilityName(id) or ""
-    local icon = GetAbilityIcon and GetAbilityIcon(id) or ""
-    if not name or name == "" then name = "Ultimate " .. tostring(id) end
+    row.bg = Solid(row, "AlphaSquadULTGroupAbilityRow" .. index .. "BG", {0.016, 0.024, 0.042, 0.96})
 
-    return zo_strformat("<<C:1>>", name), icon or "", id
-end
+    row.icon = WINDOW_MANAGER:CreateControl("AlphaSquadULTGroupAbilityRow" .. index .. "Icon", row, CT_TEXTURE)
+    row.icon:SetDimensions(24, 24)
+    row.icon:SetAnchor(LEFT, row, LEFT, 6, 0)
+    row.icon:SetTextureCoords(0.05, 0.95, 0.05, 0.95)
 
-local function ShortMode(mode)
-    if mode == "main" then return "FRONT" end
-    if mode == "back" then return "BACK" end
-    return "BOTH"
-end
-
-function Group:GetModeText(entry)
-    local assignment = entry and entry.assignment or nil
-    local mode = assignment and assignment.mode or "both"
-    local frontName = AbilityMeta(entry and entry.ult1ID)
-    local backName = AbilityMeta(entry and entry.ult2ID)
-
-    if mode == "main" then
-        return "FRONT • " .. frontName
-    elseif mode == "back" then
-        return "BACK • " .. backName
-    end
-
-    return "BOTH • " .. frontName .. " + " .. backName
-end
-
-local function CreateMemberRow(parent, index)
-    local row = WINDOW_MANAGER:CreateControl("AlphaSquadULTGroupConfigRow" .. index, parent, CT_CONTROL)
-    row:SetDimensions(736, 34)
-
-    row.bg = Solid(row, "AlphaSquadULTGroupConfigRow" .. index .. "BG", {0.016, 0.024, 0.042, 0.98})
-
-    row.name = Label(row, "AlphaSquadULTGroupConfigRow" .. index .. "Name", "ZoFontGameSmall", "", COLORS.white)
-    row.name:SetDimensions(176, 32)
-    row.name:SetAnchor(LEFT, row, LEFT, 10, 0)
+    row.name = Label(row, "AlphaSquadULTGroupAbilityRow" .. index .. "Name", "ZoFontGameSmall", "", COLORS.white)
+    row.name:SetDimensions(220, 30)
+    row.name:SetAnchor(LEFT, row, LEFT, 36, 0)
     row.name:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
     row.name:SetMaxLineCount(1)
-
-    row.share = Label(row, "AlphaSquadULTGroupConfigRow" .. index .. "Share", "ZoFontGameSmall", "", COLORS.muted)
-    row.share:SetDimensions(74, 32)
-    row.share:SetAnchor(LEFT, row, LEFT, 190, 0)
-    row.share:SetHorizontalAlignment(TEXT_ALIGN_CENTER)
-
-    row.trackButton = Button(row, "AlphaSquadULTGroupConfigRow" .. index .. "Track", "", 272, 3, 76, 28, nil)
-    row.ultButton = Button(row, "AlphaSquadULTGroupConfigRow" .. index .. "Ult", "", 356, 3, 366, 28, nil)
-    row.ultButton.label:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
-    row.ultButton.label:SetAnchor(TOPLEFT, row.ultButton, TOPLEFT, 8, 0)
-    row.ultButton.label:SetDimensions(350, 28)
-    row.ultButton.label:SetMaxLineCount(1)
-    if row.ultButton.label.SetWrapMode and TEXT_WRAP_MODE_ELLIPSIS then
-        row.ultButton.label:SetWrapMode(TEXT_WRAP_MODE_ELLIPSIS)
+    if row.name.SetWrapMode and TEXT_WRAP_MODE_ELLIPSIS then
+        row.name:SetWrapMode(TEXT_WRAP_MODE_ELLIPSIS)
     end
 
+    row.users = Label(row, "AlphaSquadULTGroupAbilityRow" .. index .. "Users", "ZoFontGameSmall", "", COLORS.muted)
+    row.users:SetDimensions(42, 30)
+    row.users:SetAnchor(RIGHT, row, RIGHT, -52, 0)
+    row.users:SetHorizontalAlignment(TEXT_ALIGN_RIGHT)
+
+    row.state = Label(row, "AlphaSquadULTGroupAbilityRow" .. index .. "State", "ZoFontGameBold", "", COLORS.muted)
+    row.state:SetDimensions(48, 30)
+    row.state:SetAnchor(RIGHT, row, RIGHT, -4, 0)
+    row.state:SetHorizontalAlignment(TEXT_ALIGN_RIGHT)
+
+    row.ability = nil
     return row
 end
 
-local function CreateSelectorOption(parent, name, y, mode, color)
-    local option = WINDOW_MANAGER:CreateControl(name, parent, CT_CONTROL)
-    option:SetDimensions(570, 54)
-    option:SetAnchor(TOPLEFT, parent, TOPLEFT, 20, y)
-    option:SetMouseEnabled(true)
-
-    option.bg = Solid(option, name .. "BG", {0.020, 0.030, 0.052, 0.99})
-
-    option.accent = WINDOW_MANAGER:CreateControl(name .. "Accent", option, CT_TEXTURE)
-    option.accent:SetAnchor(TOPLEFT, option, TOPLEFT, 0, 0)
-    option.accent:SetDimensions(3, 54)
-    SetColor(option.accent, color or COLORS.cyan)
-
-    option.mode = Label(option, name .. "Mode", "ZoFontGameBold", mode, color or COLORS.cyan)
-    option.mode:SetDimensions(64, 52)
-    option.mode:SetAnchor(LEFT, option, LEFT, 10, 0)
-    option.mode:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
-
-    option.icon1 = WINDOW_MANAGER:CreateControl(name .. "Icon1", option, CT_TEXTURE)
-    option.icon1:SetDimensions(36, 36)
-    option.icon1:SetAnchor(LEFT, option, LEFT, 82, 0)
-    option.icon1:SetTextureCoords(0.05, 0.95, 0.05, 0.95)
-
-    option.icon2 = WINDOW_MANAGER:CreateControl(name .. "Icon2", option, CT_TEXTURE)
-    option.icon2:SetDimensions(36, 36)
-    option.icon2:SetAnchor(LEFT, option, LEFT, 122, 0)
-    option.icon2:SetTextureCoords(0.05, 0.95, 0.05, 0.95)
-    option.icon2:SetHidden(true)
-
-    option.name = Label(option, name .. "Name", "ZoFontGame", "", COLORS.white)
-    option.name:SetDimensions(330, 26)
-    option.name:SetAnchor(TOPLEFT, option, TOPLEFT, 130, 4)
-    option.name:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
-    option.name:SetMaxLineCount(1)
-
-    option.cost = Label(option, name .. "Cost", "ZoFontGameSmall", "", COLORS.muted)
-    option.cost:SetDimensions(330, 18)
-    option.cost:SetAnchor(TOPLEFT, option, TOPLEFT, 130, 29)
-    option.cost:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
-
-    option.selected = Label(option, name .. "Selected", "ZoFontGameBold", "", COLORS.green)
-    option.selected:SetDimensions(90, 52)
-    option.selected:SetAnchor(RIGHT, option, RIGHT, -10, 0)
-    option.selected:SetHorizontalAlignment(TEXT_ALIGN_RIGHT)
-
-    return option
-end
-
-function Group:HideUltimateSelector()
-    if not self.configWindow or not self.configWindow.selectorOverlay then return end
-    self.configWindow.selectorOverlay:SetHidden(true)
-    self.configWindow.selectorEntry = nil
-end
-
-function Group:SelectUltimateMode(mode)
-    local win = self.configWindow
-    local entry = win and win.selectorEntry
-    if not entry then return end
-
-    self:SetMemberMode(entry.key, mode)
-    self:HideUltimateSelector()
-    self:RefreshConfig()
-end
-
-function Group:RefreshUltimateSelector(entry)
-    local win = self.configWindow
-    if not win or not win.selectorOverlay or not entry then return end
-
-    local frontName, frontIcon = AbilityMeta(entry.ult1ID)
-    local backName, backIcon = AbilityMeta(entry.ult2ID)
-    local frontCost = tonumber(entry.ult1Cost) or 0
-    local backCost = tonumber(entry.ult2Cost) or 0
-    local currentMode = entry.assignment and entry.assignment.mode or "both"
-
-    win.selectorTitle:SetText("SELECT ULTIMATE • " .. (entry.characterName or entry.key or "Player"))
-
-    local front = win.selectorFront
-    front.icon1:SetHidden(frontIcon == "")
-    if frontIcon ~= "" then front.icon1:SetTexture(frontIcon) end
-    front.icon2:SetHidden(true)
-    front.name:SetAnchor(TOPLEFT, front, TOPLEFT, 130, 4)
-    front.name:SetText(frontName)
-    front.cost:SetAnchor(TOPLEFT, front, TOPLEFT, 130, 29)
-    front.cost:SetText(frontCost > 0 and ("Front bar • Cost " .. tostring(frontCost)) or "Front bar • No cost data")
-    front.selected:SetText(currentMode == "main" and "SELECTED" or "")
-
-    local back = win.selectorBack
-    back.icon1:SetHidden(backIcon == "")
-    if backIcon ~= "" then back.icon1:SetTexture(backIcon) end
-    back.icon2:SetHidden(true)
-    back.name:SetAnchor(TOPLEFT, back, TOPLEFT, 130, 4)
-    back.name:SetText(backName)
-    back.cost:SetAnchor(TOPLEFT, back, TOPLEFT, 130, 29)
-    back.cost:SetText(backCost > 0 and ("Back bar • Cost " .. tostring(backCost)) or "Back bar • No cost data")
-    back.selected:SetText(currentMode == "back" and "SELECTED" or "")
-
-    local both = win.selectorBoth
-    both.icon1:SetHidden(frontIcon == "")
-    if frontIcon ~= "" then both.icon1:SetTexture(frontIcon) end
-    both.icon2:SetHidden(backIcon == "")
-    if backIcon ~= "" then both.icon2:SetTexture(backIcon) end
-    both.name:SetAnchor(TOPLEFT, both, TOPLEFT, 170, 4)
-    both.name:SetText(frontName .. "  +  " .. backName)
-    both.cost:SetAnchor(TOPLEFT, both, TOPLEFT, 170, 29)
-    both.cost:SetText(string.format("Front %s • Back %s",
-        frontCost > 0 and tostring(frontCost) or "?",
-        backCost > 0 and tostring(backCost) or "?"))
-    both.selected:SetText(currentMode == "both" and "SELECTED" or "")
-end
-
-function Group:ShowUltimateSelector(entry)
-    if not self.configWindow or not entry then return end
-
-    self.configWindow.selectorEntry = entry
-    self:RefreshUltimateSelector(entry)
-    self.configWindow.selectorOverlay:SetHidden(false)
-end
-
-function Group:RefreshConfigRow(row, entry)
+function Group:RefreshAbilityRow(row, ability)
     if not row then return end
 
-    if not entry then
+    if not ability then
         row:SetHidden(true)
-        row.entry = nil
+        row.ability = nil
         return
     end
 
     row:SetHidden(false)
-    row.entry = entry
+    row.ability = ability
 
-    local display = entry.characterName or entry.key or "Unknown"
-    if entry.displayName and entry.displayName ~= "" then
-        display = display .. "  " .. entry.displayName
+    row.icon:SetHidden(not ability.icon or ability.icon == "")
+    if ability.icon and ability.icon ~= "" then row.icon:SetTexture(ability.icon) end
+
+    row.name:SetText(ability.name or ("Ultimate " .. tostring(ability.id)))
+    row.users:SetText(tostring(ability.users or 0) .. "x")
+
+    local tracked = self:IsAbilityTracked(ability.id)
+    row.state:SetText(tracked and "ON" or "OFF")
+    SetColor(row.state, tracked and COLORS.green or COLORS.muted)
+
+    if tracked then
+        row.bg:SetColor(0.040, 0.085, 0.062, 0.94)
+    else
+        row.bg:SetColor(0.016, 0.024, 0.042, 0.96)
     end
-    row.name:SetText(display)
 
-    row.share:SetText(entry.shared and "SHARE" or "NO DATA")
-    SetColor(row.share, entry.shared and COLORS.green or COLORS.muted)
-
-    local tracked = entry.assignment and entry.assignment.tracked == true
-    row.trackButton.label:SetText(tracked and "TRACK" or "HIDE")
-    SetColor(row.trackButton.label, tracked and COLORS.green or COLORS.red)
-
-    row.ultButton.label:SetText(self:GetModeText(entry))
-    SetColor(row.ultButton.label, entry.shared and COLORS.white or COLORS.muted)
-
-    row.trackButton:SetHandler("OnMouseUp", function(_, mouseButton, upInside)
-        if mouseButton == MOUSE_BUTTON_INDEX_LEFT and upInside ~= false and row.entry then
-            local assignment = row.entry.assignment or Group:GetAssignment(row.entry.key)
-            Group:SetMemberTracked(row.entry.key, not (assignment and assignment.tracked == true))
+    row:SetHandler("OnMouseEnter", function()
+        if tracked then
+            row.bg:SetColor(0.055, 0.110, 0.078, 1)
+        else
+            row.bg:SetColor(0.045, 0.058, 0.080, 1)
         end
     end)
 
-    row.ultButton:SetHandler("OnMouseUp", function(_, mouseButton, upInside)
-        if mouseButton == MOUSE_BUTTON_INDEX_LEFT and upInside ~= false and row.entry then
-            Group:ShowUltimateSelector(row.entry)
+    row:SetHandler("OnMouseExit", function()
+        if Group:IsAbilityTracked(ability.id) then
+            row.bg:SetColor(0.040, 0.085, 0.062, 0.94)
+        else
+            row.bg:SetColor(0.016, 0.024, 0.042, 0.96)
+        end
+    end)
+
+    row:SetHandler("OnMouseUp", function(_, button, upInside)
+        if button == MOUSE_BUTTON_INDEX_LEFT and upInside ~= false and row.ability then
+            local enabled = Group:IsAbilityTracked(row.ability.id)
+            Group:SetAbilityTracked(row.ability.id, not enabled)
         end
     end)
 end
@@ -292,26 +157,32 @@ end
 function Group:RefreshConfig()
     if not self.configWindow or self.configWindow:IsHidden() then return end
 
-    local roster = self.roster or {}
+    local abilities = self:GetAvailableAbilities()
     local shared, total = self:GetSharingCount()
+    local trackedCount = self:GetTrackedAbilityCount()
 
     if not self.libraryAvailable then
         self.configWindow.source:SetText("Group share unavailable • LibGroupCombatStats not detected")
         SetColor(self.configWindow.source, COLORS.red)
     else
-        self.configWindow.source:SetText(string.format("%d/%d group members sharing Ultimate data", shared, total))
+        self.configWindow.source:SetText(string.format("%d/%d members sharing • %d unique Ultimates available • %d selected",
+            shared, total, #abilities, trackedCount))
         SetColor(self.configWindow.source, shared > 0 and COLORS.green or COLORS.muted)
     end
 
-    self.configWindow.empty:SetHidden(#roster > 0)
+    self.configWindow.empty:SetHidden(#abilities > 0)
 
-    for index, row in ipairs(self.configWindow.rows) do
-        local entry = roster[index]
-        self:RefreshConfigRow(row, entry)
+    for index, row in ipairs(self.configWindow.abilityRows) do
+        local ability = abilities[index]
+        self:RefreshAbilityRow(row, ability)
 
-        if entry then
+        if ability then
+            local col = index <= 12 and 0 or 1
+            local rowIndex = col == 0 and index or (index - 12)
             row:ClearAnchors()
-            row:SetAnchor(TOPLEFT, self.configWindow, TOPLEFT, 22, 132 + ((index - 1) * 36))
+            row:SetAnchor(TOPLEFT, self.configWindow, TOPLEFT,
+                col == 0 and 22 or 404,
+                152 + ((rowIndex - 1) * 34))
         end
     end
 
@@ -328,20 +199,11 @@ function Group:RefreshConfig()
     self.configWindow.selfButton.label:SetText(g.includeSelf and "SELF: ON" or "SELF: OFF")
     SetColor(self.configWindow.selfButton.label, g.includeSelf and COLORS.green or COLORS.muted)
 
-    self.configWindow.scaleValue:SetText(tostring(g.scale or 100) .. "%")
-    self.configWindow.opacityValue:SetText(tostring(g.opacity or 92) .. "%")
-    self.configWindow.soundButton.label:SetText(g.readySound and "SOUND ON" or "SOUND OFF")
+    self.configWindow.soundButton.label:SetText(g.readySound and "READY SOUND: ON" or "READY SOUND: OFF")
     SetColor(self.configWindow.soundButton.label, g.readySound and COLORS.green or COLORS.muted)
 
-    if self.configWindow.selectorEntry then
-        local updatedEntry = self.byKey and self.byKey[self.configWindow.selectorEntry.key]
-        if updatedEntry then
-            self.configWindow.selectorEntry = updatedEntry
-            self:RefreshUltimateSelector(updatedEntry)
-        else
-            self:HideUltimateSelector()
-        end
-    end
+    self.configWindow.scaleValue:SetText(tostring(g.scale or 100) .. "%")
+    self.configWindow.opacityValue:SetText(tostring(g.opacity or 92) .. "%")
 end
 
 function Group:OpenConfig()
@@ -355,7 +217,6 @@ end
 
 function Group:CloseConfig()
     if not self.configWindow then return end
-    self:HideUltimateSelector()
     self.configWindow:SetHidden(true)
     self:ApplyVisibility()
 end
@@ -369,7 +230,7 @@ function Group:CreateConfigWindow()
     local win = WINDOW_MANAGER:CreateTopLevelWindow("AlphaSquadULTGroupConfigWindow")
     self.configWindow = win
 
-    win:SetDimensions(780, 700)
+    win:SetDimensions(780, 650)
     win:SetAnchor(CENTER, GuiRoot, CENTER, 0, 0)
     win:SetClampedToScreen(true)
     win:SetMovable(true)
@@ -388,7 +249,7 @@ function Group:CreateConfigWindow()
     SetColor(top, COLORS.orange)
 
     local header = WINDOW_MANAGER:CreateControl("AlphaSquadULTGroupConfigHeader", win, CT_CONTROL)
-    header:SetDimensions(780, 64)
+    header:SetDimensions(780, 62)
     header:SetAnchor(TOPLEFT, win, TOPLEFT, 0, 0)
     header:SetMouseEnabled(true)
     header:SetHandler("OnMouseDown", function(_, button)
@@ -404,174 +265,118 @@ function Group:CreateConfigWindow()
     title:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
 
     local sub = Label(win, "AlphaSquadULTGroupConfigSub", "ZoFontGameSmall",
-        "Track players and choose FRONT, BACK or BOTH shared Ultimates.", COLORS.muted)
-    sub:SetDimensions(610, 20)
-    sub:SetAnchor(TOPLEFT, win, TOPLEFT, 21, 40)
+        "Select the Ultimates to monitor. Players are added automatically when they have one slotted.", COLORS.muted)
+    sub:SetDimensions(660, 20)
+    sub:SetAnchor(TOPLEFT, win, TOPLEFT, 21, 39)
     sub:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
 
-    Button(win, "AlphaSquadULTGroupConfigClose", "X", 730, 15, 32, 30, function()
+    Button(win, "AlphaSquadULTGroupConfigClose", "X", 730, 15, 32, 28, function()
         Group:CloseConfig()
     end)
 
     win.source = Label(win, "AlphaSquadULTGroupConfigSource", "ZoFontGameSmall", "", COLORS.muted)
-    win.source:SetDimensions(736, 22)
-    win.source:SetAnchor(TOPLEFT, win, TOPLEFT, 22, 69)
+    win.source:SetDimensions(736, 20)
+    win.source:SetAnchor(TOPLEFT, win, TOPLEFT, 22, 68)
     win.source:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
 
-    win.enabledButton = Button(win, "AlphaSquadULTGroupConfigEnabled", "", 22, 96, 130, 28, function()
+    win.enabledButton = Button(win, "AlphaSquadULTGroupConfigEnabled", "", 22, 96, 120, 28, function()
         Group:SetEnabled(not Group.sv.enabled)
         Group:RefreshConfig()
     end)
 
-    win.visibleButton = Button(win, "AlphaSquadULTGroupConfigVisible", "", 160, 96, 130, 28, function()
+    win.visibleButton = Button(win, "AlphaSquadULTGroupConfigVisible", "", 150, 96, 120, 28, function()
         Group:SetVisible(not Group.sv.visible)
         Group:RefreshConfig()
     end)
 
-    win.lockButton = Button(win, "AlphaSquadULTGroupConfigLock", "", 298, 96, 130, 28, function()
+    win.lockButton = Button(win, "AlphaSquadULTGroupConfigLock", "", 278, 96, 110, 28, function()
         Group:SetLocked(not Group.sv.locked)
         Group:RefreshConfig()
     end)
 
-    win.selfButton = Button(win, "AlphaSquadULTGroupConfigSelf", "", 436, 96, 130, 28, function()
+    win.selfButton = Button(win, "AlphaSquadULTGroupConfigSelf", "", 396, 96, 110, 28, function()
         Group.sv.includeSelf = not Group.sv.includeSelf
         Group:Refresh("include self")
         Group:RefreshConfig()
     end)
 
-    win.soundButton = Button(win, "AlphaSquadULTGroupReadySound", "", 574, 96, 184, 28, function()
+    win.soundButton = Button(win, "AlphaSquadULTGroupReadySound", "", 514, 96, 244, 28, function()
         Group.sv.readySound = not Group.sv.readySound
         Group:RefreshConfig()
     end)
 
-    local playerHeader = Label(win, "AlphaSquadULTGroupConfigPlayerHeader", "ZoFontGameBold", "PLAYER", COLORS.orange)
-    playerHeader:SetDimensions(176, 20)
-    playerHeader:SetAnchor(TOPLEFT, win, TOPLEFT, 32, 128)
-    playerHeader:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
+    local listHeader = Label(win, "AlphaSquadULTGroupAbilitiesHeader", "ZoFontGameBold",
+        "ULTIMATES AVAILABLE IN CURRENT GROUP", COLORS.orange)
+    listHeader:SetDimensions(736, 22)
+    listHeader:SetAnchor(TOPLEFT, win, TOPLEFT, 22, 128)
+    listHeader:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
 
-    local shareHeader = Label(win, "AlphaSquadULTGroupConfigShareHeader", "ZoFontGameBold", "DATA", COLORS.orange)
-    shareHeader:SetDimensions(74, 20)
-    shareHeader:SetAnchor(TOPLEFT, win, TOPLEFT, 212, 128)
-    shareHeader:SetHorizontalAlignment(TEXT_ALIGN_CENTER)
-
-    local trackHeader = Label(win, "AlphaSquadULTGroupConfigTrackHeader", "ZoFontGameBold", "SHOW", COLORS.orange)
-    trackHeader:SetDimensions(76, 20)
-    trackHeader:SetAnchor(TOPLEFT, win, TOPLEFT, 294, 128)
-    trackHeader:SetHorizontalAlignment(TEXT_ALIGN_CENTER)
-
-    local ultHeader = Label(win, "AlphaSquadULTGroupConfigUltHeader", "ZoFontGameBold", "ULTIMATE", COLORS.orange)
-    ultHeader:SetDimensions(366, 20)
-    ultHeader:SetAnchor(TOPLEFT, win, TOPLEFT, 378, 128)
-    ultHeader:SetHorizontalAlignment(TEXT_ALIGN_CENTER)
-
-    win.rows = {}
-    for index = 1, 12 do
-        win.rows[index] = CreateMemberRow(win, index)
-        win.rows[index]:SetHidden(true)
+    win.abilityRows = {}
+    for index = 1, 24 do
+        win.abilityRows[index] = CreateAbilityRow(win, index)
+        win.abilityRows[index]:SetHidden(true)
     end
 
-    win.empty = Label(win, "AlphaSquadULTGroupConfigEmpty", "ZoFontGame", "No group members found.", COLORS.muted)
+    win.empty = Label(win, "AlphaSquadULTGroupConfigEmpty", "ZoFontGame", "No shared Ultimates found in the group.", COLORS.muted)
     win.empty:SetDimensions(736, 80)
-    win.empty:SetAnchor(TOPLEFT, win, TOPLEFT, 22, 180)
+    win.empty:SetAnchor(TOPLEFT, win, TOPLEFT, 22, 210)
     win.empty:SetHorizontalAlignment(TEXT_ALIGN_CENTER)
     win.empty:SetHidden(true)
 
-    win.scaleMinus = Button(win, "AlphaSquadULTGroupScaleMinus", "−", 22, 582, 34, 28, function()
+    local controlsY = 570
+
+    Button(win, "AlphaSquadULTGroupSelectAll", "SELECT ALL", 22, controlsY, 110, 28, function()
+        for _, ability in ipairs(Group:GetAvailableAbilities()) do
+            Group.sv.trackedAbilities[tostring(ability.id)] = true
+        end
+        Group:Refresh("select all abilities")
+    end)
+
+    Button(win, "AlphaSquadULTGroupClearAll", "CLEAR ALL", 140, controlsY, 110, 28, function()
+        Group.sv.trackedAbilities = {}
+        Group:Refresh("clear tracked abilities")
+    end)
+
+    win.scaleMinus = Button(win, "AlphaSquadULTGroupScaleMinus", "−", 278, controlsY, 32, 28, function()
         Group.sv.scale = ULT.Clamp((Group.sv.scale or 100) - 5, 70, 140)
         Group:ApplyAppearance()
         Group:RefreshConfig()
     end)
-
     win.scaleValue = Label(win, "AlphaSquadULTGroupScaleValue", "ZoFontGameBold", "", COLORS.cyan)
-    win.scaleValue:SetDimensions(58, 28)
-    win.scaleValue:SetAnchor(TOPLEFT, win, TOPLEFT, 60, 582)
+    win.scaleValue:SetDimensions(54, 28)
+    win.scaleValue:SetAnchor(TOPLEFT, win, TOPLEFT, 314, controlsY)
     win.scaleValue:SetHorizontalAlignment(TEXT_ALIGN_CENTER)
-
-    win.scalePlus = Button(win, "AlphaSquadULTGroupScalePlus", "+", 122, 582, 34, 28, function()
+    win.scalePlus = Button(win, "AlphaSquadULTGroupScalePlus", "+", 372, controlsY, 32, 28, function()
         Group.sv.scale = ULT.Clamp((Group.sv.scale or 100) + 5, 70, 140)
         Group:ApplyAppearance()
         Group:RefreshConfig()
     end)
 
-    local scaleLabel = Label(win, "AlphaSquadULTGroupScaleLabel", "ZoFontGameSmall", "HUD SCALE", COLORS.muted)
-    scaleLabel:SetDimensions(90, 28)
-    scaleLabel:SetAnchor(TOPLEFT, win, TOPLEFT, 164, 582)
-    scaleLabel:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
-
-    win.opacityMinus = Button(win, "AlphaSquadULTGroupOpacityMinus", "−", 282, 582, 34, 28, function()
+    win.opacityMinus = Button(win, "AlphaSquadULTGroupOpacityMinus", "−", 438, controlsY, 32, 28, function()
         Group.sv.opacity = ULT.Clamp((Group.sv.opacity or 92) - 5, 30, 100)
         Group:ApplyAppearance()
         Group:RefreshConfig()
     end)
-
     win.opacityValue = Label(win, "AlphaSquadULTGroupOpacityValue", "ZoFontGameBold", "", COLORS.cyan)
-    win.opacityValue:SetDimensions(58, 28)
-    win.opacityValue:SetAnchor(TOPLEFT, win, TOPLEFT, 320, 582)
+    win.opacityValue:SetDimensions(54, 28)
+    win.opacityValue:SetAnchor(TOPLEFT, win, TOPLEFT, 474, controlsY)
     win.opacityValue:SetHorizontalAlignment(TEXT_ALIGN_CENTER)
-
-    win.opacityPlus = Button(win, "AlphaSquadULTGroupOpacityPlus", "+", 382, 582, 34, 28, function()
+    win.opacityPlus = Button(win, "AlphaSquadULTGroupOpacityPlus", "+", 532, controlsY, 32, 28, function()
         Group.sv.opacity = ULT.Clamp((Group.sv.opacity or 92) + 5, 30, 100)
         Group:ApplyAppearance()
         Group:RefreshConfig()
     end)
 
-    local opacityLabel = Label(win, "AlphaSquadULTGroupOpacityLabel", "ZoFontGameSmall", "OPACITY", COLORS.muted)
-    opacityLabel:SetDimensions(90, 28)
-    opacityLabel:SetAnchor(TOPLEFT, win, TOPLEFT, 424, 582)
-    opacityLabel:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
-
-    win.resetButton = Button(win, "AlphaSquadULTGroupReset", "RESET HUD", 620, 582, 138, 28, function()
+    Button(win, "AlphaSquadULTGroupReset", "RESET HUD", 648, controlsY, 110, 28, function()
         Group:ResetPosition()
     end)
 
     local footer = Label(win, "AlphaSquadULTGroupConfigFooter", "ZoFontGameSmall",
-        "Click a player's Ultimate field to choose FRONT, BACK or BOTH inside this window.", COLORS.muted)
-    footer:SetDimensions(736, 34)
-    footer:SetAnchor(TOPLEFT, win, TOPLEFT, 22, 620)
+        "READY players pulse in the raid list. After an Ultimate is spent, that @UserID is strongly dimmed for a few seconds.", COLORS.muted)
+    footer:SetDimensions(736, 36)
+    footer:SetAnchor(TOPLEFT, win, TOPLEFT, 22, 607)
     footer:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
-
-    -- Internal Ultimate selector overlay. It is part of GROUP ULTIMATE CONFIG
-    -- and never opens ESO's external popup menu.
-    win.selectorOverlay = WINDOW_MANAGER:CreateControl("AlphaSquadULTGroupSelectorOverlay", win, CT_CONTROL)
-    win.selectorOverlay:SetAnchorFill(win)
-    win.selectorOverlay:SetMouseEnabled(true)
-    win.selectorOverlay:SetHidden(true)
-
-    local shade = Solid(win.selectorOverlay, "AlphaSquadULTGroupSelectorShade", {0.000, 0.000, 0.000, 0.72})
-
-    win.selectorPanel = WINDOW_MANAGER:CreateControl("AlphaSquadULTGroupSelectorPanel", win.selectorOverlay, CT_CONTROL)
-    win.selectorPanel:SetDimensions(610, 250)
-    win.selectorPanel:SetAnchor(CENTER, win.selectorOverlay, CENTER, 0, 0)
-    Solid(win.selectorPanel, "AlphaSquadULTGroupSelectorPanelBG", {0.010, 0.016, 0.030, 0.995})
-
-    local selectorTop = WINDOW_MANAGER:CreateControl("AlphaSquadULTGroupSelectorTop", win.selectorPanel, CT_TEXTURE)
-    selectorTop:SetAnchor(TOPLEFT, win.selectorPanel, TOPLEFT, 0, 0)
-    selectorTop:SetAnchor(TOPRIGHT, win.selectorPanel, TOPRIGHT, 0, 0)
-    selectorTop:SetHeight(2)
-    SetColor(selectorTop, COLORS.orange)
-
-    win.selectorTitle = Label(win.selectorPanel, "AlphaSquadULTGroupSelectorTitle", "ZoFontGameBold", "", COLORS.white)
-    win.selectorTitle:SetDimensions(500, 28)
-    win.selectorTitle:SetAnchor(TOPLEFT, win.selectorPanel, TOPLEFT, 20, 10)
-    win.selectorTitle:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
-
-    Button(win.selectorPanel, "AlphaSquadULTGroupSelectorClose", "X", 560, 8, 30, 28, function()
-        Group:HideUltimateSelector()
-    end)
-
-    win.selectorFront = CreateSelectorOption(win.selectorPanel, "AlphaSquadULTSelectorFront", 44, "FRONT", COLORS.cyan)
-    win.selectorBack = CreateSelectorOption(win.selectorPanel, "AlphaSquadULTSelectorBack", 103, "BACK", COLORS.orange)
-    win.selectorBoth = CreateSelectorOption(win.selectorPanel, "AlphaSquadULTSelectorBoth", 162, "BOTH", COLORS.gold)
-
-    win.selectorFront:SetHandler("OnMouseUp", function(_, button, upInside)
-        if button == MOUSE_BUTTON_INDEX_LEFT and upInside ~= false then Group:SelectUltimateMode("main") end
-    end)
-    win.selectorBack:SetHandler("OnMouseUp", function(_, button, upInside)
-        if button == MOUSE_BUTTON_INDEX_LEFT and upInside ~= false then Group:SelectUltimateMode("back") end
-    end)
-    win.selectorBoth:SetHandler("OnMouseUp", function(_, button, upInside)
-        if button == MOUSE_BUTTON_INDEX_LEFT and upInside ~= false then Group:SelectUltimateMode("both") end
-    end)
+    footer:SetVerticalAlignment(TEXT_ALIGN_TOP)
 
     self:ApplyConfigWindowScale()
 end
