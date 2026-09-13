@@ -12,6 +12,7 @@ for test in tests/*.lua; do
     lua5.4 "$test"
 done
 python3 tooling/build_companion.py AlphaSquadBuildShare.zip
+mkdir -p build/companion
 unzip -oq AlphaSquadBuildShare.zip -d build/companion
 lua5.1 tests/companion_package.lua build/companion/AlphaSquadBuildShare
 lua5.4 tests/companion_package.lua build/companion/AlphaSquadBuildShare

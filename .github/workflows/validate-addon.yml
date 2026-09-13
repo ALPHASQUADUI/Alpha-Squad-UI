@@ -82,6 +82,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 tooling/build_companion.py AlphaSquadBuildShare.zip
+          mkdir -p build/companion
           unzip -q AlphaSquadBuildShare.zip -d build/companion
           find build/companion -name '*.lua' -print0 | sort -z | xargs -0 -n1 luac5.1 -p
           find build/companion -name '*.lua' -print0 | sort -z | xargs -0 -n1 luac5.4 -p
