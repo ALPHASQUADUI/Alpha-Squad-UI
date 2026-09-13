@@ -1,4 +1,4 @@
-name: Support Coverage branch tests
+name: Support Coverage validation
 on:
   push:
     branches: [support-coverage]
@@ -59,7 +59,7 @@ jobs:
       - name: Package source for independent review
         if: always()
         run: zip -r SupportCoverage-review-source.zip AlphaSquadUI companion tooling docs .github tests -x '*/.gitkeep' || test -f SupportCoverage-review-source.zip
-      - name: Package installable test addon
+      - name: Package installable addon
         run: |
           set -euo pipefail
           version="$(sed -n 's/^## Version: //p' AlphaSquadUI/AlphaSquadUI.txt)"
@@ -74,6 +74,6 @@ jobs:
           path: SupportCoverage-review-source.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: AlphaSquadUI-support-coverage-test
+          name: AlphaSquadUI-support-coverage
           path: AlphaSquadUI-*.zip
           if-no-files-found: error

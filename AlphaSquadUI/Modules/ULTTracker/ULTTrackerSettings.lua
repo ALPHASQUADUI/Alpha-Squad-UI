@@ -61,7 +61,7 @@ function ULT:BuildIntegratedSettingsPage(page, ui)
     title:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
 
     local sub = CreateLabel(page, "AlphaSquadULTIntegratedSub", "ZoFontGameSmall",
-        "MAIN / BACK Ultimate readiness • all classes • all morphs • dynamic slot detection", C.muted)
+        "See when your front-bar and back-bar Ultimates are ready to use.", C.muted)
     sub:SetDimensions(650, 22)
     sub:SetAnchor(TOPLEFT, page, TOPLEFT, 9, 34)
     sub:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
@@ -80,7 +80,7 @@ function ULT:BuildIntegratedSettingsPage(page, ui)
         function() return ULT.sv and ULT.sv.locked == true end,
         function(v) if ULT.sv then ULT:SetLocked(v) end end)
 
-    AddToggleRow(general, "AlphaSquadULTIntegratedMenus", "Hide when ESO menus open", 150,
+    AddToggleRow(general, "AlphaSquadULTIntegratedMenus", "Hide HUD in menus", 150,
         function() return ULT.sv and ULT.sv.hideInMenus == true end,
         function(v)
             if ULT.sv then
@@ -120,7 +120,7 @@ function ULT:BuildIntegratedSettingsPage(page, ui)
         if refreshMain then refreshMain() end
     end
 
-    local mainButton = CreateButton(tracking, "AlphaSquadULTIntegratedModeMain", "MAIN", 14, 74, 88, 32, function()
+    local mainButton = CreateButton(tracking, "AlphaSquadULTIntegratedModeMain", "FRONT", 14, 74, 88, 32, function()
         SelectTrackMode("main")
     end)
     local backButton = CreateButton(tracking, "AlphaSquadULTIntegratedModeBack", "BACK", 116, 74, 88, 32, function()
@@ -134,6 +134,7 @@ function ULT:BuildIntegratedSettingsPage(page, ui)
         local selectedMode = ULT.sv and ULT.sv.trackMode or "both"
         for mode, button in pairs({ main = mainButton, back = backButton, both = bothButton }) do
             local selected = selectedMode == mode
+            button.restingColor = selected and {0.13, 0.075, 0.025, 0.98} or C.panel
             if button.bg then
                 if selected then
                     button.bg:SetColor(0.13, 0.075, 0.025, 0.98)
@@ -148,11 +149,11 @@ function ULT:BuildIntegratedSettingsPage(page, ui)
         end
     end)
 
-    AddToggleRow(tracking, "AlphaSquadULTIntegratedSound", "Sound when Ultimate is READY", 122,
+    AddToggleRow(tracking, "AlphaSquadULTIntegratedSound", "Play ready sound", 122,
         function() return ULT.sv and ULT.sv.readySound == true end,
         function(v) if ULT.sv then ULT.sv.readySound = v == true end end)
 
-    AddToggleRow(tracking, "AlphaSquadULTIntegratedFlash", "Flash / pulse while READY", 158,
+    AddToggleRow(tracking, "AlphaSquadULTIntegratedFlash", "Highlight when ready", 158,
         function() return ULT.sv and ULT.sv.readyFlash == true end,
         function(v)
             if ULT.sv then
@@ -214,7 +215,7 @@ function ULT:BuildIntegratedSettingsPage(page, ui)
         local b = ULT.bars and ULT.bars.backup
         local pName = p and p.name ~= "" and p.name or "No Ultimate"
         local bName = b and b.name ~= "" and b.name or "No Ultimate"
-        livePrimary:SetText(string.format("MAIN  •  %s\n%s  •  Cost %s",
+        livePrimary:SetText(string.format("FRONT  •  %s\n%s  •  Cost %s",
             pName, p and string.upper(p.state or "empty") or "EMPTY", p and tostring(p.cost or "?") or "?"))
         liveBackup:SetText(string.format("BACK  •  %s\n%s  •  Cost %s",
             bName, b and string.upper(b.state or "empty") or "EMPTY", b and tostring(b.cost or "?") or "?"))
@@ -251,7 +252,7 @@ function ULT:BuildIntegratedSettingsPage(page, ui)
             groupStatus:SetText(string.format("DISABLED • %d/%d group members sharing ULT data", shared, total))
             SetColor(groupStatus, C.muted)
         else
-            groupStatus:SetText(string.format("ENABLED • %d/%d sharing • Event-driven raidlead list", shared, total))
+            groupStatus:SetText(string.format("ENABLED • %d/%d group members sharing Ultimates", shared, total))
             SetColor(groupStatus, C.green)
         end
     end)

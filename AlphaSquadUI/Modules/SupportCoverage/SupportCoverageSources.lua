@@ -44,6 +44,34 @@ function SC:ScanMundus()
     return result
 end
 
+-- Physical objects and set-bonus weights are different: an arena staff is one
+-- item but contributes two pieces on its equipped weapon bar. Reuse this for
+-- received item links so summaries never infer item counts from set weights.
+function SC:RefreshEquipmentPhysicalCounts(equipment)
+    if type(equipment) ~= "table" then return end
+    local byFamily = {}
+    for _, set in ipairs(equipment.setList or {}) do
+        local id = AbilityId(set.id)
+        local familyId = id and AbilityId(Try(GetItemSetUnperfectedSetId, id)) or nil
+        local key = tostring(familyId or id or ("name:" .. Normalize(set.name)))
+        byFamily[key] = set
+        set.physicalCount, set.bodyItemCount, set.primaryItemCount, set.backupItemCount = 0, 0, 0, 0
+        set.physicalCountKnown = equipment.complete == true
+    end
+    for _, item in ipairs(equipment.items or {}) do
+        local id = AbilityId(item.setId)
+        local familyId = id and AbilityId(Try(GetItemSetUnperfectedSetId, id)) or nil
+        local key = tostring(familyId or id or ("name:" .. Normalize(item.setName)))
+        local set = byFamily[key]
+        if set and item.hasSet ~= false then
+            set.physicalCount = set.physicalCount + 1
+            if item.bar == "PRIMARY" then set.primaryItemCount = set.primaryItemCount + 1
+            elseif item.bar == "BACKUP" then set.backupItemCount = set.backupItemCount + 1
+            else set.bodyItemCount = set.bodyItemCount + 1 end
+        end
+    end
+end
+
 local equipmentScan=SC.ScanEquipment
 function SC:ScanEquipment()
     local result=equipmentScan(self)
@@ -55,11 +83,15 @@ function SC:ScanEquipment()
         local family=families[familyKey]
         if not family then
             family={key=familyKey,id=familyId,name=set.name,mainCount=0,backCount=0,variants={},names={},
+                physicalCount=0,bodyItemCount=0,primaryItemCount=0,backupItemCount=0,
                 equipped=set.equipped,perfected=set.perfected,maxEquipped=set.maxEquipped}
             families[familyKey]=family
         end
         family.mainCount=family.mainCount+(FiniteNumber(set.mainCount) or 0)
         family.backCount=family.backCount+(FiniteNumber(set.backCount) or 0)
+        for _, field in ipairs({"physicalCount", "bodyItemCount", "primaryItemCount", "backupItemCount"}) do
+            family[field] = family[field] + (FiniteNumber(set[field]) or 0)
+        end
         family.variants[#family.variants+1]={id=set.id,mainCount=set.mainCount,backCount=set.backCount}
         family.names[#family.names+1]=set.name
     end
@@ -104,11 +136,9 @@ function SC:ScanEquipment()
     result.capabilities=capabilities
     for _,item in ipairs(result.items or {}) do
         if item.isWeapon and item.weaponType==nil then result.complete=false end
-        if item.hasEnchant and (not item.enchantId or item.enchantId==0) then
-            item.enchantId=Try(GetItemLinkDefaultEnchantId,item.link)
-        end
     end
     if not result.complete then result.capabilities={} end
+    self:RefreshEquipmentPhysicalCounts(result)
     return result
 end
 

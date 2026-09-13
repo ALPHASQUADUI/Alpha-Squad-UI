@@ -22,22 +22,39 @@ function UI.Label(parent, name, text, font, color)
     return label
 end
 function UI.Tooltip(control, text)
+    if AlphaSquadUI.Tooltips then return AlphaSquadUI.Tooltips.ShowText(control,text) end
     if not InformationTooltip or not InitializeTooltip then return end
     InitializeTooltip(InformationTooltip, control, TOPLEFT, 8, 4, TOPRIGHT)
     SetTooltipText(InformationTooltip, UI.Text(text))
 end
+function UI.ItemTooltip(control,item,remote)
+    if AlphaSquadUI.Tooltips then return AlphaSquadUI.Tooltips.ShowItem(control,item,remote) end
+end
+function UI.SkillTooltip(control,skill,remote)
+    if AlphaSquadUI.Tooltips then return AlphaSquadUI.Tooltips.ShowSkill(control,skill,remote) end
+end
+function UI.ChampionTooltip(control,star)
+    if AlphaSquadUI.Tooltips then return AlphaSquadUI.Tooltips.ShowChampion(control,star) end
+end
 function UI.ClearTooltip()
+    if AlphaSquadUI.Tooltips then return AlphaSquadUI.Tooltips.Hide() end
     if ClearTooltip and InformationTooltip then ClearTooltip(InformationTooltip) end
     if ClearTooltip and ItemTooltip then ClearTooltip(ItemTooltip) end
 end
 function UI.Hover(control, text)
     control:SetMouseEnabled(true)
     control:SetHandler("OnMouseWheel",function(c,delta) UI.ForwardWheel(c,delta) end)
+    local enter=control.GetHandler and control:GetHandler("OnMouseEnter")
+    local leave=control.GetHandler and control:GetHandler("OnMouseExit")
     control:SetHandler("OnMouseEnter", function()
+        if enter then enter(control) end
         local value = type(text) == "function" and text() or text
         if value and value ~= "" then UI.Tooltip(control, value) end
     end)
-    control:SetHandler("OnMouseExit", UI.ClearTooltip)
+    control:SetHandler("OnMouseExit", function()
+        if leave then leave(control) end
+        UI.ClearTooltip()
+    end)
 end
 function UI.Button(parent, name, caption, width, height, action)
     local b = WINDOW_MANAGER:CreateControl(name, parent, CT_CONTROL)

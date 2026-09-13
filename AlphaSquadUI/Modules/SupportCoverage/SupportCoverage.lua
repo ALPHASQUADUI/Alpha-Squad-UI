@@ -12,7 +12,7 @@ AlphaSquadUI.Modules.SupportCoverage = SC
 
 SC.name = "SupportCoverage"
 SC.displayName = "Support Coverage"
-SC.version = (AlphaSquadUI and AlphaSquadUI.version) or "2.7.0-support-coverage-test.5"
+SC.version = (AlphaSquadUI and AlphaSquadUI.version) or "2.7.0"
 SC.savedVarsName = "AlphaSquadSupportCoverageSavedVariables"
 SC.catalogPatch = "U50"
 SC.initialized = false
@@ -259,11 +259,11 @@ function SC:SetExperimentalSharing(enabled)
     self.sv.experimentalSharing = enabled == true
     if self.sv.experimentalSharing then
         if self.InitializeSharing then self:InitializeSharing() end
-        if self.ShareLocalSnapshot then self:ShareLocalSnapshot("test sharing enabled") end
+        if self.ShareLocalSnapshot then self:ShareLocalSnapshot("build exchange enabled") end
     elseif self.ResetSharingState then
         self:ResetSharingState("Experimental sharing disabled")
     end
-    self:Refresh("experimental sharing")
+    self:Refresh("build exchange")
 end
 
 function SC:ResetSharingState(reason)
@@ -443,6 +443,7 @@ function SC:RegisterEvents()
         {"SkillLines", EVENT_SKILL_LINE_ADDED}, {"SkillsFull", EVENT_SKILLS_FULL_UPDATE},
         {"SkillBuild", EVENT_SKILL_BUILD_SELECTION_UPDATED}, {"SkillRespec", EVENT_SKILL_RESPEC_RESULT},
         {"ArmoryChampion", EVENT_ARMORY_BUILD_CHAMPION_SLOTS_MODIFIED},
+        {"WerewolfForm", EVENT_WEREWOLF_STATE_CHANGED},
     }) do
         if definition[2] then EM:RegisterForEvent(prefix .. "_" .. definition[1], definition[2], Dirty) end
     end

@@ -8,7 +8,7 @@ Repository: `ALPHASQUADUI/Alpha-Squad-UI`. Maintainer: **SeRuM1**. [Website](htt
 
 Stable `main` remains the separate **2.6.0** baseline with Overload, personal ULT and Group Ultimate trackers. Support Coverage is feature-branch work; always inspect **support-coverage** when auditing it. An earlier audit missed the feature by inspecting only `main`.
 
-The current development candidate is **2.7.0-support-coverage-test.5** / **20705**. The maintainer authorized necessary addon changes, documentation, audit and publication to **support-coverage**, with no PR, merge, tag or stable release. Actual ESO testing is still a separate handoff; do not infer in-game acceptance from local tests.
+The current version on this branch is **2.7.0** / **20710**. The maintainer authorized necessary addon changes, documentation, audit and publication to **support-coverage**, with no PR, merge, tag or stable release. Actual ESO testing is still a separate handoff; do not infer in-game acceptance from local tests.
 
 ## Latest scope supersedes the previous report workflow
 
@@ -16,12 +16,12 @@ Support Coverage now focuses on preparation before combat:
 
 - consolidated Trial and Dungeon effect lists with per-effect ON/OFF;
 - buff/debuff/set/mastery source coverage, explicit conditions and duplicate providers;
-- group **Builds** inspection by `@UserID` and a **Food** check;
+- compact visual **Builds** inspection by `@UserID`, with body-positioned equipment, native item/skill tooltips, two icon skill bars and Champion icons, plus a **Food** check;
 - separate bar set counts, readable source names, glyphs, CP, skills and masteries where supported;
-- responsive scrollable views and library/setup guidance;
+- responsive views, foreground tooltips and library/setup guidance;
 - compatible build sharing from the full addon or a lightweight companion.
 
-Pull reports, combat uptime, history and loadout-planner workflows belong to older candidates and are retired from the active interface. Role assignments are not a mandatory readiness workflow. Historical changelog entries remain historical evidence, not current feature claims.
+Pull reports, combat uptime, history and loadout-planner workflows belong to earlier revisions and are retired from the active interface. Role assignments are not a mandatory readiness workflow. Historical changelog entries remain historical evidence, not current feature claims.
 
 ## Technical limits
 
@@ -41,6 +41,6 @@ Preserve relevant settings, filters and window geometry. Prefer events, bounded 
 
 ## Handoff
 
-The source of truth is the branch, its versioned files, current test outputs and [in-game checklist](SUPPORT_COVERAGE_TESTING.md). Do not repeat old assertion totals as current results. Branch Actions artifacts provide test packages; see [download instructions](../releases/README.md).
+The source of truth is the branch, its versioned files, current test outputs and [in-game checklist](SUPPORT_COVERAGE_TESTING.md). Do not repeat old assertion totals as current results. Branch Actions artifacts provide installable packages; see [download instructions](../releases/README.md).
 
 For cross-device continuity, read this file and `AGENTS.md`, inspect the actual branch and continue from the existing changes. Do not ask the maintainer to repeat already documented design decisions.

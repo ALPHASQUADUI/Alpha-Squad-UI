@@ -119,8 +119,8 @@ or:
 
 `/asult group`
 
-The configuration shows up to 24 unique Ultimates from the current 12-player
-group in a compact two-column list.
+The configuration shows the group's available Ultimate identities in a compact
+scrolling list. Up to 24 Ultimate filters can be retained in the saved selection.
 
 For each Ultimate:
 

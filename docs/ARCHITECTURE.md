@@ -4,7 +4,7 @@
 
 `AlphaSquadUI/` is the full ESO suite. The **AlphaSquadBuildShare** companion is a separate sharing-only installation for group members who do not want the UI suite; it uses the same compatible build format.
 
-Core owns identity/version (`Core.lua`), theme tokens (`Theme.lua`), shared helpers (`Utils.lua`), event namespaces (`Events.lua`) and the settings-page bridge (`Settings.lua`). New pages register through:
+Core owns identity/version (`Core.lua`), theme tokens (`Theme.lua`), shared helpers (`Utils.lua`), event namespaces (`Events.lua`), the settings-page bridge (`Settings.lua`) and shared foreground tooltip routing (`Tooltips.lua`). New pages register through:
 
 ```lua
 AlphaSquadUI.Settings.RegisterPage(id, builder)
@@ -24,7 +24,9 @@ The settings shell implementation is hosted by Overload. Other modules use the C
 | Support engine/lifecycle | Cached roster, precombat capability evaluation, context toggles, duplicate providers and event invalidation |
 | Support external adapters | Optional LibSetDetection group set facts and compatible LibGroupCombatStats information with explicit data limits |
 | Support share/details/codec | Bounded compatible snapshot transport and validation |
-| Support UI/settings/inspector | Coverage list, Builds, Food, information tooltips and dependency guidance |
+| Support UI/settings/inspector | Coverage list, player selection, Food and dependency guidance |
+| Support BuildView | Compact equipment silhouette, set summaries, skill/Ultimate and Champion icons |
+| Core tooltip routing | Native item/ability details and readable custom descriptions above addon windows |
 
 Some audit helpers remain for scanner/evidence compatibility. Their presence does not expose the old expected-build template workflow. Pull history, combat observation, live-report transport and recorded-build planner modules are retired from the runtime.
 
@@ -33,6 +35,12 @@ Some audit helpers remain for scanner/evidence compatibility. Their presence doe
 Equipment, skill, Champion and mastery changes invalidate the local snapshot. Coalesced scans refresh supported local evidence outside combat. Validated compatible peer snapshots populate a bounded transient group cache. The engine evaluates enabled Trial/Dungeon requirements against that evidence, and reused controls render coverage, providers and detailed builds.
 
 A five-second lightweight recovery refresh is limited to a relevant visible or grouped precombat state. Quickslot/readiness changes do not require rescanning every unrelated equipment slot. Support Coverage does not scan or send build data during combat; pending state is refreshed when combat ends. There is no pull sampler, report archive or uptime computation in this workflow.
+
+## Build presentation
+
+`SupportCoverageBuildView.lua` renders the selected build as a compact character view. Equipment placement represents body slots, jewelry and each weapon bar. It is not a native remote-character inventory API or a 3D character renderer. Set summaries distinguish physical item counts from bonus-piece counts, keep the two bars separate and respect two-handed weights. The normal weapon bars remain separate from a reported Werewolf bar. Twelve Champion positions, mastery icons and compact consumable/character cards complete the view.
+
+`Core/Tooltips.lua` centralizes foreground layering and native/custom tooltip routing. Item details are tied to the actual item link; ability details are tied to the selected skill or morph. Native item-tooltip set counters still refer to the viewing player, so the tooltip directs the user to the inspected build's own per-bar summary. Native descriptions on a receiving client do not establish the remote player's stat-scaled combat values. Champion descriptions use the sender's verified allocated points; missing allocations are not substituted with the viewer's values. Missing snapshot fields remain unknown, including unsupported transformation details and Vampire stage.
 
 ## Evidence and transport boundaries
 
@@ -44,9 +52,9 @@ A five-second lightweight recovery refresh is limited to a relevant visible or g
 - Internal set/ability identities must resolve to useful display names where available.
 - One-bar source activation is valid when that bar reaches the required set threshold; proc and recipient conditions remain distinct.
 
-Build-summary protocol **510** and detailed-build protocol **507** are provisional; the current wire version is **3**. The expanded capability bitmap is bound to the catalog schema. Full details are request-only, use acknowledged chunks and replace a receiver snapshot only after complete validation. Transfer limits are 64 chunks of at most 56 bytes, a minimum 1.2-second response gap and a 20-second inactivity timeout. Completed detail caches expire after 120 seconds and are invalidated on summary fingerprint changes or group reset.
+Build-summary protocol **510** and detailed-build protocol **507** are provisional; the current wire version is **3**. The binary build schema is **2**, with a compatibility reader for schema **1**. The newer snapshot carries separate Werewolf-bar data, verified curse/form state, ability ranks and verified Champion allocations. Older snapshots do not acquire these facts by default; ambiguous old Champion points remain unknown. The expanded capability bitmap is bound to the catalog schema. Full details are request-only, use acknowledged chunks and replace a receiver snapshot only after complete validation. Transfer limits are 64 chunks of at most 56 bytes, a minimum 1.2-second response gap and a 20-second inactivity timeout. Completed detail caches expire after 120 seconds and are invalidated on summary fingerprint changes or group reset.
 
-Both active protocol IDs remain provisional. Legacy plan/live protocols **509/508** are retired. Active IDs must be reserved before a normal public sharing release. Experimental sharing remains disabled by default.
+Both active protocol IDs remain provisional. Legacy plan/live protocols **509/508** are retired. Active IDs must be reserved before a normal public sharing release. Full build sharing remains disabled by default.
 
 ## Persistence
 

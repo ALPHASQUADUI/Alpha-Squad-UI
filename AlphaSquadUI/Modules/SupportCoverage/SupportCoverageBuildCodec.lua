@@ -1,7 +1,9 @@
 -- Bounded build records. Only native numeric IDs and numeric item-link fields
 -- travel over the wire; names and tooltips are resolved by the receiving client.
 local SC = AlphaSquadUI.Modules.SupportCoverage
-local Codec = {VERSION=1, MAX_BYTES=3584, MAX_ITEMS=16, MAX_LINK_FIELDS=40}
+-- Schema 2 adds verified Champion allocations and a separate Werewolf bar.
+-- Legacy schema 1 remains readable; fields it cannot prove stay unknown.
+local Codec = {VERSION=2, MAX_BYTES=3584, MAX_ITEMS=16, MAX_LINK_FIELDS=40}
 SC.BuildCodec = Codec
 
 local function Number(value, maximum)
@@ -87,6 +89,39 @@ local function Reader(body)
 end
 local function Count(list,maximum) return Number(#(list or {}),maximum) end
 
+local CURSE_IDS={NONE=1,VAMPIRE=2,WEREWOLF=3}
+local CURSE_NAMES={[1]="NONE",[2]="VAMPIRE",[3]="WEREWOLF"}
+local function WriteSkills(w,bar)
+    w:uint(Count(bar,6))
+    for _,skill in ipairs(bar or {}) do
+        w:uint(skill.slot,15);w:uint(skill.abilityId,2147483647);w:uint(skill.boundAbilityId or skill.abilityId,2147483647)
+        w:uint(skill.rank,4)
+        w:uint(skill.craftedAbilityId,2147483647);w:uint(skill.lineId,2147483647)
+        w:flag(skill.scriptsKnown);w:uint(Count(skill.scripts,3))
+        for _,script in ipairs(skill.scripts or {}) do w:uint(script.id,2147483647) end
+    end
+end
+local function ReadSkills(r,version)
+    local bar,seen={},{}
+    for index=1,r:uint(6) do
+        local slot,id,bound=r:uint(15),r:uint(2147483647),r:uint(2147483647)
+        if seen[slot] then error("Duplicate skill slot") end
+        seen[slot]=true
+        local rank=version>=2 and r:uint(4) or 0
+        local skill={slot=slot,abilityId=id,boundAbilityId=bound,rank=rank>0 and rank or nil,name=Call(GetAbilityName,id) or "Unknown skill",
+            icon=Call(GetAbilityIcon,id),ultimate=slot==(ACTION_BAR_ULTIMATE_SLOT_INDEX or 7)+1,
+            craftedAbilityId=r:uint(2147483647),lineId=r:uint(2147483647),scriptsKnown=r:flag(),scripts={}}
+        if skill.craftedAbilityId==0 then skill.craftedAbilityId=nil end
+        if skill.lineId==0 then skill.lineId=nil end
+        for scriptIndex=1,r:uint(3) do
+            local scriptId=r:uint(2147483647)
+            skill.scripts[#skill.scripts+1]={id=scriptId,name=Call(GetCraftedAbilityScriptDisplayName,scriptId) or "Scribing script"}
+        end
+        bar[#bar+1]=skill
+    end
+    return bar
+end
+
 function Codec.Encode(snapshot)
     local ok,body=pcall(function()
         local w=Writer()
@@ -106,18 +141,11 @@ function Codec.Encode(snapshot)
             w:uint(set.id,2147483647);w:uint(set.mainCount,24);w:uint(set.backCount,24)
         end
         w:flag(skills.known)
-        for _,bar in ipairs({"primary","backup"}) do
-            w:uint(Count(skills[bar],6))
-            for _,skill in ipairs(skills[bar] or {}) do
-                w:uint(skill.slot,15);w:uint(skill.abilityId,2147483647);w:uint(skill.boundAbilityId or skill.abilityId,2147483647)
-                w:uint(skill.craftedAbilityId,2147483647);w:uint(skill.lineId,2147483647)
-                w:flag(skill.scriptsKnown);w:uint(Count(skill.scripts,3))
-                for _,script in ipairs(skill.scripts or {}) do w:uint(script.id,2147483647) end
-            end
-        end
+        for _,bar in ipairs({"primary","backup"}) do WriteSkills(w,skills[bar]) end
         w:flag(skills.championKnown);w:uint(Count(skills.champion,12))
         for _,star in ipairs(skills.champion or {}) do
-            w:uint(star.slot,32);w:uint(star.id,2147483647);w:uint(star.points,65535)
+            w:uint(star.slot,32);w:uint(star.id,2147483647);w:uint(star.points,3600)
+            w:flag(star.pointsKnown~=false and type(star.points)=="number")
         end
         w:flag(masteries.known);w:flag(masteries.eligible)
         w:uint(Count(masteries.selected,8))
@@ -152,6 +180,16 @@ function Codec.Encode(snapshot)
             local cap=(snapshot.capabilities or {})[key]
             w:uint(cap and (1+(cap.mainBar and 2 or 0)+(cap.backBar and 4 or 0)+(cap.conditional and 8 or 0)) or 0,15)
         end
+        local curse=snapshot.curse or {}
+        local kind=curse.known==true and CURSE_IDS[curse.kind] or 0
+        if curse.known==true and kind==0 then error("Unknown curse identity") end
+        w:uint(kind,3)
+        -- The form flag refers only to the native Werewolf transformation.
+        local transformed
+        if kind==CURSE_IDS.WEREWOLF then transformed=curse.transformed end
+        w:state(transformed)
+        w:uint(kind==CURSE_IDS.VAMPIRE and curse.stage or 0,4)
+        w:flag(skills.werewolfKnown);WriteSkills(w,skills.werewolf)
         return table.concat(w.parts)
     end)
     if ok then return body end
@@ -162,9 +200,11 @@ function Codec.Decode(body)
     if type(body)~="string" or #body<2 or #body>Codec.MAX_BYTES then return nil end
     local ok,snapshot=pcall(function()
         local r=Reader(body)
-        if r:uint(7)~=Codec.VERSION then error("Unsupported build version") end
-        local result={classId=r:uint(255),equipment={items={},slots={},setList={},sets={},glyphs={}},
-            skills={primary={},backup={},champion={}},masteries={selected={},learnedIds={},learned={},skillLines={},capabilities={}},
+        local version=r:uint(7)
+        if version~=1 and version~=Codec.VERSION then error("Unsupported build version") end
+        local result={buildSchemaVersion=version,classId=r:uint(255),equipment={items={},slots={},setList={},sets={},glyphs={}},
+            skills={primary={},backup={},champion={},werewolf={},werewolfKnown=false},curse={known=false},
+            masteries={selected={},learnedIds={},learned={},skillLines={},capabilities={}},
             capabilities={},capabilitiesComplete=false,detailsEvidence="SHARED_BUILD"}
         local equipment,skills,masteries=result.equipment,result.skills,result.masteries
         equipment.complete=r:flag()
@@ -207,32 +247,18 @@ function Codec.Decode(body)
             equipment.setList[#equipment.setList+1]=set;equipment.sets[tostring(id)]=set
         end
         skills.known=r:flag()
-        for _,bar in ipairs({"primary","backup"}) do
-            local seen={}
-            for index=1,r:uint(6) do
-                local slot,id,bound=r:uint(15),r:uint(2147483647),r:uint(2147483647)
-                if seen[slot] then error("Duplicate skill slot") end
-                seen[slot]=true
-                local skill={slot=slot,abilityId=id,boundAbilityId=bound,name=Call(GetAbilityName,id) or "Unknown skill",
-                    icon=Call(GetAbilityIcon,id),ultimate=slot==(ACTION_BAR_ULTIMATE_SLOT_INDEX or 7)+1,
-                    craftedAbilityId=r:uint(2147483647),lineId=r:uint(2147483647),scriptsKnown=r:flag(),scripts={}}
-                if skill.craftedAbilityId==0 then skill.craftedAbilityId=nil end
-                if skill.lineId==0 then skill.lineId=nil end
-                for scriptIndex=1,r:uint(3) do
-                    local scriptId=r:uint(2147483647)
-                    skill.scripts[#skill.scripts+1]={id=scriptId,name=Call(GetCraftedAbilityScriptDisplayName,scriptId) or "Scribing script"}
-                end
-                skills[bar][#skills[bar]+1]=skill
-            end
-        end
+        for _,bar in ipairs({"primary","backup"}) do skills[bar]=ReadSkills(r,version) end
         skills.championKnown=r:flag()
         local seenStars={}
         for index=1,r:uint(12) do
-            local slot,id,points=r:uint(32),r:uint(2147483647),r:uint(65535)
+            local slot,id,points=r:uint(32),r:uint(2147483647),r:uint(version>=2 and 3600 or 65535)
             if seenStars[slot] then error("Duplicate Champion slot") end
             seenStars[slot]=true
-            skills.champion[#skills.champion+1]={slot=slot,id=id,points=points,name=Call(GetChampionSkillName,id) or "Unknown Champion star",
-                discipline=SC.GetChampionDiscipline and SC:GetChampionDiscipline(id)}
+            local pointsKnown=version>=2 and r:flag() or false
+            local star=SC.DescribeChampionSkill and SC:DescribeChampionSkill(id,slot,points,pointsKnown)
+                or {slot=slot,id=id,points=points,pointsKnown=pointsKnown,name=Call(GetChampionSkillName,id) or "Unknown Champion star",
+                    discipline=SC.GetChampionDiscipline and SC:GetChampionDiscipline(id)}
+            skills.champion[#skills.champion+1]=star
         end
         masteries.known=r:flag();masteries.eligible=r:flag()
         for index=1,r:uint(8) do
@@ -278,7 +304,16 @@ function Codec.Decode(body)
                     mainBar=math.floor(flags/2)%2==1,backBar=math.floor(flags/4)%2==1,conditional=flags>=8}
             end
         end
+        if SC.RefreshEquipmentPhysicalCounts then SC:RefreshEquipmentPhysicalCounts(equipment) end
         result.catalogCompatible=matches
+        if version>=2 then
+            local kind,transformed,stage=r:uint(3),r:state(),r:uint(4)
+            if kind~=CURSE_IDS.WEREWOLF and transformed~=nil or kind~=CURSE_IDS.VAMPIRE and stage~=0 then
+                error("Inconsistent curse evidence")
+            end
+            result.curse={known=kind>0,kind=CURSE_NAMES[kind],transformed=transformed,stage=stage>0 and stage or nil}
+            skills.werewolfKnown=r:flag();skills.werewolf=ReadSkills(r,version)
+        end
         if r.pos~=#body+1 then error("Unexpected build data") end
         if SC.DeriveBuildCapabilities then result.capabilities=SC:DeriveBuildCapabilities(result) or result.capabilities end
         return result

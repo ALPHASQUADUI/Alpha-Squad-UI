@@ -51,12 +51,16 @@ local function Button(parent, name, text, x, y, w, h, callback)
     button.label = Label(button, name .. "Label", "ZoFontGameSmall", text or "", COLORS.white)
     button.label:SetAnchorFill(button)
     button.label:SetHorizontalAlignment(TEXT_ALIGN_CENTER)
+    button.label:SetMaxLineCount(1)
+    if button.label.SetWrapMode and TEXT_WRAP_MODE_ELLIPSIS then button.label:SetWrapMode(TEXT_WRAP_MODE_ELLIPSIS) end
 
     button:SetHandler("OnMouseEnter", function()
         button.bg:SetColor(0.050, 0.065, 0.090, 1)
+        if button.help and AlphaSquadUI.Tooltips then AlphaSquadUI.Tooltips.ShowText(button, button.help) end
     end)
     button:SetHandler("OnMouseExit", function()
         button.bg:SetColor(COLORS.panel[1], COLORS.panel[2], COLORS.panel[3], COLORS.panel[4])
+        if AlphaSquadUI.Tooltips then AlphaSquadUI.Tooltips.Hide() end
     end)
     button:SetHandler("OnMouseUp", function(_, mouseButton, upInside)
         if mouseButton == MOUSE_BUTTON_INDEX_LEFT and upInside ~= false and callback then
@@ -136,21 +140,21 @@ function Group:RefreshAbilityRow(row, ability)
         else
             row.bg:SetColor(0.045, 0.058, 0.080, 1)
         end
-        if InformationTooltip and InitializeTooltip and SetTooltipText then
+        local tooltips = AlphaSquadUI.Tooltips
+        if tooltips then
             local description = ""
             if GetAbilityDescription then
                 local ok, value = pcall(GetAbilityDescription, ability.id)
                 if ok and type(value) == "string" then description = value end
             end
-            InitializeTooltip(InformationTooltip, row, TOPLEFT, 0, 0, BOTTOMLEFT)
-            SetTooltipText(InformationTooltip, (ability.name or "Unknown Ultimate")
+            tooltips.ShowText(row, (ability.name or "Unknown Ultimate")
                 .. (description ~= "" and ("\n\n" .. description) or "")
-                .. "\n\nClick to toggle tracking. Up to 24 Ultimate filters can be saved.")
+                .. "\n\nClick to turn tracking on or off. The count shows group members with this Ultimate. You can save up to 24 selections.")
         end
     end)
 
     row:SetHandler("OnMouseExit", function()
-        if InformationTooltip and ClearTooltip then ClearTooltip(InformationTooltip) end
+        if AlphaSquadUI.Tooltips then AlphaSquadUI.Tooltips.Hide() end
         if Group:IsAbilityTracked(ability.id) then
             row.bg:SetColor(0.040, 0.085, 0.062, 0.94)
         else
@@ -240,6 +244,7 @@ end
 function Group:CloseConfig()
     if not self.configWindow then return end
     self.configWindow:SetHidden(true)
+    if AlphaSquadUI.Tooltips then AlphaSquadUI.Tooltips.Hide() end
     self:ApplyVisibility()
     local settings = AlphaSquadUI.Settings
     if settings and settings.RefreshModuleVisibility then settings.RefreshModuleVisibility() end
@@ -287,13 +292,13 @@ function Group:CreateConfigWindow()
         if button == MOUSE_BUTTON_INDEX_LEFT then win:StopMovingOrResizing() end
     end)
 
-    local title = Label(win, "AlphaSquadULTGroupConfigTitle", "ZoFontWinH2", "GROUP ULTIMATE CONFIG", COLORS.orange)
+    local title = Label(win, "AlphaSquadULTGroupConfigTitle", "ZoFontWinH2", "GROUP ULTIMATES", COLORS.orange)
     title:SetDimensions(480, 30)
     title:SetAnchor(TOPLEFT, win, TOPLEFT, 20, 10)
     title:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
 
     local sub = Label(win, "AlphaSquadULTGroupConfigSub", "ZoFontGameSmall",
-        "Select up to 24 Ultimates. Compatible senders with those abilities are added automatically.", COLORS.muted)
+        "Choose the Ultimates you want to see. Group members with those abilities appear automatically.", COLORS.muted)
     sub:SetDimensions(660, 20)
     sub:SetAnchor(TOPLEFT, win, TOPLEFT, 21, 39)
     sub:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
@@ -352,7 +357,7 @@ function Group:CreateConfigWindow()
         win.abilityRows[index]:SetHidden(true)
     end
 
-    win.empty = Label(win, "AlphaSquadULTGroupConfigEmpty", "ZoFontGame", "No shared Ultimates found in the group.", COLORS.muted)
+    win.empty = Label(win, "AlphaSquadULTGroupConfigEmpty", "ZoFontGame", "No shared Ultimates yet.\nJoin a group and enable ULT sharing in LibGroupCombatStats.", COLORS.muted)
     win.empty:SetDimensions(736, 80)
     win.empty:SetAnchor(TOPLEFT, win, TOPLEFT, 22, 210)
     win.empty:SetHorizontalAlignment(TEXT_ALIGN_CENTER)
@@ -378,13 +383,13 @@ function Group:CreateConfigWindow()
     end)
 
     local sizeHeader = Label(win, "AlphaSquadULTGroupSizeHeader", "ZoFontGameBold",
-        "HUD SIZE  •  All values are saved automatically", COLORS.orange)
+        "HUD SIZE  •  Saved automatically", COLORS.orange)
     sizeHeader:SetDimensions(470, 24)
     sizeHeader:SetAnchor(TOPLEFT, win, TOPLEFT, 278, controlsY + 1)
     sizeHeader:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
 
     local sizeHelp = Label(win, "AlphaSquadULTGroupSizeHelp", "ZoFontGameSmall",
-        "Scale changes everything • Width changes horizontal size • Row Height changes line/icon size", COLORS.muted)
+        "Scale resizes the HUD. Width adds space for names. Row height enlarges players and icons.", COLORS.muted)
     sizeHelp:SetDimensions(736, 20)
     sizeHelp:SetAnchor(TOPLEFT, win, TOPLEFT, 22, 586)
     sizeHelp:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
@@ -487,11 +492,11 @@ function Group:CreateConfigWindow()
         Group:RefreshConfig()
     end)
 
-    Button(win, "AlphaSquadULTGroupResetSize", "RESET SIZE", 566, 610, 92, 28, function()
+    Button(win, "AlphaSquadULTGroupResetSize", "RESET SIZE", 566, 610, 192, 28, function()
         Group:ResetSize()
     end)
 
-    Button(win, "AlphaSquadULTGroupReset", "RESET POSITION", 664, 610, 94, 28, function()
+    Button(win, "AlphaSquadULTGroupReset", "RESET POSITION", 566, 644, 192, 28, function()
         Group:ResetPosition()
     end)
 
@@ -502,5 +507,10 @@ function Group:CreateConfigWindow()
     saveNote:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
     saveNote:SetVerticalAlignment(TEXT_ALIGN_TOP)
 
+    win.enabledButton.help = "Enable or disable group Ultimate tracking. Your selected abilities and HUD settings are kept."
+    win.visibleButton.help = "Show or hide the group Ultimate HUD without clearing your selected abilities."
+    win.lockButton.help = "Unlock to drag the group HUD to a new position. Lock it again when you are finished."
+    win.selfButton.help = "Include your own character in the group Ultimate list."
+    win.soundButton.help = "Play a notification when a tracked group Ultimate becomes ready."
     self:ApplyConfigWindowScale()
 end

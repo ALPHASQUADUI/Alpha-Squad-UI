@@ -1,7 +1,7 @@
 ## Title: |cE66A19Ąlpha Şquad UI|r
 ## APIVersion: 101050 101051
-## Version: 2.7.0-support-coverage-test.5
-## AddOnVersion: 20705
+## Version: 2.7.0
+## AddOnVersion: 20710
 ## Author: SeRuM1
 ## Description: Modular Alpha Squad UI with pre-combat group readiness and voluntary build inspection.
 ## SavedVariables: AlphaSquadOverloadTrackerSavedVariables AlphaSquadULTTrackerSavedVariables AlphaSquadSupportCoverageSavedVariables
@@ -11,6 +11,7 @@ Core/Core.lua
 Core/Theme.lua
 Core/Utils.lua
 Core/Events.lua
+Core/Tooltips.lua
 Core/Settings.lua
 
 Modules/ULTTracker/ULTTracker.lua
@@ -32,6 +33,7 @@ Modules/SupportCoverage/SupportCoverageDetails.lua
 Modules/SupportCoverage/SupportCoverageEngine.lua
 Modules/SupportCoverage/SupportCoverageExternal.lua
 Modules/SupportCoverage/SupportCoverageUI.lua
+Modules/SupportCoverage/SupportCoverageBuildView.lua
 Modules/SupportCoverage/SupportCoverageInspector.lua
 Modules/SupportCoverage/SupportCoverageSettings.lua
 

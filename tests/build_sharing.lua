@@ -36,7 +36,10 @@ local function Snapshot()
         masteries={known=true,eligible=true,selected={{id=1200,rank=1}},learnedIds={},skillLines={},passives={}},
         food={verified=true,active=true,abilityId=440,timeEnds=2000},
         potion={known=true,selectionKnown=true,isPotion=true,link=itemLink,count=100},
-        poisons={known=true,items={}},capabilities={major_courage={mainBar=true,backBar=false,conditional=true}}}
+        poisons={known=true,items={}},curse={known=true,kind="WEREWOLF",transformed=false},
+        capabilities={major_courage={mainBar=true,backBar=false,conditional=true}}}
+    snapshot.skills.werewolfKnown=true
+    snapshot.skills.werewolf={{slot=3,abilityId=58865,boundAbilityId=58865,rank=4},{slot=8,abilityId=32464,boundAbilityId=32464,rank=4}}
     for slot=0,13 do
         local item=slot<3 and {slot=slot,link=itemLink,enchantHasCharges=true,enchantSuppressedByPoison=false} or nil
         snapshot.equipment.slots[#snapshot.equipment.slots+1]={slot=slot,known=true,empty=item==nil,item=item}
@@ -227,10 +230,22 @@ end
 local full=alice.SC.peerData["@Bob"].fullBuild
 check(full and full.skills.primary[1].abilityId==20001 and #full.equipment.slots==14,
     "Request/summary/chunk/ACK flow produces the exact decoded build")
+check(full.curse.kind=="WEREWOLF" and full.curse.transformed==false and full.skills.werewolf[2].ultimate
+    and full.skills.werewolf[2].rank==4 and full.skills.champion[1].pointsKnown,
+    "End-to-end sharing retains Werewolf state, ultimate morph rank and verified Champion allocation")
 check(not alice.SC.share.incomingBuild and not bob.SC.share.outgoingBuild,"Completed transfers leave no active sender or receiver")
 check(alice.SC:GetPlayerBuildDetails("@Bob")==full,"A fresh matching build is available to the inspector")
 for index=2,#chunkTimes do check(chunkTimes[index]-chunkTimes[index-1]>=1200,"Every response interval respects the rate limit") end
 
+-- An unchanged heartbeat retains complete evidence; a changed curse invalidates its fingerprint.
+PrimeSummary(alice,bob)
+check(alice.SC.peerData["@Bob"].curse==full.curse and alice.SC.peerData["@Bob"].fullBuild==full,
+    "A matching heartbeat retains detailed curse and skill evidence")
+local beforeForm=bob.SC.share.lastBuildFingerprint
+bob.SC.localSnapshot.curse.transformed=true
+local changedForm=bob.SC:BuildSharePayload()
+check(math.floor(changedForm.cap4/512)~=beforeForm,"Changing Werewolf form invalidates the captured build fingerprint")
+bob.SC.localSnapshot.curse.transformed=false
 -- Fresh summary, connected identity and the exact build fingerprint bound cached data.
 local peer=alice.SC.peerData["@Bob"]
 local scannedAt,capturedAt=peer.scannedAt,peer.fullBuildAt

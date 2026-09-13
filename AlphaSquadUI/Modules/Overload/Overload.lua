@@ -1466,16 +1466,23 @@ local function CreateButton(parent, name, text, x, y, width, height, onClick)
     local label = CreateLabel(button, name .. "Label", "ZoFontGame", text, COLORS.white)
     label:SetAnchorFill(button)
     label:SetHorizontalAlignment(TEXT_ALIGN_CENTER)
+    label:SetMaxLineCount(1)
+    if label.SetWrapMode and TEXT_WRAP_MODE_ELLIPSIS then label:SetWrapMode(TEXT_WRAP_MODE_ELLIPSIS) end
     button.label = label
+    button.enabled = true
 
     button:SetHandler("OnMouseEnter", function()
-        bg:SetColor(0.05, 0.11, 0.16, 1)
+        if button.enabled then bg:SetColor(0.05, 0.11, 0.16, 1) end
+        local tooltips = AlphaSquadUI.Tooltips
+        if button.help and tooltips then tooltips.ShowText(button, button.help) end
     end)
     button:SetHandler("OnMouseExit", function()
-        bg:SetColor(COLORS.panel[1], COLORS.panel[2], COLORS.panel[3], COLORS.panel[4])
+        local color = button.restingColor or COLORS.panel
+        bg:SetColor(color[1], color[2], color[3], color[4] or 1)
+        if AlphaSquadUI.Tooltips then AlphaSquadUI.Tooltips.Hide() end
     end)
     button:SetHandler("OnMouseUp", function(_, mouseButton, upInside)
-        if mouseButton == MOUSE_BUTTON_INDEX_LEFT and upInside ~= false and onClick then
+        if button.enabled and mouseButton == MOUSE_BUTTON_INDEX_LEFT and upInside ~= false and onClick then
             onClick()
         end
     end)
@@ -1493,11 +1500,13 @@ end
 
 function AOT:ApplySettingsGeometry()
     if not self.settingsWindow or not GuiRoot then return end
-    local scale = math.min(1, math.max(0.4, (GuiRoot:GetWidth() - 40) / 900))
+    local scale = math.min(1, math.max(0.25, (GuiRoot:GetWidth() - 40) / 900),
+        math.max(0.25, (GuiRoot:GetHeight() - 40) / 420))
     local height = math.min(720, math.max(420, (GuiRoot:GetHeight() - 40) / scale))
     self.settingsWindow:SetDimensions(900, height)
     self.settingsWindow:SetScale(scale)
     if self.settingsSidebar then self.settingsSidebar:SetHeight(height - 64) end
+    if self.settingsSaveNote then self.settingsSaveNote:SetHidden(height < 490) end
     if self.settingsScroll then
         self.settingsScroll:SetHeight(height - 80)
         self.settingsScroll.scrollbar:SetHeight(height - 80)
@@ -1512,6 +1521,7 @@ function AOT:CloseSettingsWindow()
         self.settingsOpenedFromGameMenu = false
     end
     self.settingsWindow:SetHidden(true)
+    if AlphaSquadUI.Tooltips then AlphaSquadUI.Tooltips.Hide() end
     local settings = AlphaSquadUI.Settings
     if settings and settings.RefreshModuleVisibility then settings.RefreshModuleVisibility()
     else self:ApplyVisualSettings() end
@@ -1631,7 +1641,7 @@ function AOT:CreateSettingsWindow()
     title:SetAnchor(TOPLEFT, win, TOPLEFT, 20, 10)
     title:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
 
-    local subtitle = CreateLabel(win, "AlphaSquadSettingsSubtitle", "ZoFontGameSmall", "MODULAR ESO TOOLS  •  v" .. VERSION .. "  •  by SeRuM1", COLORS.muted)
+    local subtitle = CreateLabel(win, "AlphaSquadSettingsSubtitle", "ZoFontGameSmall", "Group preparation & Ultimate tracking  •  by SeRuM1", COLORS.muted)
     subtitle:SetDimensions(520, 20)
     subtitle:SetAnchor(TOPLEFT, win, TOPLEFT, 21, 38)
     subtitle:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
@@ -1707,6 +1717,7 @@ function AOT:CreateSettingsWindow()
     future:SetAnchor(TOPLEFT, sidebar, TOPLEFT, 18, 328)
     future:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
     future:SetVerticalAlignment(TEXT_ALIGN_TOP)
+    self.settingsSaveNote = future
 
     local versionLabel = CreateLabel(sidebar, "AlphaSquadSidebarVersion", "ZoFontGameSmall", "v" .. VERSION, COLORS.muted)
     versionLabel:SetDimensions(150, 20)
@@ -1748,30 +1759,50 @@ function AOT:CreateSettingsWindow()
         return card
     end
 
-    local function AddToggleRow(parent, name, labelText, y, getter, setter)
+    local function AddToggleRow(parent, name, labelText, y, getter, setter, help)
         local label = CreateLabel(parent, name .. "Label", "ZoFontGame", labelText, COLORS.white)
         label:SetDimensions(parent:GetWidth() - 116, 30)
         label:SetAnchor(TOPLEFT, parent, TOPLEFT, 14, y)
         label:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
-        local button = CreateButton(parent, name .. "Button", "", parent:GetWidth() - 96, y, 80, 30, function()
+        label:SetMaxLineCount(1)
+        if label.SetWrapMode and TEXT_WRAP_MODE_ELLIPSIS then label:SetWrapMode(TEXT_WRAP_MODE_ELLIPSIS) end
+        local function Toggle()
             setter(not getter())
             AOT:ApplyVisualSettings()
             AOT:RefreshSettingsWindow()
+        end
+        local button = CreateButton(parent, name .. "Button", "", parent:GetWidth() - 96, y, 80, 30, Toggle)
+        button.help = help or (labelText .. "\n\nClick the label or switch to change this setting. Changes are saved automatically.")
+        label:SetMouseEnabled(true)
+        label:SetHandler("OnMouseEnter", function()
+            if AlphaSquadUI.Tooltips then AlphaSquadUI.Tooltips.ShowText(label, button.help) end
+        end)
+        label:SetHandler("OnMouseExit", function()
+            if AlphaSquadUI.Tooltips then AlphaSquadUI.Tooltips.Hide() end
+        end)
+        label:SetHandler("OnMouseUp", function(_, mouseButton, upInside)
+            if mouseButton == MOUSE_BUTTON_INDEX_LEFT and upInside ~= false then Toggle() end
         end)
         table.insert(self.settingsRefreshers, function()
             local enabled = getter()
             button.label:SetText(enabled and "ON" or "OFF")
-            local c = enabled and COLORS.green or COLORS.red
+            local c = enabled and COLORS.green or COLORS.muted
             button.label:SetColor(c[1], c[2], c[3], 1)
+            button.restingColor = enabled and {0.035, 0.085, 0.060, 0.98} or COLORS.panel
+            local bg = button.restingColor
+            button.bg:SetColor(bg[1], bg[2], bg[3], bg[4])
         end)
+        return button, label
     end
 
-    local function AddStepperRow(parent, name, labelText, y, getter, setter, step, minimum, maximum, suffix, color)
+    local function AddStepperRow(parent, name, labelText, y, getter, setter, step, minimum, maximum, suffix, color, description)
         local label = CreateLabel(parent, name .. "Label", "ZoFontGame", labelText, COLORS.white)
         label:SetDimensions(parent:GetWidth() - 170, 30)
         label:SetAnchor(TOPLEFT, parent, TOPLEFT, 14, y)
         label:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
-        CreateButton(parent, name .. "Minus", "−", parent:GetWidth() - 154, y, 38, 30, function()
+        label:SetMaxLineCount(1)
+        if label.SetWrapMode and TEXT_WRAP_MODE_ELLIPSIS then label:SetWrapMode(TEXT_WRAP_MODE_ELLIPSIS) end
+        local minus = CreateButton(parent, name .. "Minus", "−", parent:GetWidth() - 154, y, 38, 30, function()
             setter(Clamp(getter() - step, minimum, maximum))
             AOT:RefreshSettingsWindow()
         end)
@@ -1779,13 +1810,28 @@ function AOT:CreateSettingsWindow()
         value:SetDimensions(56, 30)
         value:SetAnchor(TOPLEFT, parent, TOPLEFT, parent:GetWidth() - 112, y)
         value:SetHorizontalAlignment(TEXT_ALIGN_CENTER)
-        CreateButton(parent, name .. "Plus", "+", parent:GetWidth() - 52, y, 38, 30, function()
+        local plus = CreateButton(parent, name .. "Plus", "+", parent:GetWidth() - 52, y, 38, 30, function()
             setter(Clamp(getter() + step, minimum, maximum))
             AOT:RefreshSettingsWindow()
         end)
-        table.insert(self.settingsRefreshers, function()
-            value:SetText(tostring(getter()) .. (suffix or ""))
+        local help = string.format("%s%s\n\nAdjust from %s%s to %s%s. Changes are saved automatically.",
+            labelText, description and ("\n\n" .. description) or "", minimum, suffix or "", maximum, suffix or "")
+        minus.help, plus.help = help, help
+        label:SetMouseEnabled(true)
+        label:SetHandler("OnMouseEnter", function()
+            if AlphaSquadUI.Tooltips then AlphaSquadUI.Tooltips.ShowText(label, help) end
         end)
+        label:SetHandler("OnMouseExit", function()
+            if AlphaSquadUI.Tooltips then AlphaSquadUI.Tooltips.Hide() end
+        end)
+        table.insert(self.settingsRefreshers, function()
+            local current = getter()
+            value:SetText(tostring(current) .. (suffix or ""))
+            minus.enabled, plus.enabled = current > minimum, current < maximum
+            minus:SetAlpha(minus.enabled and 1 or 0.4)
+            plus:SetAlpha(plus.enabled and 1 or 0.4)
+        end)
+        return minus, plus, value
     end
 
     -- ULT TRACKER MODULE PAGE
@@ -1855,7 +1901,7 @@ function AOT:CreateSettingsWindow()
     overloadTitle:SetAnchor(TOPLEFT, overload, TOPLEFT, 8, 2)
     overloadTitle:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
     local overloadSub = CreateLabel(overload, "AlphaSquadOverloadPageSub", "ZoFontGameSmall",
-        "Fast, event-driven tracking for Overload • Energy Overload • Power Overload", COLORS.muted)
+        "See when Overload is active and keep enough Ultimate in reserve.", COLORS.muted)
     overloadSub:SetDimensions(650, 22)
     overloadSub:SetAnchor(TOPLEFT, overload, TOPLEFT, 9, 34)
     overloadSub:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
@@ -1881,13 +1927,14 @@ function AOT:CreateSettingsWindow()
     local emergency = CreateCard(overload, "AlphaSquadCardEmergency", 344, 68, 322, 226, "EMERGENCY RESERVE", COLORS.red)
     AddToggleRow(emergency, "AlphaSquadOptReserve", "Reserve system", 42,
         function() return AOT.sv.reserveCutoffEnabled end,
-        function(v) AOT.sv.reserveCutoffEnabled = v == true; AOT.reserveAttempted = false; AOT:CheckReserveCutoff() end)
+        function(v) AOT.sv.reserveCutoffEnabled = v == true; AOT.reserveAttempted = false; AOT:CheckReserveCutoff() end,
+        "Warn when active Overload approaches your reserve. At the Auto-stop threshold, the addon attempts to switch Overload off so you can keep Ultimate available.")
     AddToggleRow(emergency, "AlphaSquadOptReserveSound", "Alert sounds", 78,
         function() return AOT.sv.reserveSound end, function(v) AOT.sv.reserveSound = v == true end)
     AddStepperRow(emergency, "AlphaSquadOptWarning", "Warning starts", 118,
         function() return AOT.sv.reserveWarningThreshold end,
         function(v) AOT.sv.reserveWarningThreshold = math.max(v, AOT.sv.reserveThreshold); AOT:CheckReserveCutoff() end,
-        5, 25, 500, "", COLORS.red)
+        5, 25, 500, "", COLORS.red, "Remaining Ultimate at which the reserve warning starts. This cannot be lower than Auto-stop.")
     AddStepperRow(emergency, "AlphaSquadOptStop", "Auto-stop", 158,
         function() return AOT.sv.reserveThreshold end,
         function(v)
@@ -1896,7 +1943,7 @@ function AOT:CreateSettingsWindow()
             AOT.reserveAttempted = false
             AOT:CheckReserveCutoff()
         end,
-        5, 25, 500, "", COLORS.cyan)
+        5, 25, 500, "", COLORS.cyan, "Remaining Ultimate at which the reserve system attempts to switch active Overload off.")
 
     local appearance = CreateCard(overload, "AlphaSquadCardAppearance", 8, 270, 322, 236, "APPEARANCE", COLORS.cyan)
     AddStepperRow(appearance, "AlphaSquadOptScale", "Tracker scale", 42,
@@ -1932,11 +1979,11 @@ function AOT:CreateSettingsWindow()
     AddStepperRow(ready, "AlphaSquadOptReadyThreshold", "Ready at", 118,
         function() return AOT.sv.readyReminderThreshold end,
         function(v) AOT.sv.readyReminderThreshold = v; AOT.readyReminderActive = false; AOT.lastReadySoundAt = 0; AOT:UpdateReserveVisual() end,
-        10, 100, 500, "", COLORS.gold)
+        10, 100, 500, "", COLORS.gold, "Show the ready reminder at this much Ultimate while Overload is slotted but inactive.")
 
-    local runtime = CreateCard(overload, "AlphaSquadCardRuntime", 344, 492, 322, 126, "PERFORMANCE", COLORS.green)
+    local runtime = CreateCard(overload, "AlphaSquadCardRuntime", 344, 492, 322, 126, "AT A GLANCE", COLORS.green)
     local runtimeText = CreateLabel(runtime, "AlphaSquadRuntimeText", "ZoFontGameSmall",
-        "Event-driven tracking. A once-per-second safety sync runs only while the HUD is visible and awake. Alert animations stop when hidden or inactive.", COLORS.muted)
+        "Green means Overload is active. Reserve alerts warn you before Ultimate runs low. Use Unlock & Move to place the tracker, then lock it when you are happy with its position.", COLORS.muted)
     runtimeText:SetDimensions(290, 82)
     runtimeText:SetAnchor(TOPLEFT, runtime, TOPLEFT, 14, 38)
     runtimeText:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
@@ -1988,7 +2035,7 @@ function AOT:CreateSettingsWindow()
 
     local commandCard = CreateCard(community, "AlphaSquadCommandCard", 8, 466, 658, 152, "USEFUL COMMANDS", COLORS.gold)
     local commands = CreateLabel(commandCard, "AlphaSquadCommandsText", "ZoFontGameSmall",
-        "/asoverload  •  open settings\n/asoverload lock | unlock  •  save/unlock HUD position\n/asoverload status | inspect  •  manual diagnostics only\n/asoverload website  •  open alphasquadeso.com", COLORS.muted)
+        "/assupport builds  •  inspect available group builds\n/assupport food  •  check group food\n/assupport matrix  •  open the coverage list\n/asoverload  •  open all module settings", COLORS.muted)
     commands:SetDimensions(620, 104)
     commands:SetAnchor(TOPLEFT, commandCard, TOPLEFT, 16, 40)
     commands:SetHorizontalAlignment(TEXT_ALIGN_LEFT)

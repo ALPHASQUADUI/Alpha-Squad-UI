@@ -2,65 +2,42 @@
 
 All notable changes to Ąlpha Şquad UI are documented here.
 
+## 2.7.0
 
-## 2.7.0-support-coverage-test.5 — Unreleased
+Available on `support-coverage`. The separate `main` branch is unchanged.
 
-Precombat-focused branch candidate. Requires in-game validation before an explicit maintainer PR request; no public sharing release is claimed.
+### Visual build inspection
+- Added a compact character-style build view with armor positioned around a body silhouette, jewelry and separate front/back weapons.
+- Added named set summaries with independent front/back bonus-piece counts, including two-handed weapons.
+- Added skill and Ultimate icons for both bars, Champion star icons and available class, mastery and consumable information.
+- Bound equipment details to the equipped item link so trait and enchantment descriptions belong to that item.
+- Used the identified skill or Ultimate for its icon and description, preserving the actual morph instead of substituting a base skill.
+- Added separate Werewolf-bar and supported Vampire/Werewolf state, ability rank and verified Champion-allocation fields while retaining a conservative reader for older build snapshots.
+- Kept unsupported, incomplete and stale remote details visibly unavailable.
+- Centralized foreground tooltip behavior for addon windows.
 
 ### Support Coverage
-- Replaced the active pull-report, uptime, history and loadout-planning workflow with precombat Trial/Dungeon support checks.
+- Replaced pull reports, uptime, history and loadout planning with precombat Trial/Dungeon support checks.
 - Added independent effect ON/OFF controls, source explanations and duplicate-provider inspection by account.
-- Added group Builds and Food views with scrolling lists and named equipment, skill, Champion, mastery and consumable evidence where available.
-- Preserved separate weapon-bar set thresholds; a qualifying set on either bar can supply a source without requiring both bars.
-- Kept source availability distinct from active effect application, proc conditions and recipient coverage; unsupported and stale data remains UNKNOWN.
-- Added compatible detailed build sharing and a lightweight AlphaSquadBuildShare companion for players who do not install the full UI suite.
-- Added optional LibSetDetection set-source integration and conservative LibGroupCombatStats evidence for group members using compatible third-party sharing.
-- Retired the plan/live protocols and kept experimental build protocols provisional and opt-in.
-- Suspended Support scans and build sends during combat; used cached precombat snapshots, bounded transport and lightweight recovery updates.
+- Added a group Food check that distinguishes missing food from missing information.
+- Preserved separate weapon-bar set thresholds: a qualifying source on either bar can count without requiring both bars.
+- Kept available sources distinct from active application, proc conditions, range and recipient coverage.
+- Added compatible detailed build sharing and the lightweight AlphaSquadBuildShare companion for players who do not install the full UI suite.
+- Integrated optional LibSetDetection set reports and conservative LibGroupCombatStats Ultimate/active-line information.
+- Retired plan/live protocols. Full build sharing remains opt-in; active LibGroupBroadcast IDs are provisional pending reservation and coexistence validation.
+- Paused Support scans and build sends during combat; kept snapshots, payloads, retries and recovery updates bounded.
 
-### Suite and documentation
-- Updated settings branding to Ąlpha Şquad UI with the accented letters and ESO's standard interface font.
-- Improved responsive windows, scrolling and dependency/setup guidance.
-- Documented native remote-inspection limits, LibGroupCombatStats ULT-only scope, companion setup and the current in-game checklist.
-- Preserved existing SavedVariables namespaces and relevant tracker preferences.
+### Existing trackers and settings
+- Preserved Overload, personal ULT and Group Ultimate behavior and SavedVariables namespaces.
+- Stopped unnecessary recovery and animation updates when tracker windows are hidden, disabled or dormant.
+- Kept dead/offline players non-actionable and invalidated inappropriate state on group or character changes.
+- Hardened native and shared values against malformed input before readiness or display calculations.
+- Refined the shared Ąlpha Şquad UI settings shell, scrolling, window visibility and library/setup guidance using ESO's standard fonts.
 
-
-## 2.7.0-support-coverage-test.4 — Superseded development candidate
-
-Historical record of the previous candidate. Its report/planner features are superseded by test.5; this entry is not the current feature list.
-
-### Support Coverage
-- Added evidence-aware readiness, build expectations, per-target live coverage, a bounded planner and recoverable pull history.
-- Added committed Class Mastery, Champion slottable, equipment, enchantment, food, potion, poison and Mundus inspection without turning unavailable data into a pass.
-- Corrected native ESO API usage for group roles, enchant identities, active quickslots and Class Mastery eligibility.
-- Replaced pre-release Class Mastery identities with the live U50 names, ability IDs and rank-two prerequisite checks.
-- Kept quickslot selection updates on the lightweight readiness path and prevented an empty quickslot from falling back to an unrelated hotbar.
-- Preserved separate weapon-bar set counts, native normal/Perfected families and distinct unknown-ID set names; compact sharing now encodes native set IDs before any name fallback.
-- Removed a misleading fixed Tremorscale penetration value and excluded personal critical buffs from the reported group critical-damage bonus.
-- Hardened all received group payloads, SavedVariables and persisted history with type, range, membership, leader, freshness and size checks.
-- Replaced raw build-detail sharing with bounded signatures; prevented detail message kinds from replacing one another in the LibGroupBroadcast queue.
-- Bound signature frames to the advertised build fingerprint so a loadout change immediately invalidates stale audit details.
-- Added plan and pull heartbeats with bounded frequency so late joiners recover state without permanent fast loops.
-- Recovered local sharing after joining an already formed group and started pull collection when a group forms after local combat has already begun.
-- Scoped saved encounter templates to the active profile so loading a boss context cannot erase newer damage/trash/progression templates.
-- Kept experimental sharing off by default. Protocol IDs 507–510 remain unreserved and block a public sharing release.
-
-### ULT Tracker
-- Stopped safety and animation updates while the relevant tracker is disabled, hidden or obscured.
-- Kept dead and offline players visible but non-actionable, purged departed-player state and bounded tracked Ultimate IDs.
-- Cleared stale spend-transition state when a present member stops sharing and reused power-event values instead of immediately re-reading the native resource.
-- Hardened group payload and SavedVariables handling without changing existing namespaces.
-- Rejected non-finite native Ultimate values, costs and ability IDs before they reach readiness or UI calculations.
-
-### Overload Tracker
-- Preserved active tracking behavior while stopping its recovery heartbeat whenever the HUD is disabled, hidden, obscured, PvP-suppressed or dormant.
-- Hardened migrated booleans, thresholds, position, scale and opacity against malformed SavedVariables.
-- Normalized non-finite native Ultimate values without changing valid Overload state, reserve or cancellation behavior.
-
-### Validation
-- Added deterministic Support Coverage, ULT Tracker and Overload lifecycle regression suites for Lua 5.1 and 5.4.
-- Added pull-request CI coverage, dual-version syntax checks, version consistency checks and installable ZIP integrity validation.
-- Documented branch-only test-build downloads, safe installation, validation limits and the requirement to complete ESO testing before any PR.
+### Validation and documentation
+- Added deterministic coverage for scanner accuracy, build transport, lifecycle, settings and presentation contracts under Lua 5.1 and Lua 5.4.
+- Validated Lua syntax, manifest paths/version consistency and installable full-suite/companion archives.
+- Documented installation, supported third-party data, remote-inspection limits and in-game verification.
 
 ## 2.6.0 — 2026-09-12
 

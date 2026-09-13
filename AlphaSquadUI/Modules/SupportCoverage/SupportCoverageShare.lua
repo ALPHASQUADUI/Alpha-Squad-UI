@@ -1,5 +1,5 @@
 -- Ąlpha Şquad UI - Support Coverage compact group sharing
--- Uses a provisional test protocol ID on this development branch. It must be
+-- Uses a provisional protocol ID behind explicit sharing opt-in. It must be
 -- formally reserved in LibGroupBroadcast_IDs before a public release.
 
 local SC = AlphaSquadUI and AlphaSquadUI.Modules and AlphaSquadUI.Modules.SupportCoverage
@@ -239,6 +239,7 @@ function SC:OnPeerShareData(unitTag, data)
         peer.fullBuild, peer.fullBuildAt, peer.fullBuildFingerprint = previous.fullBuild, previous.fullBuildAt, previous.fullBuildFingerprint
         peer.capabilities = previous.fullBuild.capabilities
         peer.equipment, peer.skills, peer.masteries = previous.fullBuild.equipment, previous.fullBuild.skills, previous.fullBuild.masteries
+        peer.curse = previous.fullBuild.curse
     end
     self:ScheduleRefresh("peer data", 100)
     return true
@@ -274,7 +275,7 @@ function SC:InitializeSharing()
     self.share=self.share or {}
     if not self.sv or not self.sv.enabled or not self.sv.experimentalSharing or not self.sv.shareData then
         self.share.available=false
-        self.share.error="Build sharing is off. Enable the controlled-test option on each participating client."
+        self.share.error="Build sharing is off. Enable sharing on each participating client."
         return
     end
     local LGB=rawget(_G,"LibGroupBroadcast")
@@ -292,7 +293,7 @@ function SC:InitializeSharing()
         assert(handler,"Build sharing registration failed")
         self.share.handler=handler
         if handler.SetDisplayName then handler:SetDisplayName("Ąlpha Şquad UI — Build Sharing") end
-        if handler.SetDescription then handler:SetDescription("Optional precombat build sharing for controlled group tests. Public registration is pending.") end
+        if handler.SetDescription then handler:SetDescription("Optional precombat build sharing. Protocol registration is pending; enable only with a coordinated group.") end
         local protocol=handler:DeclareProtocol(LGB_BUILD_PROTOCOL_ID,LGB_BUILD_PROTOCOL_NAME)
         protocol:AddField(LGB.CreateNumericField("version",{minValue=0,maxValue=7}))
         protocol:AddField(LGB.CreateNumericField("role",{minValue=0,maxValue=15}))
@@ -338,6 +339,6 @@ end
 
 function SC:GetSharingStatus()
     if not self.sv or not self.sv.experimentalSharing or not self.sv.shareData then return "LOCAL","Build sharing is off" end
-    if self.share and self.share.available then return "TEST SHARE",self.share.detailError end
+    if self.share and self.share.available then return "SHARING",self.share.detailError end
     return "LOCAL",self.share and self.share.error or "LibGroupBroadcast unavailable"
 end

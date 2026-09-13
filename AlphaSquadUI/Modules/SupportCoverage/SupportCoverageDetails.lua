@@ -161,7 +161,7 @@ local function OnRequest(sc,tag,data)
     sc.localSnapshot=sc:ScanLocalPlayer()
     local body,errorText=sc.BuildCodec.Encode(sc.localSnapshot)
     if not body or #body>Details.CHUNK_BYTES*Details.MAX_CHUNKS then
-        sc.share.detailError=errorText or "Build exceeds the controlled-test transport limit.";return
+        sc.share.detailError=errorText or "Build exceeds the sharing size limit.";return
     end
     sc.share.lastResponseAt=now
     -- Bind the capture to a freshly queued summary before starting its chunks.
@@ -227,7 +227,7 @@ local function OnChunk(sc,tag,data)
     -- Keep the latest summary identity; never overwrite a newer advertisement.
     peer.asui=true;peer.buildVerified=true;peer.scannedAt=sc.NowMs()
     peer.capabilities=snapshot.capabilities;peer.equipment=snapshot.equipment;peer.skills=snapshot.skills
-    peer.masteries=snapshot.masteries;peer.food=snapshot.food;peer.potion=snapshot.potion
+    peer.masteries=snapshot.masteries;peer.curse=snapshot.curse;peer.food=snapshot.food;peer.potion=snapshot.potion
     peer.dataQuality="SHARED BUILD";sc.peerData[pending.key]=peer
     sc.share.buildStatus="Shared build — captured before combat"
     sc:ScheduleRefresh("received complete build",100)
@@ -264,7 +264,7 @@ function SC:InitializeDetailSharing(LGB,handler)
     if self.share.detailProtocol or self.share.detailRegistrationAttempted then return end
     self.share.detailRegistrationAttempted=true
     local ok,protocol=pcall(function()
-        local p=handler:DeclareProtocol(Details.ID,"AlphaSquadSupportDetailsTest")
+        local p=handler:DeclareProtocol(Details.ID,"AlphaSquadSupportDetails")
         p:AddField(LGB.CreateNumericField("version",{minValue=0,maxValue=7}))
         p:AddField(LGB.CreateNumericField("kind",{minValue=0,maxValue=3}))
         p:AddField(LGB.CreateNumericField("revision",{minValue=0,maxValue=65535}))

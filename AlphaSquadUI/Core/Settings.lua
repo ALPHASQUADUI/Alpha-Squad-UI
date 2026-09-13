@@ -138,7 +138,7 @@ Settings.RegisterPage("libraries", function(page, ui)
     title:SetAnchor(TOPLEFT, page, TOPLEFT, 8, 2)
     title:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
     local intro = ui.CreateLabel(page, "AlphaSquadLibrariesIntro", "ZoFontGameSmall",
-        "Core trackers work without libraries. Install libraries for the features you want, then /reloadui.", colors.muted)
+        "Choose the group features you need. Install their libraries with Minion or ESOUI, then /reloadui.", colors.muted)
     intro:SetDimensions(650, 36)
     intro:SetAnchor(TOPLEFT, page, TOPLEFT, 9, 35)
     intro:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
@@ -146,19 +146,19 @@ Settings.RegisterPage("libraries", function(page, ui)
 
     local rows = {
         { key = "LibGroupBroadcast", name = "LibGroupBroadcast", y = 76,
-          text = "Requires LibAddonMenu-2.0 (38+) and LibDebugLogger. Full build senders need Alpha Squad UI or AlphaSquadBuildShare with experimental sharing enabled. Other compatible libraries can share partial sets or Ultimates through their own protocols." },
+          text = "For build exchange. Requires LibAddonMenu-2.0 (38+) and LibDebugLogger. Use Alpha Squad UI or AlphaSquadBuildShare on each sender. Enable build exchange and Share my build in Support Coverage to send your build." },
         { key = "LibGroupCombatStats", name = "LibGroupCombatStats", y = 184,
-          text = "Requires LibCombat and LibGroupBroadcast. Enable ULT sharing in the library or a compatible sender addon. Receives compatible Ultimate shares without Alpha Squad UI. This library does not send full equipment, skills or Champion builds." },
+          text = "For group Ultimates. Requires LibCombat and LibGroupBroadcast. Enable ULT sharing in its settings or a compatible sender addon. Group members do not need Alpha Squad UI. This does not share a complete build." },
         { key = "LibFoodDrinkBuff", name = "LibFoodDrinkBuff", y = 292,
-          text = "Optional identification of food/drink buffs visible to your client. Enable the library; no extra configuration is needed. A native fallback remains available. Remote food still needs a compatible sender or observable native evidence." },
+          text = "For more food and drink recognition. Install and enable it; no additional setup is needed. Only buffs visible to your client or reported by a compatible sender can be checked. Unavailable information stays Unknown." },
         { key = "LibCombat", name = "LibCombat", y = 400,
-          text = "Required by LibGroupCombatStats. Install the current version and leave it enabled. No Alpha Squad specific settings are needed. Alpha Squad requests Ultimate sharing only. LibSets is not required and does not unlock remote equipment inspection." },
+          text = "Required by LibGroupCombatStats. Install the current version and leave it enabled. No Alpha Squad configuration is needed. Alpha Squad requests Ultimate sharing only; it does not collect combat reports." },
         { key = "LibAddonMenu2", name = "LibAddonMenu-2.0", y = 508,
-          text = "Required by LibGroupBroadcast (version 38 or newer). Provides library settings panels. Leave it enabled, then open the library's settings to review sharing permissions. Alpha Squad's own settings window works without LibAddonMenu." },
+          text = "Required by LibGroupBroadcast: version 38 or newer. Leave it enabled to access library settings and sharing options. Alpha Squad has its own settings window and does not otherwise require this library." },
         { key = "LibDebugLogger", name = "LibDebugLogger", y = 616,
-          text = "Required by LibGroupBroadcast. Install and enable the current version. No Alpha Squad specific configuration or additional debug viewer is needed. Installing a library never grants permission to share another player's private build data." },
+          text = "Required by LibGroupBroadcast. Install and enable the current version. No Alpha Squad configuration or additional log viewer is needed. Your sharing settings still control which build details you send." },
         { key = "LibSetDetection", name = "LibSetDetection", y = 724,
-          text = "Install version 5+ with LibGroupBroadcast on both clients for named sets and separate front/back counts without Alpha Squad UI. Disclosed sets can count as last reported sources. Incognito choices are respected. This does not expose individual items, glyphs, Champion Points or skill bars." },
+          text = "For shared set names and front/back counts without the full addon. Install version 5+ and LibGroupBroadcast on both clients. Incognito choices are respected. Reports do not include individual items, traits, glyphs, CP or skill bars." },
     }
     for index, data in ipairs(rows) do
         local card = ui.CreateCard(page, "AlphaSquadLibraryCard" .. index, 8, data.y, 658, 98, data.name, colors.orange)
@@ -182,7 +182,7 @@ Settings.RegisterPage("libraries", function(page, ui)
 
     local help = ui.CreateCard(page, "AlphaSquadLibraryHelp", 8, 838, 658, 104, "SETUP & PRIVACY", colors.cyan)
     local body = ui.CreateLabel(help, "AlphaSquadLibraryHelpText", "ZoFontGameSmall",
-        "Install from Minion or ESOUI with each library's declared dependencies. Check ESO's Add-Ons menu for disabled or missing dependencies. Group membership alone cannot reveal another player's full build; unavailable evidence stays Unknown. No combat reports or history are needed for preparation.", colors.muted)
+        "Missing data? Check ESO's Add-Ons menu for disabled dependencies, then confirm the sender has enabled sharing. Group membership alone does not reveal a complete build. Build exchange uses unreserved transport IDs; leave it off outside coordinated groups.", colors.muted)
     body:SetDimensions(628, 68)
     body:SetAnchor(TOPLEFT, help, TOPLEFT, 14, 34)
     body:SetVerticalAlignment(TEXT_ALIGN_TOP)

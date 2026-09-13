@@ -15,6 +15,28 @@ local function NaturalNumber(value, maximum)
     return value
 end
 
+-- The curse API describes the committed character state. A slotted Werewolf
+-- ultimate does not prove transformation, and a vampire skill does not prove
+-- a stage. Stages stay unspecified unless a verified stage source is available.
+function SC:ScanCurse()
+    local result = {known=false}
+    local curseType = Try(GetPlayerCurseType)
+    if curseType ~= nil then
+        for _, kind in ipairs({"NONE", "VAMPIRE", "WEREWOLF"}) do
+            local nativeType = rawget(_G, "CURSE_TYPE_" .. kind)
+            if nativeType ~= nil and curseType == nativeType then
+                result.known, result.kind = true, kind
+                break
+            end
+        end
+    end
+    if result.known and result.kind == "WEREWOLF" then
+        local transformed = Try(IsPlayerInWerewolfForm)
+        if type(transformed) == "boolean" then result.transformed = transformed end
+    end
+    return result
+end
+
 function SC:IsSelf(unitTag)
     if unitTag == "player" then return true end
     return Try(AreUnitsEqual, unitTag, "player") == true
@@ -62,7 +84,7 @@ function SC:ScanClassMasteries()
                                     result.selected[#result.selected + 1] = {
                                         id=id, name=name, rank=selectedRank,
                                         icon=tostring(Try(GetAbilityIcon, id) or ""),
-                                        description=tostring(Try(GetAbilityDescription, id) or ""),
+                                        description=tostring(Try(GetAbilityDescription, id, selectedRank, "player") or ""),
                                         lineId=lineId,
                                     }
                                 else complete=false end
@@ -90,7 +112,7 @@ function SC:ScanClassMasteries()
                                         name=tostring(learnedName or ""), rank=learnedRank, lineId=lineId,
                                         lineName=tostring(lineName or ""), active=true,
                                         icon=tostring(Try(GetAbilityIcon, learnedId) or ""),
-                                        description=tostring(Try(GetAbilityDescription, learnedId) or "")}
+                                        description=tostring(Try(GetAbilityDescription, learnedId, learnedRank, "player") or "")}
                                 end
                             else
                                 complete=false
@@ -198,6 +220,30 @@ function SC:ScanClassPassives(skills, masteries)
         end
     end
     return capabilities
+end
+
+-- ESO assigns Champion disciplines to action slots natively. Keep the real
+-- positions, including empty slots, rather than compacting the selected stars.
+function SC:GetChampionSlotLayout()
+    if HOTBAR_CATEGORY_CHAMPION == nil or type(GetRequiredChampionDisciplineIdForSlot) ~= "function" then return nil end
+    local first, last = Try(GetAssignableChampionBarStartAndEndSlots)
+    first, last = NaturalNumber(first, 64), NaturalNumber(last, 64)
+    if not first or not last or first < 1 or last < first or last - first > 23 then return nil end
+    local layout, counts = {}, {}
+    for slot = first, last do
+        local disciplineId = Try(GetRequiredChampionDisciplineIdForSlot, slot, HOTBAR_CATEGORY_CHAMPION)
+        local kind = disciplineId and Try(GetChampionDisciplineType, disciplineId)
+        local discipline
+        for _, name in ipairs({"COMBAT", "CONDITIONING", "WORLD"}) do
+            local nativeKind = rawget(_G, "CHAMPION_DISCIPLINE_TYPE_" .. name)
+            if nativeKind ~= nil and kind == nativeKind then discipline = name; break end
+        end
+        if not discipline then return nil end
+        counts[discipline] = (counts[discipline] or 0) + 1
+        if counts[discipline] > 4 then return nil end
+        layout[slot] = {discipline=discipline, index=counts[discipline]}
+    end
+    return layout
 end
 
 function SC:GetChampionDiscipline(starId)

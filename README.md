@@ -2,7 +2,7 @@
 
 A modular **The Elder Scrolls Online** addon by **SeRuM1**, built for endgame PvE groups. [Website](https://alphasquadeso.com/).
 
-The `support-coverage` branch contains **2.7.0-support-coverage-test.5** (`20705`). This is an in-game test candidate; stable `main` remains separate. Do not treat automated validation as proof of ESO runtime behavior or measured frame time.
+**Version 2.7.0** (`20710`) adds visual build inspection and precombat group preparation. These features are available on `support-coverage`; the separate `main` branch is unchanged.
 
 ## Support Coverage: check the group before combat
 
@@ -11,7 +11,7 @@ Support Coverage checks which support sources the group has available before a t
 - See missing coverage, known providers and duplicate providers by `@UserID`.
 - Hover the information icon beside an effect to read what it does and which sources can cover it.
 - Hover a provider to see the skill, set or mastery behind its contribution.
-- Open **Builds**, select an account to request its snapshot, then inspect available equipment, front/back skills, Champion slottables, committed Class Masteries, food, potion and enchantment details. **REFRESH BUILD** requests current data.
+- Open **Builds** and select an account for a compact character view: equipped items arranged around a body silhouette, front/back skill icons with both Ultimates, Champion slottables, class information and consumables. Hover an icon for its details; **REFRESH BUILD** requests current data.
 - Open **Food** to check known food/drink state across the group. Missing data stays unknown.
 - Filter Coverage by **ALL**, **MISSING** or **DUPLICATES**. Use scrolling lists, persistent position/size settings and the shared settings shell.
 
@@ -20,6 +20,22 @@ Support Coverage checks which support sources the group has available before a t
 Set counts are calculated independently for the two weapon bars. An eligible set on either bar can establish its source: a five-piece set does not need to be active on both bars. Two-handed weapons count as two set pieces. A one-piece splash does not establish a five-piece bonus. Bar-specific source presence does not promise the effect remains active after a bar swap.
 
 This version focuses on preparation. Pull reports, combat uptime, history and loadout proposals are retired from the Support Coverage workflow. Roster role labels are context, not mandatory MT/OT/healer assignments.
+
+## Builds at a glance
+
+Choose a player in **Builds** to keep the build's key information together in one character-style view.
+
+| Area | What it shows | Hover for |
+| --- | --- | --- |
+| Equipment | Body-positioned armor icons, jewelry and separate front/back weapons | The actual equipped item, its quality, trait and enchantment when supplied by the snapshot |
+| Set summary | Equipped item count and readable set name, plus separate front/back bonus-piece counts | Full set and bar-count details |
+| Skill bars | Five skills plus an Ultimate per weapon bar, plus a Werewolf bar when available | The corresponding skill or Ultimate description, including its morph |
+| Champion Points | Four slotted-star positions per discipline | The star's description and reported selection details |
+| Character details | Available masteries, passives, food, potion, Mundus and curse information | The supported details behind each indicator |
+
+The silhouette indicates equipment slots; it is not a live 3D preview of another character. The set list distinguishes actual equipped items from active bonus pieces: one arena staff is one item, while its two-handed weapon counts as two bonus pieces. Counts for front and back bars remain separate. Unknown fields stay visibly unavailable instead of showing invented items or guessed traits. Vampire/Werewolf identity and supported Werewolf form are separate facts; Vampire stage is not inferred when unavailable.
+
+Tooltips appear above the addon windows. Equipment details use the equipped item link, and skill details use the selected ability identity. Native item-tooltip set counters reflect your own equipment: use the inspected player's **FRONT / BACK** summary for their totals. Remote skill descriptions use the receiving client's ESO data and character statistics, so their damage/healing numbers are previews rather than exact remote character-sheet calculations. Champion descriptions use the reported invested points when verified.
 
 ## What can be known about another player?
 
@@ -44,19 +60,19 @@ Install libraries as separate addon folders and enable them in ESO's Add-Ons lis
 | Package | Required for | Setup |
 | --- | --- | --- |
 | [**LibSetDetection v5**](https://www.esoui.com/downloads/info3338-LibSetDetection.html) | Recommended optional group set detection without Alpha Squad on the sender | Install on both ends with LibGroupBroadcast. Allow its set-sharing protocol in LGB. `/lsd incognito` explains selective sharing; hidden sets remain unknown. |
-| [**LibGroupBroadcast**](https://www.esoui.com/downloads/info1337-LibGroupBroadcast.html) | Experimental Support Coverage build sharing and the companion | Install on senders and receiver with LibAddonMenu-2.0 (at least 38) and LibDebugLogger. In Support Coverage enable both **Share my build** and **Experimental sharing** for the controlled full-build test. The library is transport, not an inventory scanner. |
+| [**LibGroupBroadcast**](https://www.esoui.com/downloads/info1337-LibGroupBroadcast.html) | Optional Support Coverage build sharing and the companion | Install on senders and receiver with LibAddonMenu-2.0 (at least 38) and LibDebugLogger. In Support Coverage enable both **Share my build** and **Enable build exchange** to allow compatible full-build transfers. The library is transport, not an inventory scanner. |
 | [**LibAddonMenu-2.0**](https://www.esoui.com/downloads/info7-LibAddonMenu-2.0.html) | Required dependency of LibGroupBroadcast | Install a current version (the inspected LGB manifest requires at least 38); no Alpha Squad specific configuration. |
 | [**LibDebugLogger**](https://www.esoui.com/downloads/info2275-LibDebugLogger.html) | Required dependency of LibGroupBroadcast | Install and enable. It does not require debug logging to be turned on for normal sharing. |
 | [**LibFoodDrinkBuff**](https://www.esoui.com/downloads/info1902-LibFoodDrinkBuff.html) | Optional food/drink buff identification | Install and enable; no Alpha Squad specific configuration is needed. It can identify observable food buffs on supported unit tags, including group members. It does not expose an unavailable remote inventory; absent observations remain conservative. |
 | [**LibGroupCombatStats**](https://www.esoui.com/downloads/info4024-LibGroupCombatStats.html) | Optional Group Ultimate Tracker | Install and enable with all dependencies declared by its current package, currently LibGroupBroadcast and LibCombat. Alpha Squad requests ULT data only; Support Coverage reuses that integration and reads already-shared active-line data when available. |
 | [**LibCombat**](https://www.esoui.com/downloads/info2528-LibCombat.html) | Dependency of LibGroupCombatStats | Follow the installing package's dependency list. It is not needed for the personal trackers or local Support Coverage scan. |
-| **AlphaSquadBuildShare** | A group member who wants to share builds without the full UI | Install the companion plus LibGroupBroadcast, then use `/asbuildshare on` for this controlled test. `/asbuildshare off` stops sharing; `/asbuildshare status` shows its state. The companion defaults OFF and yields to the full suite if both are installed. |
+| **AlphaSquadBuildShare** | A group member who wants to share builds without the full UI | Install the companion plus LibGroupBroadcast, then use `/asbuildshare on` to start sharing. `/asbuildshare off` stops sharing; `/asbuildshare status` shows its state. The companion defaults OFF and yields to the full suite if both are installed. |
 
 LibFoodDrinkBuff lists LibAsync, LibChatMessage and LibDebugLogger as optional; LibCombat also lists LibDebugLogger as optional. **LibGroupBroadcast itself requires LibAddonMenu-2.0 and LibDebugLogger**, so those are mandatory whenever LGB is installed. Follow the current package manifests if requirements change. LibSets is a separate database and is not needed for this integration.
 
 The personal Overload and ULT trackers and local Support Coverage scan work without these optional libraries. Missing packages disable only the data paths that need them. Open the addon's **Libraries** settings page for installed/missing status and setup guidance.
 
-Experimental build sharing is **OFF by default**. The branch uses provisional LibGroupBroadcast protocol IDs. Active IDs 507/510 are not claimed as registered; legacy plan/live IDs 509/508 are retired. A public build-sharing release requires formal reservation of the final active IDs and coexistence testing. This branch is for matching-version, controlled group tests.
+Full build sharing is **OFF by default**. The branch uses provisional LibGroupBroadcast protocol IDs. Active IDs 507/510 are not claimed as registered; legacy plan/live IDs 509/508 are retired. A public build-sharing release requires formal reservation of the final active IDs and coexistence testing. Use compatible addon versions for detailed build transfers.
 
 ## Existing trackers
 
@@ -66,15 +82,15 @@ Experimental build sharing is **OFF by default**. The branch uses provisional Li
 
 **Group Ultimate Tracker** lets the raidlead select Ultimate abilities. Compatible sharing players appear automatically with `@UserID`, icon and charge percentage. READY players sort first; dead/offline players are never actionable READY. It uses LibGroupCombatStats independently from Support Coverage build sharing.
 
-## Installation and branch test download
+## Installation
 
-1. Open [Support Coverage branch tests](https://github.com/ALPHASQUADUI/Alpha-Squad-UI/actions/workflows/support-coverage.yml) and select the successful run for the intended `support-coverage` commit.
-2. Download the `AlphaSquadUI-support-coverage-test` artifact while signed in to GitHub.
+1. Open [Support Coverage downloads](https://github.com/ALPHASQUADUI/Alpha-Squad-UI/actions/workflows/support-coverage.yml) and select the successful run for the intended `support-coverage` commit.
+2. Download the `AlphaSquadUI-support-coverage` artifact while signed in to GitHub.
 3. Close ESO. Back up the existing addon folders and SavedVariables before updating. Do not delete SavedVariables to upgrade.
 4. Extract the artifact and its enclosed versioned ZIP. Copy `AlphaSquadUI` into `Documents/Elder Scrolls Online/live/AddOns/`.
 5. For a sharing-only group member, download the separate **AlphaSquadBuildShare** artifact from the same run and install its enclosed companion ZIP plus required libraries instead of the full suite.
 6. Restart ESO or run `/reloadui`. Enable the installed libraries and addons in the Add-Ons list.
-7. Complete the [in-game checklist](docs/SUPPORT_COVERAGE_TESTING.md). Start with sharing OFF, then test with matching opt-in clients.
+7. Open **ESC → Settings → Ąlpha Şquad UI**. Choose your modules, then open **Libraries** if you want group sharing. Sharing starts OFF and requires opt-in on compatible clients.
 
 The full suite's final manifest path must be:
 

@@ -62,11 +62,11 @@ Do not break existing settings, positions, filters or player preferences during 
 
 Primary active branch: **`support-coverage`**.
 
-Development version:
-- `2.7.0-support-coverage-test.5`
-- `AddOnVersion 20705`
+Version on this branch:
+- `2.7.0`
+- `AddOnVersion 20710`
 
-Support Coverage is a **precombat group capability and readiness module**. The current user-approved scope supersedes test.4's combat-report and loadout-planner workflow.
+Support Coverage is a **precombat group capability and readiness module**. The current user-approved scope focuses on precombat readiness and visual build inspection.
 
 Namespace: `AlphaSquadUI.Modules.SupportCoverage`.
 SavedVariables: `AlphaSquadSupportCoverageSavedVariables`.
@@ -77,9 +77,9 @@ SavedVariables: `AlphaSquadSupportCoverageSavedVariables`.
 - Per-effect ON/OFF tracking with persistent preferences.
 - Information tooltips describing effects, sources, proc conditions and recipient limits.
 - Known providers and duplicates by `@UserID`, with source details on hover.
-- **Builds** opens the roster and each account's available equipment, front/back skills, Champion slottables, committed Class Masteries, food, potion and glyph details.
+- **Builds** opens the roster and a compact character-style view: body-positioned equipment, per-bar set summaries, front/back skill and Ultimate icons, Champion icons, committed Class Masteries and consumables. Exact item-link traits/enchantments and ability identities drive tooltips.
 - **Food** checks known group food/drink status without converting missing data into a pass.
-- Scrolling lists, responsive windows and library/setup guidance.
+- Foreground tooltips, responsive compact builds, scrolling coverage/roster lists and library/setup guidance.
 - Product branding **Ąlpha Şquad UI**, preserving the accented A/S and ESO's standard UI font.
 
 There is no active pull history, combat uptime, report or recorded-loadout planner workflow. Role labels provide group context; mandatory MT/OT/healer assignments and role-build templates are not the current interface.
@@ -93,7 +93,8 @@ There is no active pull history, combat uptime, report or recorded-loadout plann
 - `SupportCoverageShare.lua` / `SupportCoverageDetails.lua` / `SupportCoverageBuildCodec.lua` — bounded compatible build transport.
 - `SupportCoverageEngine.lua` — cached roster, selected requirements, source coverage and duplicates.
 - `SupportCoverageExternal.lua` — conservative adapters for supported third-party group data.
-- `SupportCoverageUI.lua` / `SupportCoverageInspector.lua` / `SupportCoverageSettings.lua` — coverage, Builds, Food and configuration.
+- `SupportCoverageUI.lua` / `SupportCoverageInspector.lua` / `SupportCoverageBuildView.lua` / `SupportCoverageSettings.lua` — coverage, visual Builds, Food and configuration.
+- `Core/Tooltips.lua` — shared foreground tooltip routing for addon controls.
 
 History, Tracking, Planner and LiveShare modules are retired. Keep patch data separated from evaluation logic so future ESO updates can be audited safely.
 
@@ -105,11 +106,11 @@ The catalog covers important Major/Minor effects, group damage/penetration sourc
 
 Local scans include equipment/links, glyphs, slotted skills, Champion slottables, committed eligible Class Masteries, food, selected potion and supported readiness details. Class identity alone does not prove passive/mastery/skill selection. Prefer exact IDs/API data where reliable. Name matching is a fallback and should remain localization-aware.
 
-Native ESO grouping does not expose arbitrary remote equipment, full skill bars, CP or mastery selections. Unsupported, incomplete and stale fields remain UNKNOWN.
+Native ESO grouping does not expose arbitrary remote equipment, full skill bars, CP or mastery selections. Unsupported, incomplete and stale fields remain UNKNOWN. Never substitute an armor trait description for a jewelry/weapon trait or use an enchantment from a different item. Item links and exact ability IDs are the tooltip source of truth; remote stat-dependent skill values must not be represented as exact remote calculations.
 
 ### Sharing and dependencies
 
-- `LibGroupBroadcast`: transport for compatible experimental build sharing.
+- `LibGroupBroadcast`: transport for compatible build sharing.
 - `LibFoodDrinkBuff`: optional food/drink buff identification on supported player/group unit tags.
 - `LibGroupCombatStats`: compatible Ultimate and supported active-line data, not full-build inspection or mastery/passive proof.
 - `LibSetDetection` v5: optional recommended group set identities and per-bar activation, respecting selective sharing.
@@ -185,7 +186,7 @@ Before proposing a PR:
 
 Syntax success does **not** prove ESO runtime correctness.
 
-The current authorization is to push validated changes to `support-coverage` only. Do not create a PR, merge, tag or public release before the maintainer has tested this candidate in ESO and explicitly asks for the next step.
+The current authorization is to push validated changes to `support-coverage` only. Do not create a PR, merge, tag or public release before the maintainer has validated this version in ESO and explicitly asks for the next step.
 
 ## Documentation rules
 
