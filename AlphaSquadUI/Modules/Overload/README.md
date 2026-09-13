@@ -20,3 +20,8 @@ dormant states keep no polling update alive.
 The gameplay implementation intentionally remains consolidated in `Overload.lua`
 to minimize regression risk. Any future file split should preserve gameplay
 behavior and SavedVariables exactly.
+
+Open **ESC > Settings > Ąlpha Şquad UI > Overload** or `/asoverload`.
+Personal Overload tracking does not require LibGroupBroadcast, LibGroupCombatStats
+or the build-sharing companion. The shared **Libraries** page explains
+optional integrations used by other modules.

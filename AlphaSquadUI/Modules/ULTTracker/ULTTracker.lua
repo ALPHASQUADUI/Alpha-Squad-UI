@@ -461,6 +461,7 @@ function ULT:RegisterEvents()
                     ULT.Group:ApplyAppearance()
                     ULT.Group:ClampToScreen(true)
                     ULT.Group:RefreshHUD()
+                    if ULT.Group.ApplyConfigWindowScale then ULT.Group:ApplyConfigWindowScale() end
                 end
             end, 50)
         end)

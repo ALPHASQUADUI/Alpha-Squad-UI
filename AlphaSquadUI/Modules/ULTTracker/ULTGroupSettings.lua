@@ -117,7 +117,7 @@ function Group:RefreshAbilityRow(row, ability)
     row.icon:SetHidden(not ability.icon or ability.icon == "")
     if ability.icon and ability.icon ~= "" then row.icon:SetTexture(ability.icon) end
 
-    row.name:SetText(ability.name or ("Ultimate " .. tostring(ability.id)))
+    row.name:SetText(ability.name and ability.name ~= "" and ability.name or "Unknown Ultimate")
     row.users:SetText(tostring(ability.users or 0) .. "x")
 
     local tracked = self:IsAbilityTracked(ability.id)
@@ -136,9 +136,21 @@ function Group:RefreshAbilityRow(row, ability)
         else
             row.bg:SetColor(0.045, 0.058, 0.080, 1)
         end
+        if InformationTooltip and InitializeTooltip and SetTooltipText then
+            local description = ""
+            if GetAbilityDescription then
+                local ok, value = pcall(GetAbilityDescription, ability.id)
+                if ok and type(value) == "string" then description = value end
+            end
+            InitializeTooltip(InformationTooltip, row, TOPLEFT, 0, 0, BOTTOMLEFT)
+            SetTooltipText(InformationTooltip, (ability.name or "Unknown Ultimate")
+                .. (description ~= "" and ("\n\n" .. description) or "")
+                .. "\n\nClick to toggle tracking. Up to 24 Ultimate filters can be saved.")
+        end
     end)
 
     row:SetHandler("OnMouseExit", function()
+        if InformationTooltip and ClearTooltip then ClearTooltip(InformationTooltip) end
         if Group:IsAbilityTracked(ability.id) then
             row.bg:SetColor(0.040, 0.085, 0.062, 0.94)
         else
@@ -177,13 +189,19 @@ function Group:RefreshConfig()
         self:RefreshAbilityRow(row, ability)
 
         if ability then
-            local col = index <= 12 and 0 or 1
-            local rowIndex = col == 0 and index or (index - 12)
             row:ClearAnchors()
-            row:SetAnchor(TOPLEFT, self.configWindow, TOPLEFT,
-                col == 0 and 22 or 404,
-                152 + ((rowIndex - 1) * 34))
+            if self.configWindow.abilityContent then
+                row:SetAnchor(TOPLEFT, self.configWindow.abilityContent, TOPLEFT, 0, (index - 1) * 34)
+            else
+                local col = index <= 12 and 0 or 1
+                local rowIndex = col == 0 and index or (index - 12)
+                row:SetAnchor(TOPLEFT, self.configWindow, TOPLEFT, col == 0 and 22 or 404,
+                    152 + ((rowIndex - 1) * 34))
+            end
         end
+    end
+    if self.configWindow.abilityContent then
+        self.configWindow.abilityContent:SetHeight(math.max(390, math.min(#abilities, 48) * 34))
     end
 
     local g = self.sv
@@ -212,7 +230,9 @@ function Group:OpenConfig()
     if not self.configWindow then return end
     self:BuildRoster()
     self:ApplyConfigWindowScale()
-    self.configWindow:SetHidden(false)
+    local settings = AlphaSquadUI.Settings
+    if settings and settings.ShowExclusiveWindow then settings.ShowExclusiveWindow("groupultimate")
+    else self.configWindow:SetHidden(false) end
     self:RefreshConfig()
     self:ApplyVisibility()
 end
@@ -221,6 +241,8 @@ function Group:CloseConfig()
     if not self.configWindow then return end
     self.configWindow:SetHidden(true)
     self:ApplyVisibility()
+    local settings = AlphaSquadUI.Settings
+    if settings and settings.RefreshModuleVisibility then settings.RefreshModuleVisibility() end
 end
 
 function Group:ToggleConfig()
@@ -241,6 +263,10 @@ function Group:CreateConfigWindow()
     win:SetDrawLayer(DL_OVERLAY)
     win:SetDrawLevel(140)
     win:SetHidden(true)
+    local settings = AlphaSquadUI.Settings
+    if settings and settings.RegisterExclusiveWindow then
+        settings.RegisterExclusiveWindow("groupultimate", win, function() Group:CloseConfig() end)
+    end
 
     Solid(win, "AlphaSquadULTGroupConfigBG", {0.008, 0.013, 0.025, 0.997})
 
@@ -267,7 +293,7 @@ function Group:CreateConfigWindow()
     title:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
 
     local sub = Label(win, "AlphaSquadULTGroupConfigSub", "ZoFontGameSmall",
-        "Select the Ultimates to monitor. Players are added automatically when they have one slotted.", COLORS.muted)
+        "Select up to 24 Ultimates. Compatible senders with those abilities are added automatically.", COLORS.muted)
     sub:SetDimensions(660, 20)
     sub:SetAnchor(TOPLEFT, win, TOPLEFT, 21, 39)
     sub:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
@@ -314,8 +340,15 @@ function Group:CreateConfigWindow()
     listHeader:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
 
     win.abilityRows = {}
-    for index = 1, 24 do
-        win.abilityRows[index] = CreateAbilityRow(win, index)
+    if settings and settings.CreateScrollArea then
+        win.abilityContent, win.abilityScroll = settings.CreateScrollArea(win, "AlphaSquadULTGroupAbilityScroll", 22, 152, 736, 390, 390)
+    end
+    for index = 1, (win.abilityContent and 48 or 24) do
+        win.abilityRows[index] = CreateAbilityRow(win.abilityContent or win, index)
+        if win.abilityContent then
+            win.abilityRows[index]:SetWidth(720)
+            win.abilityRows[index].name:SetWidth(578)
+        end
         win.abilityRows[index]:SetHidden(true)
     end
 
@@ -328,8 +361,13 @@ function Group:CreateConfigWindow()
     local controlsY = 552
 
     Button(win, "AlphaSquadULTGroupSelectAll", "SELECT ALL", 22, controlsY, 110, 28, function()
+        local count = Group:GetTrackedAbilityCount()
         for _, ability in ipairs(Group:GetAvailableAbilities()) do
-            Group.sv.trackedAbilities[tostring(ability.id)] = true
+            local key = tostring(ability.id)
+            if not Group.sv.trackedAbilities[key] and count < 24 then
+                Group.sv.trackedAbilities[key] = true
+                count = count + 1
+            end
         end
         Group:Refresh("select all abilities")
     end)

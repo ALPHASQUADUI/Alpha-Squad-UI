@@ -304,6 +304,10 @@ function Group:ApplyVisibility()
 
     local sharedSettings = AlphaSquadUI and AlphaSquadUI.Settings and AlphaSquadUI.Settings.mainWindow
     local sharedSettingsVisible = sharedSettings and not sharedSettings:IsHidden() or false
+    local settings = AlphaSquadUI.Settings
+    if settings and settings.AnyExclusiveWindowVisible then
+        sharedSettingsVisible = sharedSettingsVisible or settings.AnyExclusiveWindowVisible()
+    end
     local configVisible = self.configWindow and not self.configWindow:IsHidden() or false
 
     local hidden =

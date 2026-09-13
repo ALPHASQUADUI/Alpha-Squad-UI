@@ -98,8 +98,9 @@ function ULT:BuildIntegratedSettingsPage(page, ui)
         ULT:SetEnabled(true)
         ULT:SetVisible(true)
         ULT:SetLocked(false)
-        local mainSettings = AlphaSquadUI and AlphaSquadUI.Settings and AlphaSquadUI.Settings.mainWindow
-        if mainSettings then mainSettings:SetHidden(true) end
+        local settings = AlphaSquadUI.Settings
+        if settings and settings.CloseMain then settings.CloseMain()
+        elseif settings and settings.mainWindow then settings.mainWindow:SetHidden(true) end
         ULT:ApplyVisibility()
     end)
 

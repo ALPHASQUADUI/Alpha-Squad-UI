@@ -8,17 +8,10 @@ if not SC then return end
 local Catalog = SC.Catalog
 local LGB_BUILD_PROTOCOL_ID = 510
 local LGB_BUILD_PROTOCOL_NAME = "AlphaSquadSupportCoverage"
-local LGB_PLAN_PROTOCOL_ID = 509
-local LGB_PLAN_PROTOCOL_NAME = "AlphaSquadSupportPlan"
-local LGB_LIVE_PROTOCOL_ID = 508
-local LGB_LIVE_PROTOCOL_NAME = "AlphaSquadSupportLive"
 local MASK_BITS = 24
 local MASK_MAX = 16777215 -- 2^24 - 1
-local BUILD_VERSION = 2
-local LIVE_VERSION = 2
--- Build v2 reserves the highest set2 bit for glyph-scan completeness. At most
--- 47 set-name hints can be transported; capability masks remain authoritative.
-local MAX_SHARED_SET_TOKENS = 47
+local BUILD_VERSION = 3
+-- Keep the existing highest set2 bit for glyph-scan completeness.
 local GLYPHS_VERIFIED_BIT = 23
 
 local function IsInteger(value, minimum, maximum)
@@ -34,17 +27,8 @@ end
 SC.share = SC.share or {
     available = false,
     protocol = nil,
-    planProtocol = nil,
-    liveProtocol = nil,
     handler = nil,
     lastSendAt = -60000,
-    lastLiveSendAt = -60000,
-    lastPlanAttemptAt = -60000,
-    lastPlanSentAt = -300000,
-    lastPotionAt = -60000,
-    lastPullIdentityAt = -60000,
-    planRevision = 0,
-    planPending = false,
     error = nil,
 }
 
@@ -61,20 +45,6 @@ local ROLE_TO_ID = {
 }
 local ID_TO_ROLE = {}
 for name, id in pairs(ROLE_TO_ID) do ID_TO_ROLE[id] = name end
-
-local PROFILE_TO_ID = {full=1, progression=2, damage=3, trash=4, boss=5, custom=6}
-local ID_TO_PROFILE = {}
-for name, id in pairs(PROFILE_TO_ID) do ID_TO_PROFILE[id] = name end
-
-local function HashUserId(value)
-    value = string.lower(tostring(value or ""))
-    local hash = 216613
-    for i = 1, #value do
-        hash = (hash * 131 + string.byte(value, i)) % MASK_MAX
-    end
-    return math.floor(hash)
-end
-
 
 local function BitSet(mask, bitIndex)
     if bitIndex < 0 or bitIndex >= MASK_BITS then return mask end
@@ -107,35 +77,6 @@ end
 
 local EFFECT_KEYS, EFFECT_INDEX = BuildEffectIndex()
 local V1_EFFECT_COUNT = Catalog and #(Catalog.wireV1Keys or {}) or 0
-local LIVE_SCHEMA = HashUserId(table.concat(EFFECT_KEYS, ",")) % 65536
-SC.LIVE_SCHEMA = LIVE_SCHEMA
-
-local function BuildSetIndex()
-    local tokens, seen = {}, {}
-    for _, source in ipairs(Catalog and Catalog.setSources or {}) do
-        local token = Normalize(source.token)
-        if token ~= "" and not seen[token] then
-            tokens[#tokens + 1] = source.token
-            seen[token] = true
-        end
-    end
-    table.sort(tokens, function(a, b) return Normalize(a) < Normalize(b) end)
-    while #tokens > MAX_SHARED_SET_TOKENS do table.remove(tokens) end
-    return tokens
-end
-
-local SET_TOKENS = BuildSetIndex()
-local SET_TOKEN_INDEX = {}
-for index, token in ipairs(SET_TOKENS) do SET_TOKEN_INDEX[Normalize(token)] = index end
-local SET_ID_INDICES = {}
-for _, source in ipairs(Catalog and Catalog.setSources or {}) do
-    local setId = tonumber(source.setId)
-    local index = SET_TOKEN_INDEX[Normalize(source.token)]
-    if setId and setId > 0 and setId <= 2147483647 and setId % 1 == 0 and index then
-        SET_ID_INDICES[setId] = SET_ID_INDICES[setId] or {}
-        SET_ID_INDICES[setId][#SET_ID_INDICES[setId] + 1] = index
-    end
-end
 
 local function EncodeCapabilities(capabilities)
     local masks = {0, 0, 0, 0}
@@ -173,60 +114,6 @@ local function DecodeCapabilities(data)
     return result
 end
 
-local function EncodeSets(setList)
-    local masks = {0, 0}
-    for _, set in ipairs(setList or {}) do
-        local setId = tonumber(set.id)
-        if not setId or setId ~= setId or setId == math.huge or setId == -math.huge
-            or setId <= 0 or setId > 2147483647 or setId % 1 ~= 0 then setId = nil end
-        if setId and GetItemSetUnperfectedSetId then
-            local ok, baseId = pcall(GetItemSetUnperfectedSetId, setId)
-            baseId = ok and tonumber(baseId) or nil
-            if baseId and baseId == baseId and baseId > 0 and baseId <= 2147483647 and baseId % 1 == 0 then
-                setId = baseId
-            end
-        end
-
-        local indices = setId and SET_ID_INDICES[setId] or nil
-        if indices then
-            for _, index in ipairs(indices) do
-                local zero = index - 1
-                local maskIndex = math.floor(zero / MASK_BITS) + 1
-                local bitIndex = zero % MASK_BITS
-                if masks[maskIndex] then masks[maskIndex] = BitSet(masks[maskIndex], bitIndex) end
-            end
-        elseif not setId then
-            -- Name fragments are compatibility hints only when the native API did
-            -- not expose an identity. A known-but-different ID must never be
-            -- reclassified merely because its localized name contains a token.
-            local name = Normalize(set.name)
-            for index, token in ipairs(SET_TOKENS) do
-                if name:find(Normalize(token), 1, true) then
-                    local zero = index - 1
-                    local maskIndex = math.floor(zero / MASK_BITS) + 1
-                    local bitIndex = zero % MASK_BITS
-                    if masks[maskIndex] then masks[maskIndex] = BitSet(masks[maskIndex], bitIndex) end
-                end
-            end
-        end
-    end
-    return masks
-end
-
-local function DecodeSets(data)
-    local list = {}
-    local masks = {tonumber(data.set1) or 0, tonumber(data.set2) or 0}
-    for index, token in ipairs(SET_TOKENS) do
-        local zero = index - 1
-        local maskIndex = math.floor(zero / MASK_BITS) + 1
-        local bitIndex = zero % MASK_BITS
-        if masks[maskIndex] and BitHas(masks[maskIndex], bitIndex) then
-            list[#list + 1] = {id=0, name=token, equipped=nil, sharedPresence=true}
-        end
-    end
-    return list
-end
-
 local function ClassifyPotion(snapshot)
     local potion = snapshot and snapshot.potion
     if not potion or not potion.known then return 0 end
@@ -252,7 +139,10 @@ function SC:BuildSharePayload()
     if not s then return nil end
 
     local caps = EncodeCapabilities(s.capabilities)
-    local sets = EncodeSets(s.equipment and s.equipment.setList)
+    local body = self.BuildCodec and self.BuildCodec.Encode(s)
+    if body then caps[4] = (caps[4] or 0) + (self.BuildCodec.Hash(body) % 32767 + 1) * 512 end
+    self.share.preparedBuildBody = body
+    local sets = {0,0} -- Exact native set identities are sent only in requested builds.
     local glyphs = s.equipment and s.equipment.glyphs or {}
     local food = s.food or {}
     if glyphs.verified == true then sets[2] = BitSet(sets[2], GLYPHS_VERIFIED_BIT) end
@@ -281,7 +171,8 @@ function SC:BuildSharePayload()
 end
 
 function SC:OnPeerShareData(unitTag, data)
-    if not unitTag or type(data) ~= "table" or (data.version ~= 1 and data.version ~= BUILD_VERSION) then return end
+    if not self:MayReceiveBuild(unitTag) then return end
+    if not unitTag or type(data) ~= "table" or (data.version ~= 1 and data.version ~= 2 and data.version ~= BUILD_VERSION) then return end
     for index=1,4 do
         local value=data["cap"..index]
         if type(value)~="number" or value<0 or value>MASK_MAX or value%1~=0 then return end
@@ -293,6 +184,7 @@ function SC:OnPeerShareData(unitTag, data)
     end
     if type(data.food)~="boolean" or type(data.foodVerified)~="boolean" then return end
     local key = self:GetPlayerKey(unitTag)
+    local previous = self.peerData[key]
 
     local foodId = tonumber(data.foodId) or 0
     local foodName = ""
@@ -315,9 +207,9 @@ function SC:OnPeerShareData(unitTag, data)
         capabilities = DecodeCapabilities(data),
         equipment = {
             complete = false,
-            setList = DecodeSets(data),
+            setList = {}, -- Legacy name-index hints are not safe across catalog revisions.
             glyphs = {
-                verified = data.version == BUILD_VERSION and BitHas(data.set2, GLYPHS_VERIFIED_BIT),
+                verified = data.version >= 2 and BitHas(data.set2, GLYPHS_VERIFIED_BIT),
                 armorMissing = tonumber(data.missingGlyphs) or 0,
                 prismatic = tonumber(data.prism) or 0,
                 magicka = tonumber(data.mag) or 0,
@@ -340,377 +232,112 @@ function SC:OnPeerShareData(unitTag, data)
         unitTag = unitTag,
     }
 
-    self:ScheduleRefresh("peer data", 25)
+    local peer = self.peerData[key]
+    peer.buildDetailFingerprint = data.version == 3 and math.floor(data.cap4 / 512) or nil
+    if previous and previous.fullBuild and previous.fullBuildFingerprint == peer.buildDetailFingerprint
+        and previous.characterName == peer.characterName then
+        peer.fullBuild, peer.fullBuildAt, peer.fullBuildFingerprint = previous.fullBuild, previous.fullBuildAt, previous.fullBuildFingerprint
+        peer.capabilities = previous.fullBuild.capabilities
+        peer.equipment, peer.skills, peer.masteries = previous.fullBuild.equipment, previous.fullBuild.skills, previous.fullBuild.masteries
+    end
+    self:ScheduleRefresh("peer data", 100)
     return true
 end
 
+
+local function Call(fn,...)
+    if type(fn)~="function" then return nil end
+    local ok,a=pcall(fn,...)
+    if ok then return a end
+end
+
+function SC:IsCurrentGroupMember(tag)
+    if type(tag)~="string" or not self:IsGrouped() then return false end
+    local size=BoundedInteger(Call(GetGroupSize),0,12)
+    for index=1,size do
+        local other=Call(GetGroupUnitTagByIndex,index) or ("group"..index)
+        if other==tag or Call(AreUnitsEqual,other,tag)==true then return true end
+    end
+    return false
+end
+
+function SC:MayReceiveBuild(tag)
+    return self.sv and self.sv.enabled and self.sv.shareData and self.sv.experimentalSharing
+        and not self.inCombat and self:IsCurrentGroupMember(tag) and not self:IsSelf(tag)
+end
 
 function SC:IsRaidLead()
-    if not self:IsGrouped() then return true end
-    if IsUnitGroupLeader then
-        local ok, leader = pcall(IsUnitGroupLeader, "player")
-        if ok then return leader == true end
-    end
-    return false
-end
-
-function SC:GetLocalLiveCapabilities()
-    local observed, complete = {}, false
-    if self.ObserveEffectsOnUnit then
-        observed, complete = self:ObserveEffectsOnUnit("player")
-        observed = observed or {}
-    end
-    local capabilities = {}
-    for key in pairs(observed) do capabilities[key] = {sources={["LIVE"] = true}} end
-    self.localLive = {
-        capabilities = capabilities,
-        complete = complete == true,
-        updatedAt = self.NowMs(),
-    }
-    return capabilities
-end
-
-function SC:ShareLiveSnapshot()
-    if not self.sv or not self.sv.enabled or not self.sv.experimentalSharing or not self.sv.shareData or not self.inCombat then return false end
-    if not self:IsGrouped() then return false end
-    local protocol = self.share and self.share.liveProtocol
-    if not protocol then return false end
-    if protocol.IsEnabled and not protocol:IsEnabled() then return false end
-
-    local now = self.NowMs()
-    if now - (self.share.lastLiveSendAt or 0) < 1800 then return false end
-
-    local live = self.localLive
-    if not live or self.NowMs()-(live.updatedAt or 0)>2000 then self:GetLocalLiveCapabilities(); live=self.localLive end
-    local caps = EncodeCapabilities(live and live.capabilities or {})
-    local known = {0,0,0,0}
-    for index,key in ipairs(EFFECT_KEYS) do
-        local present = live and live.capabilities and live.capabilities[key] ~= nil
-        if present or live and live.complete and self.effectReadableKeys and self.effectReadableKeys[key] then
-            local zero=index-1;local maskIndex=math.floor(zero/MASK_BITS)+1
-            known[maskIndex]=BitSet(known[maskIndex],zero%MASK_BITS)
-        end
-    end
-    local stagger=live and live.capabilities and live.capabilities.stagger
-    local stack=BoundedInteger(stagger and stagger.stacks,-1,15)+1
-    local payload = {
-        version = LIVE_VERSION,
-        schema = LIVE_SCHEMA,
-        cap1 = caps[1] or 0,
-        cap2 = caps[2] or 0,
-        cap3 = caps[3] or 0,
-        cap4 = caps[4] or 0,
-        known1 = known[1] or 0,
-        known2 = known[2] or 0,
-        known3 = known[3] or 0,
-        known4 = known[4] or 0,
-        stack = stack,
-    }
-    local ok, sent = pcall(function() return protocol:Send(payload) end)
-    if ok and sent == true then
-        self.share.lastLiveSendAt = now
-        return true
-    end
-    return false
-end
-
-function SC:OnPeerLiveData(unitTag, data)
-    if not unitTag or type(data)~="table" or data.version~=LIVE_VERSION or data.schema~=LIVE_SCHEMA then return end
-    for _,prefix in ipairs({"cap","known"}) do
-        for index=1,4 do
-            local value=data[prefix..index]
-            if type(value)~="number" or value<0 or value>MASK_MAX or value%1~=0 then return end
-        end
-    end
-    local stack=tonumber(data.stack)
-    if not stack or stack<0 or stack>16 or stack%1~=0 then return end
-    local capabilities,known=DecodeCapabilities(data),{}
-    for index,key in ipairs(EFFECT_KEYS) do
-        local zero=index-1;local maskIndex=math.floor(zero/MASK_BITS)+1;local bit=zero%MASK_BITS
-        local isKnown=BitHas(data["known"..maskIndex],bit)
-        if capabilities[key] and not isKnown then return end
-        if isKnown then known[key]=true end
-    end
-    if capabilities.stagger and stack>0 then capabilities.stagger.stacks=stack-1 end
-    local key = self:GetPlayerKey(unitTag)
-    local peer = self.peerData[key]
-    if not peer then
-        peer = self.ScanLimitedUnit and self:ScanLimitedUnit(unitTag) or {
-            displayName=key, capabilities={}, dataQuality="ASUI",
-        }
-        self.peerData[key] = peer
-    end
-    peer.asui = true
-    if peer.buildVerified == true then
-        peer.dataQuality = "ASUI"
-    else
-        peer.dataQuality = "ASUI LIVE"
-    end
-    peer.liveCapabilities = capabilities
-    peer.liveKnownKeys = known
-    peer.liveUpdatedAt = self.NowMs()
-    peer.unitTag = unitTag
-end
-
-function SC:GetMyHash()
-    return HashUserId(self:GetPlayerKey("player"))
-end
-
-function SC:GetPlanSignature()
-    local parts = {tostring(self.sv and self.sv.activeProfile or "full")}
-    local coverage = self.coverage or {}
-
-    for _, row in ipairs(coverage.entries or {}) do
-        local owner = row.assigned and row.assigned.key or ""
-        parts[#parts + 1] = tostring(row.key) .. "=" .. tostring(owner)
-    end
-
-    local roleKeys = {}
-    for playerKey in pairs(self.sv and self.sv.roleOverrides or {}) do
-        roleKeys[#roleKeys + 1] = playerKey
-    end
-    table.sort(roleKeys)
-    for _, playerKey in ipairs(roleKeys) do
-        parts[#parts + 1] = "role:" .. tostring(playerKey) .. "=" .. tostring(self.sv.roleOverrides[playerKey])
-    end
-
-    return table.concat(parts, "|")
-end
-
-function SC:MaybeBroadcastPlan()
-    if not self:IsRaidLead() or self.inCombat then return end
-    local signature = self:GetPlanSignature()
-    local heartbeatDue = self.NowMs()-(self.share.lastPlanSentAt or -300000)>=300000
-    if signature == self.lastPlanSignature and not heartbeatDue then return end
-    self:SchedulePlanBroadcast()
-end
-
-function SC:SchedulePlanBroadcast()
-    if not self.share or not self.share.planProtocol then return end
-    if not self:IsRaidLead() or self.inCombat then return end
-    if self.share.planPending then return end
-    self.share.planPending = true
-    zo_callLater(function()
-        if not SC or not SC.share then return end
-        SC.share.planPending = false
-        SC:BroadcastPlan()
-    end, 900)
-end
-
-function SC:BroadcastPlan()
-    if not self.sv or not self.sv.shareData or self.inCombat then return false end
-    if not self:IsGrouped() or not self:IsRaidLead() then return false end
-    local protocol = self.share and self.share.planProtocol
-    if not protocol then return false end
-    if protocol.IsEnabled and not protocol:IsEnabled() then return false end
-
-    self.share.planRevision = ((self.share.planRevision or 0) % 250) + 1
-    local revision = self.share.planRevision
-    local profileId = PROFILE_TO_ID[self.sv.activeProfile] or 1
-
-    -- Reset/new-plan marker. key contains profile ID.
-    pcall(function()
-        protocol:Send({revision=revision, kind=0, key=profileId, ownerHash=0})
-    end)
-
-    local coverage = self.coverage or {}
-    for _, row in ipairs(coverage.entries or {}) do
-        local owner = row.assigned
-        local effectIndex = EFFECT_INDEX[row.key]
-        if owner and effectIndex and effectIndex < 128 then
-            pcall(function()
-                protocol:Send({
-                    revision=revision,
-                    kind=1,
-                    key=effectIndex,
-                    ownerHash=HashUserId(owner.key),
-                })
-            end)
-        end
-    end
-
-    for playerKey, role in pairs(self.sv.roleOverrides or {}) do
-        local roleId = ROLE_TO_ID[role]
-        if roleId then
-            pcall(function()
-                protocol:Send({
-                    revision=revision,
-                    kind=2,
-                    key=roleId,
-                    ownerHash=HashUserId(playerKey),
-                })
-            end)
-        end
-    end
-
-    self.lastPlanSignature = self:GetPlanSignature()
-    self.share.lastPlanSentAt = self.NowMs()
-    return true
-end
-
-function SC:OnPlanData(unitTag, data)
-    if not data then return end
-    local revision = tonumber(data.revision) or 0
-    local kind = tonumber(data.kind) or 0
-    local key = tonumber(data.key) or 0
-    local ownerHash = tonumber(data.ownerHash) or 0
-
-    self.remotePlan = self.remotePlan or {revision=-1, assignments={}}
-    if kind == 0 then
-        self.remotePlan = {
-            revision = revision,
-            sender = self:GetPlayerKey(unitTag),
-            profile = ID_TO_PROFILE[key] or "full",
-            assignments = {},
-            myRole = nil,
-            receivedAt = self.NowMs(),
-        }
-    elseif self.remotePlan.revision == revision then
-        if kind == 1 then
-            local effectKey = EFFECT_KEYS[key + 1]
-            if effectKey then
-                self.remotePlan.assignments[effectKey] = ownerHash
-            end
-        elseif kind == 2 and ownerHash == self:GetMyHash() then
-            self.remotePlan.myRole = ID_TO_ROLE[key] or "UNKNOWN"
-        end
-    end
-
-    if self.assignmentBannerPending then return end
-    self.assignmentBannerPending = true
-    zo_callLater(function()
-        if SC then
-            SC.assignmentBannerPending = false
-            if SC.ShowPersonalAssignmentBanner then SC:ShowPersonalAssignmentBanner() end
-        end
-    end, 350)
-end
-
-function SC:GetMyRemoteAssignments()
-    local result = {}
-    local plan = self.remotePlan
-    if not plan then return result end
-    if plan.receivedAt and self.NowMs()-plan.receivedAt>600000 then self.remotePlan=nil;return result end
-    local myHash = self:GetMyHash()
-    for effectKey, ownerHash in pairs(plan.assignments or {}) do
-        if ownerHash == myHash and Catalog.effects[effectKey] then
-            result[#result + 1] = Catalog.effects[effectKey].label
-        end
-    end
-    table.sort(result)
-    return result
+    return not self:IsGrouped() or Call(IsUnitGroupLeader,"player")==true
 end
 
 function SC:InitializeSharing()
-    local LGB = rawget(_G, "LibGroupBroadcast")
-    if not LGB or type(LGB.RegisterHandler) ~= "function" then
-        self.share.available = false
-        self.share.error = "LibGroupBroadcast unavailable"
+    self.share=self.share or {}
+    if not self.sv or not self.sv.enabled or not self.sv.experimentalSharing or not self.sv.shareData then
+        self.share.available=false
+        self.share.error="Build sharing is off. Enable the controlled-test option on each participating client."
         return
     end
-
-    local ok, handlerOrError = pcall(function()
-        local handler = LGB:RegisterHandler("AlphaSquadUI", "ASUI")
-        if not handler then error("handler registration failed") end
-        if handler.SetDisplayName then handler:SetDisplayName("Ąlpha Şquad UI") end
-        if handler.SetDescription then
-            handler:SetDescription("Shares compact Support Coverage capability data with group members.")
-        end
-
-        local protocol = handler:DeclareProtocol(LGB_BUILD_PROTOCOL_ID, LGB_BUILD_PROTOCOL_NAME)
-        protocol:AddField(LGB.CreateNumericField("version", {minValue=0,maxValue=7}))
-        protocol:AddField(LGB.CreateNumericField("role", {minValue=0,maxValue=15}))
-        protocol:AddField(LGB.CreateNumericField("classId", {minValue=0,maxValue=15}))
+    local LGB=rawget(_G,"LibGroupBroadcast")
+    if not LGB or type(LGB.RegisterHandler)~="function" then
+        self.share.available=false;self.share.error="LibGroupBroadcast is not installed";return
+    end
+    if self.share.handler then
+        self.share.available=self.share.protocol~=nil and self.share.detailProtocol~=nil
+        return
+    end
+    if self.share.registrationAttempted then return end
+    self.share.registrationAttempted=true
+    local ok,result=pcall(function()
+        local handler=LGB:RegisterHandler("AlphaSquadUI","ASUI")
+        assert(handler,"Build sharing registration failed")
+        self.share.handler=handler
+        if handler.SetDisplayName then handler:SetDisplayName("Ąlpha Şquad UI — Build Sharing") end
+        if handler.SetDescription then handler:SetDescription("Optional precombat build sharing for controlled group tests. Public registration is pending.") end
+        local protocol=handler:DeclareProtocol(LGB_BUILD_PROTOCOL_ID,LGB_BUILD_PROTOCOL_NAME)
+        protocol:AddField(LGB.CreateNumericField("version",{minValue=0,maxValue=7}))
+        protocol:AddField(LGB.CreateNumericField("role",{minValue=0,maxValue=15}))
+        protocol:AddField(LGB.CreateNumericField("classId",{minValue=0,maxValue=15}))
         protocol:AddField(LGB.CreateFlagField("food"))
         protocol:AddField(LGB.CreateFlagField("foodVerified"))
-        protocol:AddField(LGB.CreateNumericField("foodId", {minValue=0,maxValue=1048575}))
-        protocol:AddField(LGB.CreateNumericField("potion", {minValue=0,maxValue=7}))
-        protocol:AddField(LGB.CreateNumericField("missingGlyphs", {minValue=0,maxValue=7}))
-        protocol:AddField(LGB.CreateNumericField("prism", {minValue=0,maxValue=7}))
-        protocol:AddField(LGB.CreateNumericField("mag", {minValue=0,maxValue=7}))
-        protocol:AddField(LGB.CreateNumericField("stam", {minValue=0,maxValue=7}))
-        protocol:AddField(LGB.CreateNumericField("health", {minValue=0,maxValue=7}))
-        protocol:AddField(LGB.CreateNumericField("supportScore", {minValue=0,maxValue=31}))
-        protocol:AddField(LGB.CreateNumericField("cap1", {minValue=0,maxValue=MASK_MAX}))
-        protocol:AddField(LGB.CreateNumericField("cap2", {minValue=0,maxValue=MASK_MAX}))
-        protocol:AddField(LGB.CreateNumericField("cap3", {minValue=0,maxValue=MASK_MAX}))
-        protocol:AddField(LGB.CreateNumericField("cap4", {minValue=0,maxValue=MASK_MAX}))
-        protocol:AddField(LGB.CreateNumericField("set1", {minValue=0,maxValue=MASK_MAX}))
-        protocol:AddField(LGB.CreateNumericField("set2", {minValue=0,maxValue=MASK_MAX}))
-        protocol:OnData(function(unitTag, data)
-            if SC then SC:OnPeerShareData(unitTag, data) end
-        end)
-        assert(protocol:Finalize({isRelevantInCombat=false, replaceQueuedMessages=true}), "build protocol validation failed")
-
-        local liveProtocol = handler:DeclareProtocol(LGB_LIVE_PROTOCOL_ID, LGB_LIVE_PROTOCOL_NAME)
-        liveProtocol:AddField(LGB.CreateNumericField("version", {minValue=0,maxValue=3}))
-        liveProtocol:AddField(LGB.CreateNumericField("schema", {minValue=0,maxValue=65535}))
-        liveProtocol:AddField(LGB.CreateNumericField("cap1", {minValue=0,maxValue=MASK_MAX}))
-        liveProtocol:AddField(LGB.CreateNumericField("cap2", {minValue=0,maxValue=MASK_MAX}))
-        liveProtocol:AddField(LGB.CreateNumericField("cap3", {minValue=0,maxValue=MASK_MAX}))
-        liveProtocol:AddField(LGB.CreateNumericField("cap4", {minValue=0,maxValue=MASK_MAX}))
-        liveProtocol:AddField(LGB.CreateNumericField("known1", {minValue=0,maxValue=MASK_MAX}))
-        liveProtocol:AddField(LGB.CreateNumericField("known2", {minValue=0,maxValue=MASK_MAX}))
-        liveProtocol:AddField(LGB.CreateNumericField("known3", {minValue=0,maxValue=MASK_MAX}))
-        liveProtocol:AddField(LGB.CreateNumericField("known4", {minValue=0,maxValue=MASK_MAX}))
-        liveProtocol:AddField(LGB.CreateNumericField("stack", {minValue=0,maxValue=16}))
-        liveProtocol:OnData(function(unitTag, data)
-            if SC then SC:OnPeerLiveData(unitTag, data) end
-        end)
-        assert(liveProtocol:Finalize({isRelevantInCombat=true, replaceQueuedMessages=true}), "live protocol validation failed")
-
-        local planProtocol = handler:DeclareProtocol(LGB_PLAN_PROTOCOL_ID, LGB_PLAN_PROTOCOL_NAME)
-        planProtocol:AddField(LGB.CreateNumericField("revision", {minValue=0,maxValue=255}))
-        planProtocol:AddField(LGB.CreateNumericField("kind", {minValue=0,maxValue=3}))
-        planProtocol:AddField(LGB.CreateNumericField("key", {minValue=0,maxValue=127}))
-        planProtocol:AddField(LGB.CreateNumericField("ownerHash", {minValue=0,maxValue=MASK_MAX}))
-        planProtocol:OnData(function(unitTag, data)
-            if SC then SC:OnPlanData(unitTag, data) end
-        end)
-        assert(planProtocol:Finalize({isRelevantInCombat=false, replaceQueuedMessages=false}), "plan protocol validation failed")
-
-        return {handler=handler, protocol=protocol, liveProtocol=liveProtocol, planProtocol=planProtocol}
+        protocol:AddField(LGB.CreateNumericField("foodId",{minValue=0,maxValue=1048575}))
+        protocol:AddField(LGB.CreateNumericField("potion",{minValue=0,maxValue=7}))
+        for _,field in ipairs({"missingGlyphs","prism","mag","stam","health"}) do
+            protocol:AddField(LGB.CreateNumericField(field,{minValue=0,maxValue=7}))
+        end
+        protocol:AddField(LGB.CreateNumericField("supportScore",{minValue=0,maxValue=31}))
+        for _,field in ipairs({"cap1","cap2","cap3","cap4","set1","set2"}) do
+            protocol:AddField(LGB.CreateNumericField(field,{minValue=0,maxValue=MASK_MAX}))
+        end
+        protocol:OnData(function(tag,data) SC:OnPeerShareData(tag,data) end)
+        assert(protocol:Finalize({isRelevantInCombat=false,replaceQueuedMessages=true}),"Build protocol unavailable")
+        self.share.protocol=protocol
+        self:InitializeDetailSharing(LGB,handler)
+        assert(self.share.detailProtocol,self.share.detailError or "Detail protocol unavailable")
     end)
-
-    if not ok then
-        self.share.available = false
-        self.share.error = tostring(handlerOrError)
-        return
-    end
-
-    self.share.handler = handlerOrError.handler
-    self.share.protocol = handlerOrError.protocol
-    self.share.liveProtocol = handlerOrError.liveProtocol
-    self.share.planProtocol = handlerOrError.planProtocol
-    self.share.available = true
-    self.share.error = nil
+    self.share.available=ok
+    self.share.error=ok and nil or tostring(result)
 end
 
 function SC:ShareLocalSnapshot(reason)
     if not self.sv or not self.sv.enabled or not self.sv.experimentalSharing or not self.sv.shareData or self.inCombat then return false end
-    if not self:IsGrouped() then return false end
-    if not self.share or not self.share.available or not self.share.protocol then return false end
-
-    local protocol = self.share.protocol
-    if protocol.IsEnabled and not protocol:IsEnabled() then return false end
-
-    local now = self.NowMs()
-    if now - (self.share.lastSendAt or 0) < 750 then return false end
-
-    local payload = self:BuildSharePayload()
+    if not self:IsGrouped() or not self.share or not self.share.available or not self.share.protocol then return false end
+    if self.share.protocol.IsEnabled and not self.share.protocol:IsEnabled() then return false end
+    local now=self.NowMs()
+    if now-(self.share.lastSendAt or -60000)<1500 then return false end
+    local payload=self:BuildSharePayload()
     if not payload then return false end
-
-    local ok, sent = pcall(function() return protocol:Send(payload) end)
-    if ok and sent == true then
-        self.share.lastSendAt = now
+    local ok,sent=pcall(self.share.protocol.Send,self.share.protocol,payload,{isRelevantInCombat=false,replaceQueuedMessages=true})
+    if ok and sent==true then
+        self.share.lastSendAt=now
+        self.share.lastBuildFingerprint=math.floor(payload.cap4/512)
+        if self.ShareCapabilitySummary then self:ShareCapabilitySummary() end
         return true
     end
     return false
 end
 
 function SC:GetSharingStatus()
-    if not self.share or not self.share.available then
-        return "LOCAL", self.share and self.share.error or "LibGroupBroadcast unavailable"
-    end
-    return "LGB", nil
+    if not self.sv or not self.sv.experimentalSharing or not self.sv.shareData then return "LOCAL","Build sharing is off" end
+    if self.share and self.share.available then return "TEST SHARE",self.share.detailError end
+    return "LOCAL",self.share and self.share.error or "LibGroupBroadcast unavailable"
 end

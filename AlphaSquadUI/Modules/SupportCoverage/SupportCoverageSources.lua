@@ -16,100 +16,6 @@ local function AbilityId(value)
     return value
 end
 
-local nativeBuffs={
-    major_courage="MAJOR_COURAGE",minor_courage="MINOR_COURAGE",
-    major_slayer="MAJOR_SLAYER",minor_slayer="MINOR_SLAYER",
-    major_force="MAJOR_FORCE",minor_force="MINOR_FORCE",
-    major_berserk="MAJOR_BERSERK",minor_berserk="MINOR_BERSERK",
-    major_vulnerability="MAJOR_VULNERABILITY",minor_vulnerability="MINOR_VULNERABILITY",
-    major_brittle="MAJOR_BRITTLE",minor_brittle="MINOR_BRITTLE",
-    major_breach="MAJOR_BREACH",minor_breach="MINOR_BREACH",
-    major_heroism="MAJOR_HEROISM",minor_heroism="MINOR_HEROISM",
-    minor_magickasteal="MINOR_MAGICKASTEAL",minor_lifesteal="MINOR_LIFESTEAL",
-    major_intellect="MAJOR_INTELLECT",minor_intellect="MINOR_INTELLECT",
-    major_endurance="MAJOR_ENDURANCE",minor_endurance="MINOR_ENDURANCE",
-    major_fortitude="MAJOR_FORTITUDE",minor_fortitude="MINOR_FORTITUDE",
-    major_resolve="MAJOR_RESOLVE",minor_resolve="MINOR_RESOLVE",
-    major_protection="MAJOR_PROTECTION",minor_protection="MINOR_PROTECTION",
-    major_evasion="MAJOR_EVASION",minor_evasion="MINOR_EVASION",
-    major_vitality="MAJOR_VITALITY",minor_vitality="MINOR_VITALITY",
-    major_mending="MAJOR_MENDING",minor_mending="MINOR_MENDING",
-    minor_toughness="MINOR_TOUGHNESS",major_aegis="MAJOR_AEGIS",minor_aegis="MINOR_AEGIS",
-    major_maim="MAJOR_MAIM",minor_maim="MINOR_MAIM",
-    major_cowardice="MAJOR_COWARDICE",minor_cowardice="MINOR_COWARDICE",
-}
-local pairedBuffs={
-    major_brutality_sorcery={"MAJOR_BRUTALITY","MAJOR_SORCERY"},
-    minor_brutality_sorcery={"MINOR_BRUTALITY","MINOR_SORCERY"},
-    major_savagery_prophecy={"MAJOR_SAVAGERY","MAJOR_PROPHECY"},
-    minor_savagery_prophecy={"MINOR_SAVAGERY","MINOR_PROPHECY"},
-}
-local originalIndex=SC.RebuildEffectIndex
-function SC:RebuildEffectIndex()
-    originalIndex(self)
-    self.nativeBuffIndex={}
-    local function Add(key,suffix)
-        local enum=rawget(_G,"BUFF_TYPE_"..suffix)
-        if enum~=nil then self.nativeBuffIndex[enum]=key end
-    end
-    for key,suffix in pairs(nativeBuffs) do Add(key,suffix) end
-    for key,suffixes in pairs(pairedBuffs) do for _,suffix in ipairs(suffixes) do Add(key,suffix) end end
-end
-
-function SC:ObserveEffectsOnUnit(tag)
-    local observed,raw={},{}
-    if not tag or type(GetNumBuffs)~="function" or type(GetUnitBuffInfo)~="function" then return observed,false,raw end
-    if not self.effectIdIndex then self:RebuildEffectIndex() end
-    local count=Try(GetNumBuffs,tag)
-    if type(count)~="number" or count~=count or count==math.huge or count==-math.huge then return observed,false,raw end
-    count=math.max(0,math.floor(count))
-    local complete=true
-    local nativeComplete=type(GetAbilityBuffType)=="function"
-    local now=self.NowMs()
-    self.observerHasData=self.observerHasData or {}
-    local subject=self:GetObservationSubject(tag)
-    if count>0 then self.observerHasData[subject]=true end
-    for index=1,math.min(count,self.History.MAX_EFFECTS_PER_UNIT) do
-        local ok,name,started,ending,slot,stacks,icon,_,effectType,_,statusType,id,_,castByPlayer=pcall(GetUnitBuffInfo,tag,index)
-        id=AbilityId(id)
-        if not ok or not id then complete=false
-        else
-            local key=self.effectIdIndex[id]
-            local source=key and "ABILITY_ID" or nil
-            if GetAbilityBuffType then
-                local validCall,buffType=pcall(GetAbilityBuffType,id,tag)
-                local finiteBuffType=validCall and FiniteNumber(buffType) or nil
-                if not finiteBuffType then nativeComplete=false end
-                local nativeKey=finiteBuffType and self.nativeBuffIndex[finiteBuffType]
-                if nativeKey then
-                    key=nativeKey;source="NATIVE_BUFF_TYPE"
-                end
-            end
-            if not key then key=self.effectNameIndex[Normalize(name)];source="OBSERVED_NAME" end
-            local captureRaw=self.sv.collectAllEffects or self.sv.logRawEffects
-            local value
-            if key or captureRaw then
-                local stackCount=FiniteNumber(stacks)
-                if stackCount then stackCount=math.max(0,math.min(100,math.floor(stackCount))) end
-                value={name=name,abilityId=id,started=started,ending=ending,slot=slot,
-                    stacks=stackCount,icon=icon,effectType=effectType,statusEffectType=statusType,
-                    castByPlayer=castByPlayer,observedAt=now,evidence=source or "RAW_ABILITY_ID"}
-            end
-            if key then
-                self.effectIdIndex[id]=key;self.effectReadableKeys[key]=true
-                if not observed[key] or (value.stacks or 0)>(observed[key].stacks or 0) then observed[key]=value end
-            end
-            if captureRaw then raw[id]=value end
-        end
-    end
-    if count>self.History.MAX_EFFECTS_PER_UNIT then complete=false;if self.pull then self.pull.truncated=true end end
-    -- Only a successful complete LOCAL scan can establish an absent native buff type.
-    if complete and nativeComplete and self:IsSelf(tag) then
-        for _,key in pairs(self.nativeBuffIndex) do self.effectReadableKeys[key]=true end
-    end
-    return observed,complete,raw
-end
-
 function SC:ScanMundus()
     local result={known=false,ids={},types={},names={}}
     if type(GetUnitActiveMundusStoneBuffIndices)~="function" or type(GetUnitBuffInfo)~="function" then return result end
@@ -177,7 +83,11 @@ function SC:ScanEquipment()
                 if result.complete and (main or back) then
                     for _,key in ipairs(source.provides) do
                         local cap=capabilities[key] or {sources={},mainBar=false,backBar=false}
-                        cap.sources[family.name]=true
+                        local sourceName=source.label or family.name
+                        cap.sources[sourceName]=true
+                        cap.groupSource=true
+                        cap.sourceDetails=cap.sourceDetails or {}
+                        cap.sourceDetails[sourceName]={name=sourceName,kind="set",conditions=source.conditions,mainBar=main,backBar=back,evidence="SET_ID"}
                         cap.mainBar=cap.mainBar or main;cap.backBar=cap.backBar or back
                         cap.evidence=source.setId and "SET_ID" or "SET_NAME_HINT"
                         capabilities[key]=cap
@@ -214,16 +124,144 @@ function SC:ScanPotion()
     return potion
 end
 
-local bossObservations=SC.GetBossObservations
-function SC:GetBossObservations()
-    local result=bossObservations(self)
-    -- Untargetable boss phases are observation gaps, not proven debuff downtime.
-    for _,entry in ipairs(result) do
-        for index=1,6 do
-            local tag="boss"..index
-            if Try(DoesUnitExist,tag)==true and self:GetObservationSubject(tag)==entry.subject
-                and Try(IsUnitAttackable,tag)==false then
-                entry.effects={};entry.raw={};entry.complete=false
+-- Use the same conservative capability derivation for local scans and received full builds.
+-- Remote booleans are not expanded into invented skill, set, passive or potion providers.
+function SC:DeriveBuildCapabilities(snapshot)
+    local result={}
+    if type(snapshot)~="table" then return result end
+    local function Add(key, name, kind, conditions, mainBar, backBar, evidence, extra)
+        if not Catalog.effects[key] then return end
+        local cap=result[key]
+        if not cap then
+            cap={sources={},sourceDetails={},mainBar=false,backBar=false,conditional=true,groupSource=true}
+            result[key]=cap
+        end
+        cap.sources[name]=true
+        cap.mainBar=cap.mainBar or mainBar==true
+        cap.backBar=cap.backBar or backBar==true
+        cap.evidence=cap.evidence or evidence
+        local detail=cap.sourceDetails[name] or {name=name,kind=kind,conditions=conditions,evidence=evidence}
+        detail.mainBar=detail.mainBar or mainBar==true
+        detail.backBar=detail.backBar or backBar==true
+        if extra then for field,value in pairs(extra) do detail[field]=value end end
+        cap.sourceDetails[name]=detail
+    end
+    local equipment=type(snapshot.equipment)=="table" and snapshot.equipment or {}
+    if equipment.complete==true then
+        for _,set in ipairs(equipment.setList or {}) do
+            local id=AbilityId(set.id)
+            local base=id and AbilityId(Try(GetItemSetUnperfectedSetId,id))
+            id=base or id
+            for _,source in ipairs(Catalog.setSources or {}) do
+                local matched=id and source.setId==id
+                if not id and source.setId==nil then matched=Normalize(set.name)==Normalize(source.token) end
+                if matched then
+                    local needed=source.requiredPieces or 5
+                    local main=(FiniteNumber(set.mainCount) or 0)>=needed
+                    local back=(FiniteNumber(set.backCount) or 0)>=needed
+                    if main or back then
+                        local name=source.label or set.name or "Equipped set"
+                        for _,key in ipairs(source.provides or {}) do
+                            Add(key,name,"set",source.conditions,main,back,"SET_ID",{
+                                requiredPieces=needed,mainCount=set.mainCount,backCount=set.backCount})
+                        end
+                    end
+                end
+            end
+        end
+        for _,item in ipairs(equipment.items or {}) do
+            if item.isWeapon and item.hasEnchant~=false and item.enchantHasCharges~=false
+                and item.enchantSuppressedByPoison~=true then
+                local key=item.enchant=="crusher" and "crusher" or (item.enchant=="weakening" and "weakening" or nil)
+                if key then
+                    local name=(key=="crusher" and "Crusher" or "Weakening") .. " Enchantment (" .. tostring(item.slotName or "Weapon") .. ")"
+                    Add(key,name,"enchant","Requires a charged weapon enchantment without paired poison.",
+                        item.bar=="PRIMARY",item.bar=="BACKUP","EQUIPPED_ENCHANT",{slotName=item.slotName})
+                end
+            end
+        end
+    end
+    local skills=type(snapshot.skills)=="table" and snapshot.skills or {}
+    if skills.known==true then
+        for _,bar in ipairs({"primary","backup"}) do
+            for _,skill in ipairs(skills[bar] or {}) do
+                local seen={}
+                local function AddMatches(id)
+                    for _,source in ipairs(Catalog:FindSkillSources(id,skill.name)) do
+                        if not seen[source] then
+                            seen[source]=true
+                            for _,key in ipairs(source.provides or {}) do
+                                if source.personal~=true then
+                                    Add(key,source.label or skill.name,"skill",source.conditions,
+                                        bar=="primary",bar=="backup","SLOTTED_SKILL",{slot=skill.slot})
+                                end
+                            end
+                        end
+                    end
+                end
+                -- A grimoire without its exact scripts does not establish a buff recipient.
+                if not skill.craftedAbilityId then
+                    AddMatches(AbilityId(skill.abilityId))
+                    if skill.boundAbilityId~=skill.abilityId then AddMatches(AbilityId(skill.boundAbilityId)) end
+                elseif skill.scriptsKnown and self.DeriveScribingCapabilities then
+                    for key,detail in pairs(self:DeriveScribingCapabilities(skill) or {}) do
+                        Add(key,detail.name or skill.name,"scribing",detail.conditions,bar=="primary",bar=="backup","SCRIBING_SCRIPTS")
+                    end
+                end
+            end
+        end
+    end
+    local masteries=type(snapshot.masteries)=="table" and snapshot.masteries or {}
+    if masteries.known and masteries.eligible then
+        for _,selected in ipairs(masteries.selected or {}) do
+            for _,source in ipairs(Catalog.masterySources or {}) do
+                local matches=(source.abilityId and selected.id==source.abilityId) or Normalize(selected.name)==Normalize(source.name)
+                local prerequisite=not source.requires
+                for _,id in ipairs(source.requiresIds or {}) do
+                    if ((masteries.learnedIds or {})[id] or 0)>=(source.rank or 1) then prerequisite=true;break end
+                end
+                if not prerequisite and source.requires then
+                    prerequisite=((masteries.learned or {})[Normalize(source.requires)] or 0)>=(source.rank or 1)
+                end
+                if prerequisite and (source.requiredSkillLineIds or source.requiredSlottedIds) then
+                    local slotted=false
+                    if skills.known then
+                        for _,bar in ipairs({"primary","backup"}) do
+                            for _,skill in ipairs(skills[bar] or {}) do
+                                for _,lineId in ipairs(source.requiredSkillLineIds or {}) do
+                                    if skill.lineId==lineId then slotted=true end
+                                end
+                                for _,id in ipairs(source.requiredSlottedIds or {}) do
+                                    if skill.abilityId==id or (not skill.craftedAbilityId and skill.boundAbilityId==id) then slotted=true end
+                                end
+                            end
+                        end
+                    end
+                    prerequisite=slotted
+                end
+                if matches and prerequisite then
+                    for _,key in ipairs(source.provides or {}) do
+                        Add(key,source.name,"mastery",source.conditions,true,true,"SELECTED_MASTERY")
+                    end
+                end
+            end
+        end
+    end
+    if self.ScanClassPassives and skills.known then
+        for key,cap in pairs(self:ScanClassPassives(skills,masteries)) do
+            for name,detail in pairs(cap.sourceDetails or {}) do
+                Add(key,name,"passive",detail.conditions,detail.mainBar,detail.backBar,detail.evidence)
+            end
+        end
+    end
+    if skills.championKnown then
+        for _,star in ipairs(skills.champion or {}) do
+            for _,source in ipairs(Catalog.championSources or {}) do
+                local matched=Normalize(star.name)==Normalize(source.name)
+                for _,id in ipairs(source.championIds or {}) do if star.id==id then matched=true end end
+                if matched then
+                    for _,key in ipairs(source.provides) do Add(key,source.name,"champion",source.conditions,true,true,"SLOTTED_CHAMPION") end
+                end
             end
         end
     end

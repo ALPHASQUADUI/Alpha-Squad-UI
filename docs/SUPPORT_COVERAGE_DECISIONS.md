@@ -1,13 +1,33 @@
-# Support Coverage — validated direction
+# Support Coverage — current approved direction
 
-Development continues on `support-coverage`. The user explicitly prohibited an alternative development branch, an automatic PR to main and an automatic merge. Main remains the stable baseline. The deleted `support-coverage` reference was restored to its preserved original commit before this integration.
+The active branch is **support-coverage**. Version **2.7.0-support-coverage-test.5** (`20705`) replaces the previous candidate's report/planning workflow with precombat build and group support checks. The maintainer authorized implementation, visual/performance improvements, audit and publication to this branch. No PR, merge or changes to `main` are authorized.
 
-The approved direction is broad observable-effect collection with raid-relevant display defaults; optional expected/actual equipment checks; four Champion slottables by role/build; committed Class Masteries; expected food and potion checks; combat potion-use evidence; optional non-mandatory poison checks; recipient- and target-specific uptime; closeable/reopenable reports and bounded raid/boss pull history; manual history reset and clearing on leaving/disbanding; recorded-loadout proposals; saved encounter profiles; and best-effort observations for non-ASUI group members with explicit missing-data labels.
+## User-facing scope
 
-Detailed checks use OFF, WARN and REQUIRED modes. No single meta loadout is mandatory. Source presence, manual assignment, observed uptime and proof of consumption/caster are different facts.
+- One consolidated **Trial** list and one **Dungeon** list of useful group support effects and sources.
+- Individual ON/OFF tracking with persistent preferences.
+- Clear effect explanations and known source/proc/recipient conditions in information tooltips.
+- Multiple known providers listed by `@UserID`; hover for the specific skill, set or mastery producing the duplicate.
+- A **Builds** button leading to the group roster, then each player's available equipment, skill bars, Champion slottables, masteries, food, potion and glyph details.
+- A **Food** group check, distinguishing verified absence from unknown state.
+- Scrolling lists and responsive, readable windows with persistent geometry.
+- **Ąlpha Şquad UI** branding, preserving the accented letters and ESO's standard UI font.
+- Visible library/setup guidance within the addon and repository.
 
-History labels use observed boss names and encounter-specific counters. Closing, automatic closing and reopening a report must not erase the stored report. A new fight closes deep planning/report windows. History must remain bounded independently of the user-selected number of pulls.
+Pull reports, history, uptime, expected-role loadout templates and whole-loadout proposals are retired from the active workflow. Existing settings namespaces and relevant preferences must survive the migration. There is no mandatory MT/OT/healer assignment workflow.
 
-Unsupported or stale peer fields are UNKNOWN. A non-ASUI user is not assigned guessed gear, CP, mastery choices or potion use. Class, visible effects and compatible library data can still contribute explicit positive evidence.
+## Evidence rules
 
-This test branch is the validation base. Completion of syntax tests, regression tests or an audit does not authorize a PR. In-game testing and a later explicit user PR request remain separate steps.
+A source is counted only when the available evidence establishes the corresponding equipment/skill/mastery requirement. One-bar set activation is valid if the required pieces are active on that bar. Class identity alone does not establish skill, passive or mastery selection.
+
+Source availability and live application are different facts. The UI must not promise twelve recipients for a six-player effect, proc activation, maintained duration or stacking merely because it identifies multiple providers.
+
+Native group data is partial. Remote gear, full skill bars, CP and mastery inspection require a compatible sender. LibGroupCombatStats provides compatible Ultimate/active-line data, not a full remote build API or mastery/passive proof. LibSetDetection v5 adds reported set identities and per-bar activation without the full suite, while respecting hidden/partial data. A small **AlphaSquadBuildShare** companion offers an alternative to installing the full suite, but still requires explicit installation/opt-in and LibGroupBroadcast.
+
+Unsupported, stale, malformed or incomplete data remains `UNKNOWN`. Missing observations are not automatically proof of missing food or missing equipment. No packet or manual claim should silently become stronger evidence than it provides.
+
+## Performance and release boundaries
+
+Use cached snapshots, coalesced build events and bounded sharing. Do not reintroduce a combat sampler or report history for these checks. Hidden views must not continually rebuild controls; disabled modules must stop unnecessary callbacks.
+
+Experimental sharing defaults OFF and uses provisional protocol IDs. Formal reservation and coexistence tests are required before a public sharing release. Deterministic tests, syntax success and a clean audit do not establish in-game acceptance or authorize a PR.

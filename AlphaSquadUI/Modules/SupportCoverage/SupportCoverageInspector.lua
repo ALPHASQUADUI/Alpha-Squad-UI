@@ -1,351 +1,349 @@
--- On-demand, paginated build inspection and pull reports. No OnUpdate handlers.
-local SC = AlphaSquadUI.Modules.SupportCoverage
-local C = AlphaSquadUI.Theme.colors
-local PAGE_SIZE = 12
-local ROLES = {"UNKNOWN","MT","OT","H1","H2","DD PARSE","DD SUPPORT"}
-
-local function SafeText(value)
-    return tostring(value or "UNKNOWN"):gsub("|", "||"):gsub("[\r\n]", " ")
+-- On-demand group build and food inspection. Controls are reused and scroll naturally.
+local SC=AlphaSquadUI and AlphaSquadUI.Modules and AlphaSquadUI.Modules.SupportCoverage
+if not SC then return end
+local UI=SC.UI
+local C=UI.colors
+local function Text(value,fallback)
+    if type(value)=="string" and value~="" then return value:gsub("%^.*$", "") end
+    return fallback or "Unknown"
 end
-local function Next(list, current)
-    for index, value in ipairs(list) do if value == current then return list[index % #list + 1] end end
-    return list[1]
+local function FoodText(food)
+    if not food or not food.verified then return "UNKNOWN",C.gold,"Food information is not available." end
+    if not food.active then return "NO FOOD",C.red,"No active food or drink was detected." end
+    return "FOOD ACTIVE",C.green,Text(food.name,"Food or drink active")
 end
-local function Label(parent, name, font, text, width, height, x, y)
-    local label = WINDOW_MANAGER:CreateControl(name, parent, CT_LABEL)
-    label:SetFont(font)
-    label:SetDimensions(width, height)
-    label:SetAnchor(TOPLEFT, parent, TOPLEFT, x, y)
-    label:SetColor(C.white[1], C.white[2], C.white[3], 1)
-    label:SetText(text or "")
-    label:SetVerticalAlignment(TEXT_ALIGN_CENTER)
-    label:SetMaxLineCount(1)
-    if label.SetWrapMode and TEXT_WRAP_MODE_ELLIPSIS then label:SetWrapMode(TEXT_WRAP_MODE_ELLIPSIS) end
-    return label
+local function PotionText(potion)
+    if potion and potion.known then
+        local name=Text(potion.name,"Potion selected")
+        local stock=potion.stack or potion.count
+        return name .. (stock and (" • " .. tostring(stock) .. " available") or ""),C.white
+    elseif potion and potion.selectionKnown then return "No potion selected",C.gold end
+    return "Selected potion unavailable",C.muted
 end
-local function Button(parent, name, text, x, y, width, action)
-    local button = WINDOW_MANAGER:CreateControl(name, parent, CT_CONTROL)
-    button:SetDimensions(width, 28)
-    button:SetAnchor(TOPLEFT, parent, TOPLEFT, x, y)
-    button:SetMouseEnabled(true)
-    local bg = WINDOW_MANAGER:CreateControl(name .. "BG", button, CT_TEXTURE)
-    bg:SetAnchorFill(button); bg:SetColor(0.04,0.065,0.10,1)
-    button.label = Label(button, name .. "Label", "ZoFontGameSmall", text, width-8, 28, 4, 0)
-    button.label:SetHorizontalAlignment(TEXT_ALIGN_CENTER)
-    button:SetHandler("OnMouseUp", function(_, which, inside)
-        if which == MOUSE_BUTTON_INDEX_LEFT and inside ~= false and action then action() end
-    end)
-    return button
+local function PlayerKey(player) return player and (player.key or player.displayName) end
+local function FreshSharedSample(updatedAt,maxAge)
+    if type(updatedAt)~="number" or updatedAt~=updatedAt or not SC.NowMs then return false end
+    local age=SC.NowMs()-updatedAt
+    return age>=0 and age<=(maxAge or 75000)
 end
-local function CreateWindow(name, title, close)
-    local win = WINDOW_MANAGER:CreateTopLevelWindow(name)
-    win:SetDimensions(1000, 750); win:SetAnchor(CENTER, GuiRoot, CENTER, 0, 0)
-    win:SetClampedToScreen(true); win:SetDrawTier(DT_HIGH); win:SetDrawLayer(DL_OVERLAY); win:SetDrawLevel(150)
-    win:SetMouseEnabled(true); win:SetMovable(true); win:SetHidden(true)
-    local bg = WINDOW_MANAGER:CreateControl(name .. "BG", win, CT_TEXTURE)
-    bg:SetAnchorFill(win); bg:SetColor(C.bg[1],C.bg[2],C.bg[3],0.99)
-    win.title = Label(win, name .. "Title", "ZoFontWinH2", title, 860, 35, 18, 10)
-    win.subtitle = Label(win, name .. "Subtitle", "ZoFontGameSmall", "", 960, 26, 18, 47)
-    Button(win, name .. "Close", "CLOSE", 900, 14, 80, close)
-    local drag = WINDOW_MANAGER:CreateControl(name .. "Drag", win, CT_CONTROL)
-    drag:SetDimensions(870, 40); drag:SetAnchor(TOPLEFT, win, TOPLEFT, 0, 0); drag:SetMouseEnabled(true)
-    drag:SetHandler("OnMouseDown", function(_, b) if b == MOUSE_BUTTON_INDEX_LEFT then win:StartMoving() end end)
-    drag:SetHandler("OnMouseUp", function(_, b) if b == MOUSE_BUTTON_INDEX_LEFT then win:StopMovingOrResizing() end end)
-    win.rows = {}
-    for index=1,PAGE_SIZE do
-        local row = WINDOW_MANAGER:CreateControl(name .. "Row" .. index, win, CT_CONTROL)
-        row:SetDimensions(960, 41); row:SetAnchor(TOPLEFT, win, TOPLEFT, 18, 168+(index-1)*43)
-        row.title = Label(row, name .. "RowTitle" .. index, "ZoFontGameBold", "", 800, 21, 5, 0)
-        row.detail = Label(row, name .. "RowDetail" .. index, "ZoFontGameSmall", "", 800, 20, 5, 20)
-        row.button = Button(row, name .. "RowAction" .. index, "", 817, 6, 138, function()
-            if row.action then row.action() end
-        end)
-        win.rows[index] = row
+local function ClassName(player)
+    if player and type(player.className)=="string" and player.className~="" then return Text(player.className) end
+    if player and player.classId and GetClassName then
+        local ok,name=pcall(GetClassName,GENDER_MALE or 0,player.classId)
+        if ok and name and name~="" then return Text(name) end
     end
-    win.footer = Label(win, name .. "Footer", "ZoFontGameSmall", "", 690, 26, 18, 708)
-    return win
-end
-local function RenderRows(win, rows, page)
-    local pages = math.max(1, math.ceil(#rows/PAGE_SIZE))
-    page = math.max(1, math.min(pages, page or 1))
-    for index, row in ipairs(win.rows) do
-        local data = rows[(page-1)*PAGE_SIZE + index]
-        row:SetHidden(data == nil)
-        if data then
-            row.title:SetText(SafeText(data.title))
-            row.detail:SetText(SafeText(data.detail or ""))
-            row.button.label:SetText(data.button or "")
-            row.button:SetHidden(data.action == nil)
-            row.action = data.action
-            local color = data.color or C.white
-            row.title:SetColor(color[1],color[2],color[3],1)
-        else row.action = nil end
-    end
-    win.footer:SetText(string.format("Page %d/%d  |  %d entries  |  UNKNOWN never means FAIL or PASS", page, pages, #rows))
-    return page
-end
-
-function SC:ResizeInspector()
-    for _, win in ipairs({self.inspectorWindow or false, self.reportWindow or false}) do
-        if win then win:SetScale(math.max(0.1, math.min(1, (GuiRoot:GetWidth()-24)/1000, (GuiRoot:GetHeight()-24)/750))) end
-    end
+    return "Class unavailable"
 end
 function SC:GetInspectedPlayer()
-    local players = self.roster or {}
-    self.inspectorPlayer = math.max(1, math.min(#players, self.inspectorPlayer or 1))
-    return players[self.inspectorPlayer] or self.localSnapshot
+    local key=self.inspectorPlayerKey
+    for _,player in ipairs(self.roster or {}) do if PlayerKey(player)==key then return player end end
+    return nil
+end
+function SC:ResizeInspector()
+    if self.matrixWindow and not self.matrixWindow:IsHidden() then self:RefreshMatrix() end
+    if self.inspectorWindow and not self.inspectorWindow:IsHidden() then self:RefreshInspector() end
 end
 function SC:CloseInspector()
     if self.inspectorWindow then self.inspectorWindow:SetHidden(true) end
-    self:ApplyVisibility()
+    UI.ClearTooltip()
+    if AlphaSquadUI.Settings.RefreshModuleVisibility then AlphaSquadUI.Settings.RefreshModuleVisibility() else self:ApplyVisibility() end
+end
+function SC:RequestInspectedBuild(key)
+    if not key or not self.RequestPlayerBuild then return false end
+    local ok,message=self:RequestPlayerBuild(key)
+    self.inspectorRequestError=not ok and message or nil
+    self.inspectorRequestKey=key
+    return ok
 end
 function SC:OpenInspector(tab)
-    if self.inCombat then return end
-    if self.reportWindow then self:ClosePullReport() end
-    if self.matrixWindow and not self.matrixWindow:IsHidden() then self:CloseMatrix() end
-    self.inspectorTab, self.inspectorPage = tab or "CHECKS", 1
-    if not self.inspectorWindow then
-        local win = CreateWindow("AlphaSquadSupportInspector", "SUPPORT COVERAGE - INSPECTOR", function() SC:CloseInspector() end)
-        self.inspectorWindow = win
-        for index, key in ipairs({"CHECKS","BUILD","EXPECTED","EFFECTS","PLANNER","HISTORY"}) do
-            Button(win, "AlphaSquadInspectorTab" .. key, key, 18+(index-1)*125, 82, 118, function()
-                SC.inspectorTab, SC.inspectorPage = key, 1; SC:RefreshInspector()
-            end)
+    if self.inCombat then return false end
+    self.inspectorTab=tab=="FOOD" and "FOOD" or "BUILD"
+    if not self.inspectorWindow then self:CreateInspectorWindow() end
+    UI.ShowWindow("supportBuilds",self.inspectorWindow)
+    if self.inspectorTab=="BUILD" and self.inspectorPlayerKey and self.RequestPlayerBuild then self:RequestInspectedBuild(self.inspectorPlayerKey) end
+    self:RefreshInspector(); return true
+end
+function SC:OpenFoodCheck() return self:OpenInspector("FOOD") end
+function SC:CreateInspectorWindow()
+    local win=UI.Window("AlphaSquadSupportInspector","Ąlpha Şquad UI  •  Builds",function() SC:CloseInspector() end)
+    self.inspectorWindow=win; UI.RegisterWindow("supportBuilds",win,function() SC:CloseInspector() end)
+    win.buildTab=UI.Button(win,"AlphaSquadInspectorBuildTab","BUILDS",112,30,function() SC.inspectorTab="BUILD"; SC:RefreshInspector() end)
+    win.buildTab:SetAnchor(TOPLEFT,win,TOPLEFT,18,96)
+    win.foodTab=UI.Button(win,"AlphaSquadInspectorFoodTab","FOOD CHECK",130,30,function() SC.inspectorTab="FOOD"; SC:RefreshInspector() end)
+    win.foodTab:SetAnchor(TOPLEFT,win,TOPLEFT,138,96)
+    win.coverage=UI.Button(win,"AlphaSquadInspectorCoverage","COVERAGE",124,30,function() SC:OpenMatrix() end)
+    win.coverage:SetAnchor(TOPRIGHT,win,TOPRIGHT,-18,96)
+    win.request=UI.Button(win,"AlphaSquadInspectorRequest","REFRESH BUILD",144,30,function()
+        if SC.inspectorPlayerKey and SC.RequestPlayerBuild then
+            SC:RequestInspectedBuild(SC.inspectorPlayerKey); SC:RefreshInspector()
         end
-        Button(win, "AlphaSquadInspectorPrevPlayer", "NEXT PLAYER", 18, 120, 126, function()
-            SC.inspectorPlayer = ((SC.inspectorPlayer or 1) % math.max(1,#SC.roster))+1; SC:RefreshInspector()
-        end)
-        win.roleButton = Button(win, "AlphaSquadInspectorRole", "ROLE", 154, 120, 155, function()
-            local player = SC:GetInspectedPlayer()
-            if player then
-                SC.sv.roleOverrides[player.key or player.displayName] = Next(ROLES, player.role)
-                SC:SanitizePlanningSettings()
-                SC:Refresh("inspector role")
-            end
-        end)
-        Button(win, "AlphaSquadInspectorCapture", "CAPTURE AS EXPECTED", 319, 120, 184, function()
-            local player = SC:GetInspectedPlayer()
-            if player then
-                local _, message = SC:CaptureExpectedBuild(player.role, player, player.key or player.displayName)
-                SC.inspectorNotice = message; SC:RefreshInspector()
-            end
-        end)
-        Button(win, "AlphaSquadInspectorClearTemplate", "CLEAR EXPECTED", 513, 120, 152, function()
-            local player = SC:GetInspectedPlayer()
-            if player then
-                local _, key = SC:GetExpectedTemplate(player)
-                SC.sv.buildTemplates[key] = nil
-                local playerKey = player.key or player.displayName
-                if playerKey then
-                    local scoped = tostring(SC.sv.activeProfile) .. ":" .. playerKey
-                    if SC.sv.playerTemplates[scoped] == key then SC.sv.playerTemplates[scoped] = nil end
-                    if SC.sv.playerTemplates[playerKey] == key then SC.sv.playerTemplates[playerKey] = nil end
-                end
-                SC:Refresh("clear expected"); SC:RefreshInspector()
-            end
-        end)
-        Button(win, "AlphaSquadInspectorResetHistory", "RESET HISTORY", 785, 82, 195, function()
-            if SC.resetConfirmAt and SC.NowMs()-SC.resetConfirmAt < 5000 then
-                SC.resetConfirmAt=nil; SC:ResetHistory("Manual reset"); SC.inspectorNotice="History cleared. Build settings were preserved."
-            else SC.resetConfirmAt=SC.NowMs(); SC.inspectorNotice="Click RESET HISTORY again within five seconds to confirm." end
-            SC:RefreshInspector()
-        end)
-        Button(win, "AlphaSquadInspectorPrevious", "PREVIOUS", 715, 708, 120, function()
-            SC.inspectorPage=math.max(1,(SC.inspectorPage or 1)-1); SC:RefreshInspector()
-        end)
-        Button(win, "AlphaSquadInspectorNext", "NEXT", 845, 708, 135, function()
-            SC.inspectorPage=(SC.inspectorPage or 1)+1; SC:RefreshInspector()
-        end)
-    end
-    self:ResizeInspector(); self.inspectorWindow:SetHidden(false); self:RefreshInspector(); self:ApplyVisibility()
+    end)
+    win.request:SetAnchor(TOPRIGHT,win.coverage,TOPLEFT,-8,0)
+    win.playerList=UI.Scroll(win,"AlphaSquadInspectorPlayers")
+    win.playerList:SetAnchor(TOPLEFT,win,TOPLEFT,18,146); win.playerList:SetAnchor(BOTTOMLEFT,win,BOTTOMLEFT,18,-64)
+    win.detailList=UI.Scroll(win,"AlphaSquadInspectorDetails")
+    win.detailList:SetAnchor(BOTTOMRIGHT,win,BOTTOMRIGHT,-16,-64)
+    win.footer:SetText("Select a player to request their build. Equipment, skill bars and Champion Points require a compatible sender. Unknown means unavailable or incomplete data.")
 end
 
 function SC:GetInspectorRows()
-    local rows, player = {}, self:GetInspectedPlayer()
-    local function Add(title, detail, button, action, color)
-        rows[#rows + 1] = {title=title, detail=detail, button=button, action=action, color=color}
+    local rows={}
+    local function Add(title,detail,color,link,tooltip,section)
+        rows[#rows+1]={title=title,detail=detail or "",color=color or C.white,link=link,tooltip=tooltip,section=section}
     end
-    if self.inspectorTab == "CHECKS" then
-        for _, key in ipairs(self.Audit.order) do
-            Add(self.Audit.labels[key], "OFF: not enforced | WARN: informational | REQUIRED: mismatch blocks readiness", self.sv.checkModes[key], function()
-                self.sv.checkModes[key]=Next({"OFF","WARN","REQUIRED"}, self.sv.checkModes[key]); self:Refresh("check mode"); self:RefreshInspector()
-            end)
+    local function Section(title) Add(title,"",C.orange,nil,nil,true) end
+    if self.inspectorTab=="FOOD" then
+        Section("GROUP FOOD & POTION CHECK")
+        for _,player in ipairs(self.roster or {}) do
+            local status,color,food=FoodText(player.food)
+            local unavailable=player.connected==false and "OFFLINE • " or player.dead and "DEAD • " or ""
+            Add(unavailable..Text(player.displayName,"Unknown player").."  •  "..status,food.."\n"..PotionText(player.potion),color,nil,
+                "Food presence can be verified independently of a full build. A selected potion is preparation evidence only.")
         end
-        for _, item in ipairs({
-            {"checkFoodPresence","Food presence check"}, {"checkMissingGlyphs","Missing armor glyph check"},
-            {"historyEnabled","Record bounded raid history"}, {"persistHistory","Preserve history on UI reload in the same group"}, {"autoContextProfile","Auto-load a saved encounter profile"}, {"trackPotionBuffs","Record potion-related buff coverage (source unverified)"}, {"reportAutoOpen","Open report after each pull"},
-            {"collectAllEffects","Collect all observable local effect IDs"}, {"logRawEffects","Include raw IDs in history (higher memory use)"},
-            {"hideInMenus","Hide HUD in ESO menus"}, {"showReadyBanner","Show readiness banner"},
-        }) do
-            local key, label = item[1], item[2]
-            Add(label, "Independent optional setting. No compulsory meta build.", self.sv[key] and "ON" or "OFF", function()
-                self.sv[key]=not self.sv[key]; self:Refresh("option"); self:RefreshInspector()
-            end)
-        end
-        Add("Champion discipline to compare", "Four slottables in the selected discipline; order is ignored, committed point values are checked.", self.sv.championScope, function()
-            self.sv.championScope=Next({"COMBAT","CONDITIONING","WORLD","ALL"},self.sv.championScope); self:Refresh("champion scope"); self:RefreshInspector()
-        end)
-        Add("Minimum measured pull coverage", "Below this threshold an uptime target is INSUFFICIENT_DATA, never a pass or failure.", tostring(self.sv.minimumMeasuredPercent).."%", function()
-            self.sv.minimumMeasuredPercent=Next({0,50,80,90,95,100},self.sv.minimumMeasuredPercent); self:RefreshInspector()
-        end)
-        Add("Maximum stored pulls", "Oldest pulls are evicted. History resets after leaving/disbanding the group.", tostring(self.sv.historyLimit), function()
-            self.sv.historyLimit=Next({5,10,20,30,50}, self.sv.historyLimit)
-            self.History.Trim(self:EnsureHistorySession(),self.sv.historyLimit); self:SaveHistorySession()
-            self:RefreshInspector()
-        end)
-        Add("Report auto-close", "A new fight always closes the window. Closing never deletes the stored pull.", tostring(self.sv.reportAutoCloseSeconds) .. " seconds", function()
-            self.sv.reportAutoCloseSeconds=Next({0,10,20,30,60,120}, self.sv.reportAutoCloseSeconds); self:RefreshInspector()
-        end)
-        Add("Experimental test sharing", "Unreserved IDs 507-510. Controlled tests only; public release is blocked.", self.sv.experimentalSharing and "ON" or "OFF", function()
-            self:SetExperimentalSharing(not self.sv.experimentalSharing)
-            if self.sv.experimentalSharing then self:MarkScanDirty("test sharing") end
-            self:RefreshInspector()
-        end, C.gold)
-    elseif self.inspectorTab == "PLANNER" then
-        Add("Build plan", "Search recorded loadouts only. No equipment changes are made.", "CALCULATE", function()
-            local _,message=self:ComputeBuildPlan();self.inspectorNotice=message;self:RefreshInspector()
-        end)
-        if self.buildPlan then
-            local plan=self.buildPlan
-            Add((plan.stale and "STALE - " or "").."Suggested changes: "..plan.changes,plan.notice)
-            Add("Uncovered requirements",#plan.missing>0 and table.concat(plan.missing,", ") or "All selected requirements have a potential source.")
-            if plan.lockFailures>0 then Add("Assignment locks need review",tostring(plan.lockFailures).." locked requirements cannot be met by this proposal.") end
-            for _,choice in ipairs(plan.choices) do
-                local effects={};for key in pairs(choice.candidate.capabilities) do effects[#effects+1]=self.Catalog.effects[key].label end;table.sort(effects)
-                Add(choice.player.." - "..choice.candidate.label, table.concat(effects,", "),nil,nil,choice.candidate.current and C.white or C.gold)
+        if #(self.roster or {})==0 then Add("No group members", "Join a group to review its preparation.",C.muted) end
+        return rows
+    end
+    local player=self:GetInspectedPlayer()
+    if not player then
+        Add("Choose a player from the group list","Select an @UserID to inspect equipment, both skill bars, Champion Points, Class Masteries and consumables.",C.gold)
+        return rows
+    end
+    local details,status
+    if self.GetPlayerBuildDetails then details,status=self:GetPlayerBuildDetails(PlayerKey(player))
+    elseif player.unitTag=="player" then details=self.localSnapshot end
+    Add(Text(player.displayName,"Unknown player"),ClassName(player)..(player.connected==false and " • Offline" or ""),C.orange)
+    if not details then
+        Add("Detailed build unavailable",(self.inspectorRequestKey==PlayerKey(player) and self.inspectorRequestError) or status or "This player has not shared a compatible build snapshot. ESO does not expose their equipment or skill bars to other group members.",C.gold)
+        local foodStatus,color,food=FoodText(player.food); Add("Food • "..foodStatus,food,color)
+        Add("Potion",PotionText(player.potion),C.muted)
+        if player.connected~=false then
+            local sharedSets=player.externalSets
+            if sharedSets and sharedSets.sessionValid==true and sharedSets.fresh==true then
+                Section("SHARED SET COUNTS • LAST REPORTED")
+                do
+                    local knownBars=sharedSets.knownBars or {}
+                    local function Count(value,known)
+                        return known==true and type(value)=="number" and tostring(value) or "unknown"
+                    end
+                    local barStatus={}
+                    for _,bar in ipairs({{"body","Body & jewelry"},{"front","Front bar"},{"back","Back bar"}}) do
+                        barStatus[#barStatus+1]=bar[2]..": "..(knownBars[bar[1]] and "reported" or "unknown")
+                    end
+                    local ageText="Report age unavailable"
+                    if SC.NowMs and type(sharedSets.updatedAt)=="number" then
+                        local age=math.max(0,SC.NowMs()-sharedSets.updatedAt)
+                        if age==age and age<math.huge then
+                            if age<10000 then ageText="Last report: just now"
+                            elseif age<60000 then ageText="Last report: "..math.floor(age/1000).." seconds ago"
+                            elseif age<3600000 then ageText="Last report: "..math.floor(age/60000).." minutes ago"
+                            else ageText="Last report: "..math.floor(age/3600000).." hours ago" end
+                        end
+                    end
+                    Add("LibSetDetection • "..ageText,table.concat(barStatus," • ").."\nThis library reports changes during the current group session. Set counts do not prove an active proc or reveal equipment slots, traits or glyphs.",C.muted)
+                    if sharedSets.incognito then
+                        Add("Some set information is private","Only sets explicitly disclosed by this player are shown. Other set names or counts are unavailable.",C.gold)
+                    end
+                    for _,set in ipairs(sharedSets.setList or {}) do
+                        local counts="Body & jewelry: "..Count(set.bodyCount,knownBars.body)
+                            .." • Front weapon pieces: "..Count(set.frontWeaponCount,knownBars.front)
+                            .." • Back weapon pieces: "..Count(set.backWeaponCount,knownBars.back)
+                        counts=counts.."\nFront total: "..Count(set.mainCount,set.frontKnown).." • Back total: "..Count(set.backCount,set.backKnown)
+                        local active={}
+                        if set.frontKnown and set.activeOnMain then active[#active+1]="front" end
+                        if set.backKnown and set.activeOnBack then active[#active+1]="back" end
+                        if #active>0 then counts=counts.."\nQualifying set bonus reported on "..table.concat(active," + ").." bar." end
+                        Add(Text(set.name,"Set name unavailable"),counts,C.white)
+                    end
+                    if #(sharedSets.setList or {})==0 then
+                        Add("No disclosed set counts",sharedSets.complete and "The complete report contains no named set bonuses." or "The available report is incomplete or private; missing sets cannot be ruled out.",C.muted)
+                    end
+                end
+            end
+            local ultimates={}
+            for _,ultimate in ipairs(player.externalUltimates or {}) do
+                if (ultimate.bar=="front" or ultimate.bar=="back") and FreshSharedSample(ultimate.updatedAt) then
+                    ultimates[ultimate.bar]=ultimate
+                end
+            end
+            if next(ultimates) then
+                Section("SHARED ULTIMATES • PARTIAL")
+                for _,bar in ipairs({{"front","Front bar ultimate"},{"back","Back bar ultimate"}}) do
+                    local ultimate=ultimates[bar[1]]
+                    Add(bar[2],ultimate and (Text(ultimate.name,"Ultimate name unavailable").."\nLibGroupCombatStats • reported ultimate slot")
+                        or "UNKNOWN • no fresh ultimate slot was reported for this bar.",ultimate and C.white or C.muted)
+                end
+            end
+            local lines=player.externalSkillLines
+            if lines and FreshSharedSample(lines.updatedAt) and #(lines.names or {})>0 then
+                Section("SHARED CLASS SKILL LINES • PARTIAL")
+                local names={};for _,name in ipairs(lines.names) do names[#names+1]=Text(name,"Skill line name unavailable") end
+                Add(table.concat(names," • "),"LibGroupCombatStats • reported class skill lines only. This does not reveal slotted skills, learned passives or Class Mastery selections.",C.white)
             end
         end
-        if player then
-            Add("Saved loadouts for "..tostring(player.displayName),"Capture verified builds with CAPTURE AS EXPECTED. Up to four alternatives per character.","CLEAR SAVED",function()
-                self.sv.loadoutLibrary[player.key or player.displayName]=nil;self.buildPlan=nil;self:RefreshInspector()
-            end)
+        Section("AVAILABLE SUPPORT SOURCES")
+        for _,key in ipairs(self.Catalog:GetAllEffectKeys()) do
+            if player.capabilities and player.capabilities[key] then
+                Add(self.Catalog.effects[key].label,UI.PlayerSources(player,key),C.white,nil,self.Catalog:GetEffectTooltip(key))
+            end
         end
-    elseif self.inspectorTab == "EFFECTS" then
-        local selected=self.inspectorEffect
-        if selected and self.Catalog.effects[selected] then
-            local effect=self.Catalog.effects[selected]
-            local rule=self:GetEffectRule(selected)
-            local override=self.sv.effectRules[selected] or {};self.sv.effectRules[selected]=override
-            Add(effect.label,"Profile-specific requirement; target rules are optional.","ALL EFFECTS",function() self.inspectorEffect=nil;self.inspectorPage=1;self:RefreshInspector() end)
-            local wanted=false;for _,key in ipairs(self.Catalog:GetRequirements(self.sv.activeProfile,self.sv)) do if key==selected then wanted=true end end
-            Add("Required in "..self.sv.activeProfile,"OFF does not discard raw observations.",wanted and "ON" or "OFF",function()
-                self.sv.profileOverrides[self.sv.activeProfile]=self.sv.profileOverrides[self.sv.activeProfile] or {}
-                self.sv.profileOverrides[self.sv.activeProfile][selected]=not wanted;self:Refresh("effect requirement")
-            end)
-            Add("Target recipients","ALL means all eligible online, living players; boss effects remain per target.",rule.targetRole or "ALL",function()
-                local role=Next({"ALL","MT","OT","H1","H2","DD PARSE","DD SUPPORT"},rule.targetRole or "ALL")
-                override.targetRole=role~="ALL" and role or nil;self:RefreshInspector()
-            end)
-            Add("Expected recipient count","0 uses all eligible recipients; the set's default limit is preserved until changed.",tostring(rule.targetCount or 0),function()
-                override.targetCount=Next({0,1,2,3,4,5,6,8,10,12},rule.targetCount or 0);self:RefreshInspector()
-            end)
-            Add("Required stacks","Unknown remote stack data is never treated as full stacks.",tostring(rule.expectedStacks),function()
-                override.expectedStacks=Next({1,2,3,4,5,6,10},rule.expectedStacks);self:RefreshInspector()
-            end)
-            Add("Target uptime","0 disables the target. This is compared only against measured, known time.",tostring(rule.uptimeTarget).."%",function()
-                override.uptimeTarget=Next({0,50,60,70,75,80,85,90,95,98,100},rule.uptimeTarget);self:RefreshInspector()
-            end)
-            Add("Exact effect identifiers","Register an observed ID with /assupport custom "..selected.." <abilityId>. No unverified ID is invented.")
+        return rows
+    end
+    if status and status~="" then Add("Build snapshot",status,C.muted) end
+    Section("EQUIPMENT • FEET TO HEAD")
+    local equipment=details.equipment or {}
+    local slots=equipment.slots
+    if not slots or #slots==0 then
+        if #(equipment.items or {})==0 then Add("Equipment unavailable","No detailed equipment was shared.",C.muted) end
+        slots={}
+        for _,item in ipairs(equipment.items or {}) do slots[#slots+1]={item=item,slotName=item.slotName or "Equipment",known=true} end
+    end
+    for _,slot in ipairs(slots) do
+        local item=slot.item
+        local label=Text(slot.slotName,"Equipment")
+        if slot.known==false then Add(label,"UNKNOWN • this slot could not be read.",C.muted)
+        elseif slot.empty or not item then Add(label,"Empty",C.gold)
         else
-            local wanted={};for _,key in ipairs(self.Catalog:GetRequirements(self.sv.activeProfile,self.sv)) do wanted[key]=true end
-            for _,key in ipairs(self.Catalog:GetAllEffectKeys()) do
-                local effect=self.Catalog.effects[key]
-                Add(effect.label,effect.category.." | "..(wanted[key] and "Selected requirement" or "Optional / not required"),"CONFIGURE",function()
-                    self.inspectorEffect=key;self.inspectorPage=1;self:RefreshInspector()
-                end)
-            end
-        end
-    elseif self.inspectorTab == "HISTORY" then
-        local pulls=self:GetHistoryPulls()
-        for index=#pulls,1,-1 do
-            local pull=pulls[index]
-            Add(pull.label, string.format("%s | %.1fs | %d metrics%s", pull.meta.zoneName, pull.durationMs/1000, #pull.rows, pull.truncated and " | TRUNCATED" or ""), "OPEN REPORT", function() self:OpenPullReport(pull) end)
-        end
-        if #pulls==0 then Add("No stored pulls", "History clears on leaving/disbanding. Optional UI-reload recovery requires the same group and expires after six hours.") end
-    elseif self.inspectorTab == "EXPECTED" then
-        local audit=self:EvaluateBuildAudit(player)
-        if #audit.rows==0 then Add("All expectation checks are OFF", "Capture a known build, then enable only the desired checks in CHECKS.") end
-        for _, check in ipairs(audit.rows) do
-            Add(check.label .. " - " .. check.status, check.reason .. " Expected: " .. tostring(check.expected or "not configured") .. " | Actual: " .. tostring(check.actual or "unavailable"), nil, nil,
-                check.status=="PASS" and C.green or check.status=="MISMATCH" and C.gold or C.muted)
-        end
-    else
-        for _, key in ipairs(self.Audit.order) do
-            local value=self.Audit.Value(player,key)
-            local hashKey=key=="champion" and "champion_"..string.lower(self.sv.championScope or "COMBAT") or key
-            local signatureMatches=not player or not player.buildDetailFingerprint or not player.detailBuildFingerprint
-                or player.buildDetailFingerprint==player.detailBuildFingerprint
-            local shared=player and signatureMatches and player.auditHashes and player.detailAt
-                and self.NowMs()-math.max(player.detailAt,player.detailAliveAt or 0)<=120000
-                and player.auditHashes[hashKey]~=nil
-            local detail=value or (shared and "Shared signature available; the private raw value is not transmitted.")
-                or ((player and player.asui) and "Unavailable or not shared by this ASUI client." or "No ASUI build data; this field cannot be analyzed.")
-            Add(self.Audit.labels[key],detail,nil,nil,value and C.white or shared and C.gold or C.muted)
-        end
-        if player then
-            for _, set in ipairs(player.equipment and player.equipment.setList or {}) do
-                Add("SET - " .. tostring(set.name), string.format("ID %s | MAIN %s | BACK %s | Presence is not proof of proc uptime", tostring(set.id), tostring(set.mainCount or "?"), tostring(set.backCount or "?")))
-            end
-            for _, star in ipairs(player.skills and player.skills.champion or {}) do Add("CHAMPION - " .. tostring(star.name), "Slot " .. star.slot .. " | ID " .. star.id .. " | Spent points " .. tostring(star.points or "UNKNOWN")) end
-            for _, mastery in ipairs(player.masteries and player.masteries.selected or {}) do Add("CLASS MASTERY - " .. tostring(mastery.name), "ID " .. mastery.id .. " | Committed selection; eligibility checked separately") end
+            local name=Text(item.name,"Item name unavailable")
+            local parts={Text(item.setName,"No set bonus"),"Trait: "..Text(item.traitName)}
+            if item.hasEnchant==false then parts[#parts+1]="Glyph: missing"
+            elseif item.hasEnchant==true then parts[#parts+1]="Glyph: "..Text(item.enchantName,Text(item.enchant,"Present"))
+            else parts[#parts+1]="Glyph: unknown" end
+            Add(label.." • "..name,table.concat(parts,"  •  "),item.hasEnchant==false and C.gold or C.white,item.link,
+                item.enchantDescription and item.enchantDescription~="" and item.enchantDescription or nil)
         end
     end
+    Section("SET BONUSES • FRONT / BACK")
+    for _,set in ipairs(equipment.setList or {}) do
+        local main,back=tonumber(set.mainCount),tonumber(set.backCount)
+        local count="Front: "..(main and tostring(main) or "unknown").." pieces  •  Back: "..(back and tostring(back) or "unknown").." pieces"
+        local active={}; if set.activeOnMain then active[#active+1]="front" end; if set.activeOnBack then active[#active+1]="back" end
+        Add(Text(set.name,"Set name unavailable"),count..(#active>0 and ("\nQualifying bonus available on "..table.concat(active," + ").." bar.") or "\nPiece counts do not prove a proc is active."))
+    end
+    local skills=details.skills or {}
+    for _,bar in ipairs({{"primary","FRONT BAR SKILLS"},{"backup","BACK BAR SKILLS"}}) do
+        Section(bar[2])
+        local entries=skills[bar[1]] or {}
+        if #entries==0 then Add("Skill bar unavailable",skills.known and "No skills are slotted." or "Skill slots were not shared or could not be read.",C.muted) end
+        for index,skill in ipairs(entries) do
+            local position=tonumber(skill.slot)
+            position=position and position>=3 and position<=7 and position-2 or index
+            local scripts={}
+            for _,script in ipairs(skill.scripts or {}) do scripts[#scripts+1]=Text(script.name,"Script unavailable") end
+            local detail=Text(skill.lineName,"Skill line unavailable")
+            if #scripts>0 then detail=detail.."\nScripts: "..table.concat(scripts," • ") end
+            Add((skill.ultimate and "Ultimate • " or "Skill "..position.." • ")..Text(skill.name,"Skill name unavailable"),detail,C.white,nil,skill.description)
+        end
+    end
+    Section("CHAMPION SLOTTABLES")
+    local disciplineNames={COMBAT="Warfare",CONDITIONING="Fitness",WORLD="Craft"}
+    local stars=skills.champion or {}
+    if #stars==0 then Add("Champion Points unavailable",skills.championKnown and "No Champion stars are slotted." or "Champion selections were not shared or could not be read.",C.muted) end
+    for _,star in ipairs(stars) do
+        Add(Text(star.name,"Champion star name unavailable"),(disciplineNames[star.discipline] or "Discipline unavailable").." • "..(star.points and tostring(star.points).." committed points" or "Points unavailable"),C.white,nil,star.description)
+    end
+    Section("CLASS MASTERIES & SKILL LINES")
+    local masteries=details.masteries or {}
+    if masteries.known~=true then Add("Class Masteries incomplete","Some committed mastery or prerequisite information is unavailable.",C.gold)
+    elseif masteries.eligible==false then Add("Class Masteries inactive","The current class skill line selection does not meet mastery eligibility.",C.gold) end
+    if #(masteries.selected or {})==0 then Add("No selected masteries",masteries.known and "No committed Class Mastery selection was detected." or "Mastery selections have not been verified.",C.muted) end
+    for _,mastery in ipairs(masteries.selected or {}) do Add(Text(mastery.name,"Mastery name unavailable"),masteries.eligible and "Committed selection • eligibility met" or "Committed selection • eligibility not confirmed",C.white,nil,mastery.description) end
+    for _,line in ipairs(masteries.skillLines or {}) do
+        if not line.mastery then Add(Text(line.name,"Skill line unavailable"),line.active==false and "Inactive skill line" or (line.native==false and "Active subclass skill line" or "Active class skill line"),C.muted) end
+    end
+    if #(masteries.passives or {})>0 then
+        Section("COMMITTED CLASS PASSIVES")
+        for _,passive in ipairs(masteries.passives) do Add(Text(passive.name,"Passive name unavailable"),Text(passive.lineName,"Purchased class passive"),C.white,nil,passive.description) end
+    end
+    Section("CONSUMABLES & MUNDUS")
+    local foodStatus,color,food=FoodText(player.food or details.food); Add("Food • "..foodStatus,food,color)
+    local currentPotion=player.potion or details.potion
+    local potion,potionColor=PotionText(currentPotion); Add("Selected potion",potion,potionColor,currentPotion and currentPotion.link)
+    local mundus=details.mundus or {}
+    Add("Mundus",#(mundus.names or {})>0 and table.concat(mundus.names," • ") or (mundus.known and "No Mundus detected" or "Mundus unavailable"),C.muted)
     return rows
 end
 
 function SC:RefreshInspector()
     local win=self.inspectorWindow
     if not win or win:IsHidden() then return end
-    local player=self:GetInspectedPlayer()
-    local heading=player and ((player.displayName or "player") .. " | " .. tostring(player.role) .. " | " .. tostring(player.dataQuality)) or "No player data"
-    win.subtitle:SetText(SafeText(self.inspectorNotice or (self.inspectorTab .. " | " .. heading)))
-    win.roleButton.label:SetText("ROLE: " .. tostring(player and player.role or "UNKNOWN"))
-    self.inspectorPage=RenderRows(win,self:GetInspectorRows(),self.inspectorPage)
-end
-
-function SC:ClosePullReport()
-    local win=self.reportWindow
-    if win then win:SetHidden(true); win.report=nil end
-    self.reportGeneration=(self.reportGeneration or 0)+1
-    if self.ApplyVisibility then self:ApplyVisibility() end
-end
-function SC:OpenPullReport(report)
-    if not report or self.inCombat then return end
-    if self.inspectorWindow then self.inspectorWindow:SetHidden(true) end
-    if self.matrixWindow and not self.matrixWindow:IsHidden() then self:CloseMatrix() end
-    if not self.reportWindow then
-        local win=CreateWindow("AlphaSquadSupportPullReport","SUPPORT PERFORMANCE",function() SC:ClosePullReport() end)
-        self.reportWindow=win
-        Button(win,"AlphaSquadReportPrevious","PREVIOUS",715,708,120,function() win.page=math.max(1,(win.page or 1)-1); SC:RefreshPullReport() end)
-        Button(win,"AlphaSquadReportNext","NEXT",845,708,135,function() win.page=(win.page or 1)+1; SC:RefreshPullReport() end)
-        Button(win,"AlphaSquadReportHistory","OPEN HISTORY",18,82,155,function() SC:ClosePullReport(); SC:OpenInspector("HISTORY") end)
-        Label(win,"AlphaSquadReportEvidence","ZoFontGameSmall","Uptime is measured time only. Unknown time is shown separately. Assigned owners are not confirmed casters.",960,30,18,122)
+    local width=UI.FitWindow(win); local foodMode=self.inspectorTab=="FOOD"
+    win.title:SetText("Ąlpha Şquad UI  •  "..(foodMode and "Food check" or "Builds"))
+    win.subtitle:SetText(foodMode and "Check food presence and the selected potion for every player before combat." or "Select an @UserID • inspect an on-demand snapshot • hover items, skills and stars for details")
+    UI.Color(win.buildTab.label,not foodMode and C.orange or C.muted); UI.Color(win.foodTab.label,foodMode and C.orange or C.muted)
+    win.request:SetHidden(foodMode or not self:GetInspectedPlayer())
+    local playerWidth=width<850 and 178 or 226
+    win.playerList:SetWidth(playerWidth)
+    win.playerList:SetHidden(foodMode)
+    win.detailList:ClearAnchors(); win.detailList:SetAnchor(TOPLEFT,win,TOPLEFT,foodMode and 18 or playerWidth+32,146)
+    win.detailList:SetAnchor(BOTTOMRIGHT,win,BOTTOMRIGHT,-16,-64)
+    local detailWidth=width-(foodMode and 64 or playerWidth+78)
+    local roster=self.roster or {}
+    if not foodMode then
+        for index,player in ipairs(roster) do
+            local row=win.playerList.rows[index]
+            if not row then
+                row=UI.Button(win.playerList.content,"AlphaSquadInspectorPlayer"..index,"",playerWidth-22,54,function(button)
+                    SC.inspectorPlayerKey=PlayerKey(button.player)
+                    if SC.RequestPlayerBuild then SC:RequestInspectedBuild(SC.inspectorPlayerKey) end
+                    local scroll=win.detailList.viewport
+                    if scroll then scroll.offset=0; scroll.UpdateBounds() end
+                    SC:RefreshInspector()
+                end)
+                row.label:ClearAnchors(); row.label:SetAnchor(TOPLEFT,row,TOPLEFT,6,2); row.label:SetHeight(27)
+                row.label:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
+                row.detail=UI.Label(row,"AlphaSquadInspectorPlayerDetail"..index,"","ZoFontGameSmall",C.muted)
+                row.detail:SetAnchor(TOPLEFT,row,TOPLEFT,6,29); row.detail:SetHeight(22)
+                win.playerList.rows[index]=row
+            end
+            row.player=player; row:SetHidden(false); row:ClearAnchors(); row:SetAnchor(TOPLEFT,win.playerList.content,TOPLEFT,0,(index-1)*59)
+            row:SetWidth(playerWidth-22); row.label:SetWidth(playerWidth-34); row.detail:SetWidth(playerWidth-34)
+            row.label:SetText(UI.Text(player.displayName or "Unknown player"))
+            UI.Color(row.label,PlayerKey(player)==self.inspectorPlayerKey and C.orange or C.white)
+            local foodStatus,foodColor=FoodText(player.food)
+            row.detail:SetText(player.connected==false and "OFFLINE" or foodStatus); UI.Color(row.detail,player.connected==false and C.muted or foodColor)
+        end
+        for index=#roster+1,#win.playerList.rows do win.playerList.rows[index]:SetHidden(true); win.playerList.rows[index].player=nil end
+        UI.FinishScroll(win.playerList,#roster*59,playerWidth-22)
     end
-    self.reportWindow.report,self.reportWindow.page=report,1
-    self:ResizeInspector(); self.reportWindow:SetHidden(false); self:RefreshPullReport(); self:ApplyVisibility()
-    self.reportGeneration=(self.reportGeneration or 0)+1
-    local generation=self.reportGeneration
-    local delay=self.sv.reportAutoCloseSeconds
-    if delay and delay>0 then zo_callLater(function() if SC.reportGeneration==generation then SC:ClosePullReport() end end,delay*1000) end
-end
-function SC:RefreshPullReport()
-    local win=self.reportWindow
-    local report=win and win.report
-    if not report or win:IsHidden() then return end
-    win.title:SetText(SafeText(report.label))
-    win.subtitle:SetText(SafeText(string.format("%s | %.1fs | Profile %s%s",report.meta.zoneName,report.durationMs/1000,report.profile or "?",report.truncated and " | METRIC LIMIT REACHED" or "")))
-    local rows={}
-    local potionKeys={}; for key in pairs(report.potions or {}) do potionKeys[#potionKeys+1]=key end; table.sort(potionKeys)
-    for _, key in ipairs(potionKeys) do
-        local potion=report.potions[key]
-        rows[#rows+1]={title=key .. " - POTION EVIDENCE", detail=string.format("Category-use events: %s | Inferred cooldown starts: %s | %s | Exact potion item: UNVERIFIED",potion.categoryMonitoring and tostring(potion.count or 0) or "UNKNOWN",potion.cooldownMonitoring and tostring(potion.inferredCount or 0) or "UNKNOWN",potion.evidence or "UNKNOWN"),color=C.gold}
+    local rows=self:GetInspectorRows(); local offset=0
+    for index,data in ipairs(rows) do
+        local row=win.detailList.rows[index]
+        if not row then
+            local name="AlphaSquadInspectorDetail"..index
+            row=WINDOW_MANAGER:CreateControl(name,win.detailList.content,CT_CONTROL)
+            row.bg=UI.Solid(row,name.."BG",C.panel)
+            row.title=UI.Label(row,name.."Title","","ZoFontGameBold")
+            row.title:SetAnchor(TOPLEFT,row,TOPLEFT,10,4); row.title:SetVerticalAlignment(TEXT_ALIGN_TOP)
+            row.detail=UI.Label(row,name.."Detail","","ZoFontGameSmall",C.muted)
+            row.detail:SetVerticalAlignment(TEXT_ALIGN_TOP)
+            row:SetMouseEnabled(true)
+            row:SetHandler("OnMouseWheel",UI.ForwardWheel)
+            row:SetHandler("OnMouseEnter",function()
+                local d=row.data
+                if not d then return end
+                if d.link and d.link~="" and ItemTooltip and InitializeTooltip then
+                    InitializeTooltip(ItemTooltip,row,TOPLEFT,8,0,TOPRIGHT)
+                    if ItemTooltip.SetLink then ItemTooltip:SetLink(d.link) end
+                elseif d.tooltip and d.tooltip~="" then UI.Tooltip(row,d.tooltip)
+                elseif d.detail and d.detail~="" then UI.Tooltip(row,d.title.."\n\n"..d.detail) end
+            end)
+            row:SetHandler("OnMouseExit",UI.ClearTooltip); win.detailList.rows[index]=row
+        end
+        row.data=data; row:SetHidden(false); row.title:SetWidth(detailWidth-20); row.detail:SetWidth(detailWidth-20)
+        row.title:SetText(UI.Text(data.title)); row.detail:SetText(UI.Text(data.detail)); UI.Color(row.title,data.color)
+        local titleHeight=math.max(25,row.title:GetTextHeight() or 25)
+        row.title:SetHeight(titleHeight)
+        row.detail:ClearAnchors(); row.detail:SetAnchor(TOPLEFT,row,TOPLEFT,10,titleHeight+5)
+        local detailHeight=data.section and 0 or math.max(23,row.detail:GetTextHeight() or 23)
+        row.detail:SetHeight(detailHeight); row.detail:SetHidden(data.section==true)
+        local height=titleHeight+detailHeight+12
+        row:ClearAnchors(); row:SetAnchor(TOPLEFT,win.detailList.content,TOPLEFT,0,offset); row:SetDimensions(detailWidth,height)
+        offset=offset+height+6
     end
-    for _, metric in ipairs(report.rows) do
-        local measured=report.durationMs>0 and math.min(100,(metric.knownMs/report.durationMs)*100) or 0
-        rows[#rows+1]={title=(report.subjects and report.subjects[metric.subject] or metric.subject) .. " - " .. (metric.label or metric.key),
-            detail=string.format("Uptime %s | Measured %.1f%% | Unknown %.1fs | Gap %.1fs | Goal %s%%: %s",metric.uptime and (metric.uptime.."%") or "UNKNOWN",measured,(metric.unknownMs or 0)/1000,(metric.longestGapMs or 0)/1000,tostring(metric.targetUptime or 0),self.History.Assess(metric,report.durationMs)),
-            color=self.History.Assess(metric,report.durationMs)=="BELOW_TARGET" and C.gold or C.white}
-    end
-    if #rows==0 then rows[1]={title="No analyzable observations",detail="No data is better than fabricated uptime. Verify effect IDs, peer sharing, and encounter visibility.",color=C.muted} end
-    win.page=RenderRows(win,rows,win.page)
+    for index=#rows+1,#win.detailList.rows do win.detailList.rows[index]:SetHidden(true); win.detailList.rows[index].data=nil end
+    UI.FinishScroll(win.detailList,offset,detailWidth)
 end
+-- Legacy callers may close an old view during migration; reports are no longer created.
+function SC:ClosePullReport() if self.reportWindow then self.reportWindow:SetHidden(true) end end
+function SC:OpenPullReport() return false end
+function SC:RefreshPullReport() end

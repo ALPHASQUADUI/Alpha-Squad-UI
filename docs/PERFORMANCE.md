@@ -1,63 +1,50 @@
 # Performance Guidelines
 
-Performance is a design constraint for every Ąlpha Şquad UI module.
+Performance is a design constraint for **Ąlpha Şquad UI**. The design reduces unnecessary work; real frame time, network coexistence and memory behavior must still be measured in ESO.
 
-## Rules
+## Shared rules
 
-1. Prefer ESO events over frequent polling.
-2. Poll only as a fallback when the ESO API cannot guarantee a transition.
-3. Dormant or disabled modules should not run fast update callbacks.
-4. Fast animation callbacks must exist only while the animation is visible.
-5. Reuse controls instead of recreating combat UI trees.
-6. Avoid repeated scans of unrelated action slots.
-7. Filter ESO events as narrowly as the API allows.
-8. Avoid copying data structures that are not used.
-9. Avoid automatic gameplay chat formatting unless debug/status output was requested.
-10. Document every persistent heartbeat.
+1. Prefer filtered native events to frequent polling.
+2. Coalesce bursts of equipment, skill and roster changes.
+3. Cache validated snapshots and update only affected roster entries where practical.
+4. Reuse controls and refresh visible views only when relevant state changes.
+5. Run animations only while their visual output is visible.
+6. Keep peer caches, payloads, pending fragments and retry queues bounded.
+7. Guard missing optional libraries and malformed values at integration boundaries.
+8. Do not parse combat logs for a precombat readiness question.
 
 ## Overload
 
-Primary tracking uses effect, power, slot, hotbar and player-activation events.
+Effect, power, slot, hotbar and player-activation events drive tracking. Its one-second recovery sync runs only while enabled, visible, unobscured, not PvP-suppressed and not dormant. Hidden/dormant states rely on native wake-up events.
 
-A 1-second safety sync runs only while Overload Tracker is enabled, visible, unobscured, not PvP-suppressed and not dormant. Hidden and dormant states rely on native events and register no recovery polling update.
+Reserve and ready-reminder animations register only while their alerts are active and visible.
 
-Emergency and Ready Reminder animation loops register only while their alert is active.
+## Personal ULT
 
-## Personal ULT Tracker
+Native events drive slot/resource changes. A 1.5-second fallback refresh runs only while enabled, visible and unobscured. The READY animation exists only while a visible tracked Ultimate needs it.
 
-Primary tracking is event-driven.
+## Group ULT
 
-A 1.5-second safety refresh remains for rare missed slot/resource transitions only while the personal tracker is enabled, visible and unobscured.
+LibGroupCombatStats is subscribed for **ULT only**. An incoming player update changes that player's cached entry; no DPS/HPS stream is requested. Full roster refreshes are for membership/connectivity changes and a two-second safety check while the group HUD and its parent are enabled, visible and unobscured.
 
-The 80 ms READY animation update is registered only while a tracked Ultimate is READY and flash is enabled.
-
-## Group Ultimate Tracker
-
-AlphaSquadUI registers with LibGroupCombatStats for **ULT only**.
-
-Incoming ULT callbacks update the cached entry for the affected unit instead of rebuilding and re-querying the whole raid roster.
-
-Full roster scans are reserved for:
-
-- initialization
-- member join/leave/update events
-- connectivity changes
-- the 2-second safety sync while Group Tracking and its parent module are enabled, visible and unobscured
-
-The raidlead UI reuses a fixed pool of 12 rows.
-
-The READY pulse exists only while at least one visible tracked player is READY.
+The HUD reuses up to twelve player rows. READY animation stops when no visible row requires it.
 
 ## Support Coverage
 
-Build scans are invalidated by equipment, skill and Champion events. Active-quickslot changes refresh only lightweight food/potion/Mundus readiness facts. The slower 2.5-second recovery sync runs only while the module is enabled and its HUD or settings are relevant.
+Equipment, skill, Champion and mastery changes invalidate a cached local build. Coalesced scans run outside combat. Quickslot/readiness changes take the lightweight consumable path instead of always rescanning equipment.
 
-Combat observation uses one active 1.5-second update only during a pull, plus coalesced local effect events. Disconnected group members cannot prolong the quiet-period check with stale combat state. Pull identity, unchanged potion evidence and leader plans use bounded heartbeats; build and live messages also have minimum send intervals. Peer caches, history, effects, subjects, tracked IDs, context templates and planner candidates all have absolute limits.
+A **five-second lightweight recovery refresh** is restricted to visible or grouped precombat use. Combat suspends Support scans and build sends; deferred changes are handled after combat. Hidden inspectors do not continuously rebuild their content.
 
-Hidden report/settings windows reuse controls and do not require continuous rebuilding. Disabling the module stops combat and recovery updates and clears transient sharing state.
+There is **no combat sampler, uptime accumulator, pull report archive or planner search loop** in the active workflow. Build-sharing frames and pending receiver state are bounded, rate-limited and validated before affecting coverage. Only compact capability summaries are automatic; full builds are requested on demand. Detail transfers keep one acknowledged chunk in flight, wait at least 1.2 seconds between responses and cap the serialized snapshot at 3,584 bytes. Inactive transfers time out; completed detail data is cached for 120 seconds. The companion follows the same precombat transport constraints.
 
-## Validation
+Disabling a module must remove its unnecessary updates and transient integration state. A missing library must not cause a retry loop or chat spam.
 
-The GitHub workflows validate Lua 5.1/5.4 syntax, deterministic Support Coverage, ULT Tracker and Overload lifecycle behavior, manifest integrity and release-version consistency, then verify a ZIP artifact.
+## Optional third-party evidence
 
-In-game validation remains mandatory because `luac` cannot verify ESO API semantics, scene behavior, protected-function rules or actual combat timing.
+LibSetDetection set updates are event-driven. Repeated reads do not make old data fresh; the adapter uses events observed in the current group session, labels the last-report age and invalidates records on session/identity/disconnect/deactivation changes. Change-only set traffic has no artificial short expiry timer. Compatible LibGroupCombatStats Ultimate/active-line evidence uses a 75-second conservative age limit; an idle sender may therefore become limited until it sends fresh data.
+
+## Verification and limits
+
+Automated tests cover deterministic logic, syntax, manifest/version consistency and package integrity. They cannot establish a zero-FPS-drop or zero-disconnection guarantee.
+
+In ESO, compare addon ON/OFF frame time and memory in a four-player dungeon and a twelve-player trial. Check quiet precombat state, burst gear changes, hide/show, combat start/end, late join and simultaneous compatible broadcasts. Test alongside the raid addons actually used by the group. Stop additional synthetic testing once the remaining concrete risks have meaningful coverage; complete the real-client checklist next.

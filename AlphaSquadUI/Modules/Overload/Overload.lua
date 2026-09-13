@@ -18,7 +18,7 @@
 
 local ADDON_NAME = "AlphaSquadUI"
 local DISPLAY_NAME = "Ąlpha Şquad UI - Overload"
-local SETTINGS_MENU_NAME = "|cE66A19Ą|cEA7628l|cEE8237p|cF18E47h|cF49A58a |cF6A968Ş|cF8B77Aq|cFAC58Cu|cFCD49Ea|cFFF3D0d|r"
+local SETTINGS_MENU_NAME = "|cF6A968Ąlpha Şquad UI|r"
 local VERSION = (AlphaSquadUI and AlphaSquadUI.version) or "2.6.0"
 
 AlphaSquadUI = AlphaSquadUI or {}
@@ -296,7 +296,9 @@ function AOT:ApplyVisualSettings()
     -- Runtime suppression never overwrites the user's own Show/Enable choices.
     -- No slotted Overload, non-HUD game menus, or optional PvP suppression make
     -- the tracker invisible/silent until the context becomes valid again.
-    local settingsVisible = self.settingsWindow and not self.settingsWindow:IsHidden() or false
+    local settings = AlphaSquadUI.Settings
+    local settingsVisible = (settings and settings.AnyExclusiveWindowVisible and settings.AnyExclusiveWindowVisible())
+        or (self.settingsWindow and not self.settingsWindow:IsHidden()) or false
     local hidden = (not self.sv.addonEnabled)
         or (not self.sv.visible)
         or self.autoDormant
@@ -1482,19 +1484,57 @@ local function CreateButton(parent, name, text, x, y, width, height, onClick)
 end
 
 function AOT:RefreshSettingsWindow()
-    if not self.settingsWindow then return end
+    if not self.settingsWindow or self.settingsWindow:IsHidden() then return end
+    self:ApplySettingsGeometry()
     for _, refresher in ipairs(self.settingsRefreshers) do
         refresher()
     end
 end
 
+function AOT:ApplySettingsGeometry()
+    if not self.settingsWindow or not GuiRoot then return end
+    local scale = math.min(1, math.max(0.4, (GuiRoot:GetWidth() - 40) / 900))
+    local height = math.min(720, math.max(420, (GuiRoot:GetHeight() - 40) / scale))
+    self.settingsWindow:SetDimensions(900, height)
+    self.settingsWindow:SetScale(scale)
+    if self.settingsSidebar then self.settingsSidebar:SetHeight(height - 64) end
+    if self.settingsScroll then
+        self.settingsScroll:SetHeight(height - 80)
+        self.settingsScroll.scrollbar:SetHeight(height - 80)
+        self.settingsScroll.UpdateBounds()
+    end
+end
+
+function AOT:CloseSettingsWindow()
+    if not self.settingsWindow then return end
+    if self.settingsOpenedFromGameMenu and self.settingsFragment then
+        SCENE_MANAGER:RemoveFragment(self.settingsFragment)
+        self.settingsOpenedFromGameMenu = false
+    end
+    self.settingsWindow:SetHidden(true)
+    local settings = AlphaSquadUI.Settings
+    if settings and settings.RefreshModuleVisibility then settings.RefreshModuleVisibility()
+    else self:ApplyVisualSettings() end
+end
+
 function AOT:ShowSettingsPage(pageId)
     if not self.settingsPages then return end
     if not self.settingsPages[pageId] then pageId = "overload" end
+    if self.activeSettingsPage ~= pageId and self.settingsScroll then
+        self.settingsScroll.offset = 0
+        self.settingsScroll:SetVerticalScroll(0)
+        self.settingsScroll.scrollbar:SetValue(0)
+    end
     self.activeSettingsPage = pageId
 
     for id, page in pairs(self.settingsPages) do
         page:SetHidden(id ~= pageId)
+    end
+    if self.settingsContent then
+        local page = self.settingsPages[pageId]
+        local height = math.max(640, tonumber(page.contentHeight) or 640)
+        self.settingsContent:SetHeight(height)
+        page:SetHeight(height)
     end
 
     for id, button in pairs(self.settingsNavButtons or {}) do
@@ -1558,6 +1598,14 @@ function AOT:CreateSettingsWindow()
     win:SetDrawLayer(DL_OVERLAY)
     win:SetDrawLevel(100)
     win:SetHidden(true)
+    if AlphaSquadUI.Settings.RegisterExclusiveWindow then
+        AlphaSquadUI.Settings.RegisterExclusiveWindow("settings", win, function() AOT:CloseSettingsWindow() end)
+    end
+    if EVENT_SCREEN_RESIZED then
+        EVENT_MANAGER:RegisterForEvent("AlphaSquadUI_SettingsResize", EVENT_SCREEN_RESIZED, function()
+            AOT:ApplySettingsGeometry()
+        end)
+    end
 
     CreateSolid(win, "AlphaSquadSettingsBG", {0.010, 0.015, 0.027, 0.992})
 
@@ -1589,16 +1637,7 @@ function AOT:CreateSettingsWindow()
     subtitle:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
 
     CreateButton(win, "AlphaSquadSettingsClose", "X", 846, 14, 34, 30, function()
-        if AOT.settingsOpenedFromGameMenu and AOT.settingsFragment then
-            SCENE_MANAGER:RemoveFragment(AOT.settingsFragment)
-            AOT.settingsOpenedFromGameMenu = false
-        end
-        win:SetHidden(true)
-        AOT:ApplyVisualSettings()
-        local ult = AlphaSquadUI and AlphaSquadUI.Modules and AlphaSquadUI.Modules.ULTTracker
-        if ult and ult.ApplyVisibility then ult:ApplyVisibility() end
-        local support = AlphaSquadUI and AlphaSquadUI.Modules and AlphaSquadUI.Modules.SupportCoverage
-        if support and support.ApplyVisibility then support:ApplyVisibility() end
+        AOT:CloseSettingsWindow()
     end)
 
     local separator = WINDOW_MANAGER:CreateControl("AlphaSquadSettingsSeparator", win, CT_TEXTURE)
@@ -1609,12 +1648,14 @@ function AOT:CreateSettingsWindow()
 
     -- Sidebar: intentionally simple and static. It has no OnUpdate handler.
     local sidebar = WINDOW_MANAGER:CreateControl("AlphaSquadSettingsSidebar", win, CT_CONTROL)
+    self.settingsSidebar = sidebar
     sidebar:SetDimensions(190, 656)
     sidebar:SetAnchor(TOPLEFT, win, TOPLEFT, 0, 64)
     CreateSolid(sidebar, "AlphaSquadSettingsSidebarBG", {0.014, 0.021, 0.037, 0.995})
     local sideLine = WINDOW_MANAGER:CreateControl("AlphaSquadSettingsSidebarLine", sidebar, CT_TEXTURE)
     sideLine:SetAnchor(TOPRIGHT, sidebar, TOPRIGHT, 0, 0)
-    sideLine:SetDimensions(1, 656)
+    sideLine:SetWidth(1)
+    sideLine:SetAnchor(BOTTOMRIGHT, sidebar, BOTTOMRIGHT, 0, 0)
     sideLine:SetColor(COLORS.orange[1], COLORS.orange[2], COLORS.orange[3], 0.18)
 
     local modulesHeader = CreateLabel(sidebar, "AlphaSquadModulesHeader", "ZoFontGameBold", "MODULES", COLORS.orange)
@@ -1652,17 +1693,18 @@ function AOT:CreateSettingsWindow()
     AddNavButton("overload", "Overload", 50)
     AddNavButton("ulttracker", "ULT Tracker", 94)
     AddNavButton("supportcoverage", "Support Coverage", 138)
+    AddNavButton("libraries", "Libraries", 182)
 
     local communityHeader = CreateLabel(sidebar, "AlphaSquadCommunityNavHeader", "ZoFontGameBold", "COMMUNITY", COLORS.orange)
     communityHeader:SetDimensions(158, 24)
-    communityHeader:SetAnchor(TOPLEFT, sidebar, TOPLEFT, 18, 200)
+    communityHeader:SetAnchor(TOPLEFT, sidebar, TOPLEFT, 18, 240)
     communityHeader:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
-    AddNavButton("community", "Website & About", 232)
+    AddNavButton("community", "Website & About", 272)
 
     local future = CreateLabel(sidebar, "AlphaSquadFutureModules", "ZoFontGameSmall",
-        "Future Ąlpha Şquad modules\nwill appear here.", COLORS.muted)
+        "Changes are saved\nautomatically.", COLORS.muted)
     future:SetDimensions(154, 48)
-    future:SetAnchor(TOPLEFT, sidebar, TOPLEFT, 18, 293)
+    future:SetAnchor(TOPLEFT, sidebar, TOPLEFT, 18, 328)
     future:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
     future:SetVerticalAlignment(TEXT_ALIGN_TOP)
 
@@ -1671,13 +1713,20 @@ function AOT:CreateSettingsWindow()
     versionLabel:SetAnchor(BOTTOMLEFT, sidebar, BOTTOMLEFT, 18, -15)
     versionLabel:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
 
-    local content = WINDOW_MANAGER:CreateControl("AlphaSquadSettingsContent", win, CT_CONTROL)
-    content:SetDimensions(690, 640)
-    content:SetAnchor(TOPLEFT, win, TOPLEFT, 200, 70)
+    local content
+    if AlphaSquadUI.Settings.CreateScrollArea then
+        content, self.settingsScroll = AlphaSquadUI.Settings.CreateScrollArea(win, "AlphaSquadSettingsContent", 200, 70, 690, 640, 640)
+    else
+        content = WINDOW_MANAGER:CreateControl("AlphaSquadSettingsContent", win, CT_CONTROL)
+        content:SetDimensions(690, 640)
+        content:SetAnchor(TOPLEFT, win, TOPLEFT, 200, 70)
+    end
+    self.settingsContent = content
 
     local function CreatePage(id)
         local page = WINDOW_MANAGER:CreateControl("AlphaSquadPage_" .. id, content, CT_CONTROL)
-        page:SetAnchorFill(content)
+        page:SetAnchor(TOPLEFT, content, TOPLEFT, 0, 0)
+        page:SetDimensions(674, 640)
         page:SetHidden(true)
         self.settingsPages[id] = page
         return page
@@ -1795,6 +1844,10 @@ function AOT:CreateSettingsWindow()
         unavailable:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
     end
 
+    local librariesPage = CreatePage("libraries")
+    local librariesBuilder = AlphaSquadUI.Settings.GetPageBuilder and AlphaSquadUI.Settings.GetPageBuilder("libraries")
+    if librariesBuilder then librariesBuilder(librariesPage, pageUI) end
+
     -- OVERLOAD MODULE PAGE
     local overload = CreatePage("overload")
     local overloadTitle = CreateLabel(overload, "AlphaSquadOverloadPageTitle", "ZoFontWinH2", "OVERLOAD TRACKER", COLORS.white)
@@ -1861,8 +1914,7 @@ function AOT:CreateSettingsWindow()
         AOT:SetAddonEnabled(true)
         AOT:SetTrackerVisible(true)
         AOT:SetLocked(false)
-        win:SetHidden(true)
-        AOT:ApplyVisualSettings()
+        AOT:CloseSettingsWindow()
     end)
     local opacityNote = CreateLabel(appearance, "AlphaSquadOpacityNote", "ZoFontGameSmall",
         "Opacity affects the background only. Text, icon and borders stay fully visible.", COLORS.muted)
@@ -1884,7 +1936,7 @@ function AOT:CreateSettingsWindow()
 
     local runtime = CreateCard(overload, "AlphaSquadCardRuntime", 344, 492, 322, 126, "PERFORMANCE", COLORS.green)
     local runtimeText = CreateLabel(runtime, "AlphaSquadRuntimeText", "ZoFontGameSmall",
-        "Event-driven by default. Safety sync runs only once per second (and slower while dormant). Alert animation loops exist only while an alert is actually visible.", COLORS.muted)
+        "Event-driven tracking. A once-per-second safety sync runs only while the HUD is visible and awake. Alert animations stop when hidden or inactive.", COLORS.muted)
     runtimeText:SetDimensions(290, 82)
     runtimeText:SetAnchor(TOPLEFT, runtime, TOPLEFT, 14, 38)
     runtimeText:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
@@ -1928,7 +1980,7 @@ function AOT:CreateSettingsWindow()
 
     local aboutCard = CreateCard(community, "AlphaSquadAboutCard", 8, 276, 658, 174, "ABOUT THIS ADDON", COLORS.cyan)
     local about = CreateLabel(aboutCard, "AlphaSquadAboutText", "ZoFontGameSmall",
-        "Ąlpha Şquad Overload Tracker is built as the first module of a larger modular toolkit. The settings shell is shared, so future features can be added as new sidebar modules without creating extra Settings entries or permanent background loops.\n\nCreated by SeRuM1  •  English UI  •  Subclassing compatible", COLORS.muted)
+        "Ąlpha Şquad UI brings together Overload, personal and group Ultimate tracking, and Support Coverage. Each module can be configured separately in this shared settings window.\n\nCreated by SeRuM1  •  English UI  •  Subclassing compatible", COLORS.muted)
     about:SetDimensions(620, 126)
     about:SetAnchor(TOPLEFT, aboutCard, TOPLEFT, 16, 40)
     about:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
@@ -1951,7 +2003,7 @@ function AOT:RegisterDirectSettingsPanel()
 
     local panelId = KEYBOARD_OPTIONS.currentPanelId
     KEYBOARD_OPTIONS.currentPanelId = panelId + 1
-    KEYBOARD_OPTIONS.panelNames[panelId] = "Ąlpha Şquad"
+    KEYBOARD_OPTIONS.panelNames[panelId] = "Ąlpha Şquad UI"
     self.directSettingsPanelId = panelId
     self.settingsFragment = ZO_FadeSceneFragment:New(self.settingsWindow)
 
@@ -1962,8 +2014,11 @@ function AOT:RegisterDirectSettingsPanel()
     }
 
     panelData.callback = function(_, anchorFunction)
+        local settings = AlphaSquadUI.Settings
+        if settings and settings.ShowExclusiveWindow then settings.ShowExclusiveWindow("settings") end
         AOT.settingsOpenedFromGameMenu = true
         AOT.settingsWindow:SetMovable(false)
+        AOT:ApplySettingsGeometry()
         AOT.settingsWindow:ClearAnchors()
         if anchorFunction then
             anchorFunction(AOT.settingsWindow)
@@ -2004,6 +2059,23 @@ function AOT:RegisterDirectSettingsPanel()
 
     self.directSettingsPanelData = panelData
     ZO_GameMenu_AddSettingPanel(panelData)
+    -- Only move our panel before entries explicitly identified as addon panels.
+    -- Native entries have no addon panel ID; their order and data stay untouched.
+    local entries = ZO_GameMenuManager_GetSubcategoriesEntries and ZO_GameMenuManager_GetSubcategoriesEntries()
+    if type(entries) == "table" and type(SETTING_PANEL_MAX_VALUE) == "number" then
+        local ownIndex, firstAddonIndex
+        for index, entry in ipairs(entries) do
+            if entry == panelData then ownIndex = index
+            elseif type(entry) == "table" and entry.categoryName == panelData.categoryName
+                and type(entry.id) == "number" and entry.id > SETTING_PANEL_MAX_VALUE then
+                firstAddonIndex = firstAddonIndex or index
+            end
+        end
+        if ownIndex and firstAddonIndex and firstAddonIndex < ownIndex then
+            table.remove(entries, ownIndex)
+            table.insert(entries, firstAddonIndex, panelData)
+        end
+    end
 end
 
 function AOT:RegisterHUDSceneVisibility()
@@ -2021,6 +2093,7 @@ end
 
 function AOT:ToggleSettingsWindow()
     if not self.settingsWindow then return end
+    if not self.settingsWindow:IsHidden() then self:CloseSettingsWindow(); return end
     if self.settingsOpenedFromGameMenu and self.settingsFragment then
         SCENE_MANAGER:RemoveFragment(self.settingsFragment)
         self.settingsOpenedFromGameMenu = false
@@ -2031,7 +2104,8 @@ function AOT:ToggleSettingsWindow()
         self.settingsWindow:ClearAnchors()
         self.settingsWindow:SetAnchor(CENTER, GuiRoot, CENTER, 0, 0)
     end
-    self.settingsWindow:SetHidden(not hidden)
+    if hidden and AlphaSquadUI.Settings.ShowExclusiveWindow then AlphaSquadUI.Settings.ShowExclusiveWindow("settings")
+    else self.settingsWindow:SetHidden(not hidden) end
     if hidden then self:RefreshSettingsWindow() end
     self:ApplyVisualSettings()
     local ult = AlphaSquadUI and AlphaSquadUI.Modules and AlphaSquadUI.Modules.ULTTracker

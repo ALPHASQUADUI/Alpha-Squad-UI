@@ -264,7 +264,7 @@ function Group:GetAbilityMeta(abilityId)
 
     local name = GetAbilityName and GetAbilityName(abilityId) or ""
     local icon = GetAbilityIcon and GetAbilityIcon(abilityId) or ""
-    if not name or name == "" then name = "Ultimate " .. tostring(abilityId) end
+    if not name or name == "" then name = "Unknown Ultimate" end
 
     return zo_strformat("<<C:1>>", name), icon or "", abilityId
 end

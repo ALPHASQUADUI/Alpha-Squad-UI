@@ -36,15 +36,28 @@ jobs:
           PY
       - name: Run deterministic regression tests
         run: |
-          lua5.1 tests/support_coverage.lua
-          lua5.4 tests/support_coverage.lua
-          lua5.1 tests/ult_tracker.lua
-          lua5.4 tests/ult_tracker.lua
-          lua5.1 tests/overload.lua
-          lua5.4 tests/overload.lua
+          set -euo pipefail
+          for test in tests/*.lua; do
+            lua5.1 "$test"
+            lua5.4 "$test"
+          done
+      - name: Build and validate optional companion
+        run: |
+          set -euo pipefail
+          python3 tooling/build_companion.py AlphaSquadBuildShare.zip
+          unzip -q AlphaSquadBuildShare.zip -d build/companion
+          find build/companion -name '*.lua' -print0 | sort -z | xargs -0 -n1 luac5.1 -p
+          find build/companion -name '*.lua' -print0 | sort -z | xargs -0 -n1 luac5.4 -p
+          lua5.1 tests/companion_package.lua build/companion/AlphaSquadBuildShare
+          lua5.4 tests/companion_package.lua build/companion/AlphaSquadBuildShare
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AlphaSquadBuildShare
+          path: AlphaSquadBuildShare.zip
+          if-no-files-found: error
       - name: Package source for independent review
         if: always()
-        run: zip -r SupportCoverage-review-source.zip AlphaSquadUI docs .github tests -x '*/.gitkeep' || test -f SupportCoverage-review-source.zip
+        run: zip -r SupportCoverage-review-source.zip AlphaSquadUI companion tooling docs .github tests -x '*/.gitkeep' || test -f SupportCoverage-review-source.zip
       - name: Package installable test addon
         run: |
           set -euo pipefail

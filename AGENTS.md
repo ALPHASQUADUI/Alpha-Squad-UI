@@ -60,187 +60,79 @@ Do not break existing settings, positions, filters or player preferences during 
 
 ## Active development: Support Coverage
 
-Primary active branch: **`support-coverage`**
+Primary active branch: **`support-coverage`**.
 
 Development version:
-- `2.7.0-support-coverage-test.4`
-- `AddOnVersion 20704`
+- `2.7.0-support-coverage-test.5`
+- `AddOnVersion 20705`
 
-Support Coverage is a **raidlead support-planning, capability-scanning and live-coverage module**.
+Support Coverage is a **precombat group capability and readiness module**. The current user-approved scope supersedes test.4's combat-report and loadout-planner workflow.
 
-Namespace:
-`AlphaSquadUI.Modules.SupportCoverage`
+Namespace: `AlphaSquadUI.Modules.SupportCoverage`.
+SavedVariables: `AlphaSquadSupportCoverageSavedVariables`.
 
-SavedVariables:
-`AlphaSquadSupportCoverageSavedVariables`
+### Current goals and UI
 
-### Support Coverage goals
+- One **Trial** list and one **Dungeon** list of important group support effects/sources.
+- Per-effect ON/OFF tracking with persistent preferences.
+- Information tooltips describing effects, sources, proc conditions and recipient limits.
+- Known providers and duplicates by `@UserID`, with source details on hover.
+- **Builds** opens the roster and each account's available equipment, front/back skills, Champion slottables, committed Class Masteries, food, potion and glyph details.
+- **Food** checks known group food/drink status without converting missing data into a pass.
+- Scrolling lists, responsive windows and library/setup guidance.
+- Product branding **Ąlpha Şquad UI**, preserving the accented A/S and ESO's standard UI font.
 
-The module should help a raidlead answer:
-- Which important buffs/debuffs/support sets are covered?
-- Who is responsible for each effect?
-- What is missing?
-- What is duplicated?
-- Which player/build is best suited to cover a missing requirement?
-- Is the group ready before a pull?
-- What changed after roster/build changes?
+There is no active pull history, combat uptime, report or recorded-loadout planner workflow. Role labels provide group context; mandatory MT/OT/healer assignments and role-build templates are not the current interface.
 
-It must be useful for 12-player endgame trial groups without becoming a combat-overlay performance problem.
+### Runtime architecture
 
-### Support Coverage architecture
+- `SupportCoverage.lua` — precombat lifecycle, SavedVariables, events and commands.
+- `SupportCoverageCatalog.lua` / `SupportCoverageSources.lua` — catalog, source identities and build-source matching.
+- `SupportCoverageScanner.lua` / `SupportCoverageBuild.lua` — local equipment, skills, CP, mastery and consumable evidence.
+- `SupportCoverageAudit.lua` — bounded snapshot copy and readiness settings; no expected-template UI.
+- `SupportCoverageShare.lua` / `SupportCoverageDetails.lua` / `SupportCoverageBuildCodec.lua` — bounded compatible build transport.
+- `SupportCoverageEngine.lua` — cached roster, selected requirements, source coverage and duplicates.
+- `SupportCoverageExternal.lua` — conservative adapters for supported third-party group data.
+- `SupportCoverageUI.lua` / `SupportCoverageInspector.lua` / `SupportCoverageSettings.lua` — coverage, Builds, Food and configuration.
 
-Files:
-- `SupportCoverage.lua` — lifecycle, SavedVariables, events, slash commands
-- `SupportCoverageCatalog.lua` — patch-specific support catalog and profiles
-- `SupportCoverageAudit.lua` — expected-build comparisons and evidence-aware readiness
-- `SupportCoverageScanner.lua` — local equipment/skill/food/potion capability scanner
-- `SupportCoverageBuild.lua` — Champion, mastery and build evidence helpers
-- `SupportCoverageHistory.lua` — bounded pull history and report snapshots
-- `SupportCoverageShare.lua` — compact group sharing and plan/live protocols
-- `SupportCoverageDetails.lua` — build-bound signature/detail transport
-- `SupportCoverageLiveShare.lua` — bounded observed-coverage transport
-- `SupportCoverageEngine.lua` — roster building, coverage evaluation, assignment planning
-- `SupportCoverageTracking.lua` — local live observations and pull timing
-- `SupportCoverageUI.lua` — responsive raidlead HUD / readiness presentation
-- `SupportCoveragePlanner.lua` — whole-loadout proposals with manual-choice preservation
-- `SupportCoverageInspector.lua` — detailed build, readiness and history views
-- `SupportCoverageSettings.lua` — integrated settings and coverage matrix
-- `SupportCoverageSources.lua` — native set and skill identities with conservative fallbacks
-- `SupportCoverageIntegration.lua` — group bonuses, saved contexts and bounded persistence
+History, Tracking, Planner and LiveShare modules are retired. Keep patch data separated from evaluation logic so future ESO updates can be audited safely.
 
-Keep patch data separated from evaluation logic so future ESO updates can be audited safely.
+### Evidence and sources
 
-### U50 catalog
+The catalog covers important Major/Minor effects, group damage/penetration sources, group support sets, monster/mythic effects, class sources and optional sustain/defense effects. Source descriptions retain their activation and recipient limits.
 
-The current catalog is tagged **U50** and includes coverage concepts such as:
-- Major / Minor Courage
-- Major / Minor Slayer
-- Major / Minor Force
-- Major / Minor Berserk
-- Major / Minor Vulnerability
-- Major / Minor Brittle
-- Elemental Catalyst
-- Z'en's Redress
-- Martial Knowledge
-- Heat Shock (stable compatibility key: `stagger`)
-- Major / Minor Breach
-- Crusher
-- Alkosh
-- Crimson Oath
-- Tremorscale
-- Powerful Assault
-- Pearlescent Ward
-- Pillager's Profit
-- Spaulder of Ruin
-- Nazaray
-- Symphony of Blades
-- Yolnahkriin
-- sustain / defense / status-effect coverage
-- penetration and critical-damage budgets
+`COVERED` means available build evidence establishes a source, not guaranteed active application. Separate weapon-bar set thresholds apply: a qualifying source on either bar can count, and two-handed weapons count as two set pieces. A one-piece splash does not establish a five-piece bonus.
 
-Do not silently remove catalog coverage without a clear reason and changelog note.
+Local scans include equipment/links, glyphs, slotted skills, Champion slottables, committed eligible Class Masteries, food, selected potion and supported readiness details. Class identity alone does not prove passive/mastery/skill selection. Prefer exact IDs/API data where reliable. Name matching is a fallback and should remain localization-aware.
 
-### Planner profiles
+Native ESO grouping does not expose arbitrary remote equipment, full skill bars, CP or mastery selections. Unsupported, incomplete and stale fields remain UNKNOWN.
 
-Current profiles:
-- `full`
-- `progression`
-- `damage`
-- `trash`
-- `boss`
-- `custom`
+### Sharing and dependencies
 
-Current support role vocabulary:
-- `MT`
-- `OT`
-- `H1`
-- `H2`
-- `DD PARSE`
-- `DD SUPPORT`
-- `UNKNOWN`
+- `LibGroupBroadcast`: transport for compatible experimental build sharing.
+- `LibFoodDrinkBuff`: optional food/drink buff identification on supported player/group unit tags.
+- `LibGroupCombatStats`: compatible Ultimate and supported active-line data, not full-build inspection or mastery/passive proof.
+- `LibSetDetection` v5: optional recommended group set identities and per-bar activation, respecting selective sharing.
+- `LibAddonMenu-2.0` (at least 38) and `LibDebugLogger`: required dependencies of LibGroupBroadcast.
+- `AlphaSquadBuildShare`: optional sharing-only companion instead of the full UI suite.
 
-The raidlead must be able to override roles/assignments and preserve those choices.
+A sender must install a compatible addon and explicitly enable sharing. A library alone does not publish another player's complete build. Full-suite and companion sending are alternatives on one client.
 
-### Scanner behavior
+Active provisional protocols:
+- build summary: **510**
+- build details: **507**
 
-Local player scanning currently covers:
-- equipped sets
-- item links / set information
-- armor glyph/enchant classification
-- slotted skills
-- Champion slottables
-- committed Class Masteries and prerequisites
-- food
-- selected potion, stack and cooldown evidence
-- optional poisons and Mundus
-- inferred support capabilities
-- support score / role hint
+Legacy plan/live protocols 509/508 are retired. **Do not publish a stable public release with active provisional IDs unless they have been formally reserved/verified against LibGroupBroadcast IDs.** Sharing defaults OFF and must fail gracefully when libraries are missing.
 
-Prefer exact IDs/API data where reliable. Name matching is a fallback and should remain localization-aware.
+Never expose private or unnecessary data. Share only the bounded group build information required by the feature, after sender opt-in.
 
-### Sharing
+### Persistence and performance
 
-Optional dependencies used by Support Coverage:
-- `LibGroupCombatStats`
-- `LibGroupBroadcast`
-- `LibFoodDrinkBuff`
+Relevant enabled/visible/locked, geometry, context and effect preferences remain in the existing Support Coverage namespace. Remote build snapshots are transient group data. Migrations must preserve user settings wherever possible.
 
-The current Support Coverage sharing code uses **provisional development protocol IDs**:
-- build protocol: 510
-- plan protocol: 509
-- live protocol: 508
-- signature/detail protocol: 507
+A five-second lightweight recovery refresh is limited to visible or grouped precombat use. Equipment/skill/CP changes invalidate cached evidence through coalesced events. Support scans and build sends pause during combat; deferred changes refresh after combat. There is no active combat sampler or report collector.
 
-**Do not publish a stable public release with IDs 507–510 unless they have been formally reserved/verified against LibGroupBroadcast IDs.**
-
-Sharing must fail gracefully when libraries are missing.
-
-Never expose private or unnecessary data. Share only compact capability/plan/live information required by the feature.
-
-### Support Coverage UX
-
-The module should remain:
-- raidlead-first;
-- compact;
-- responsive;
-- movable and lockable;
-- account/server persistent;
-- readable at common ESO resolutions;
-- usable with `problemsOnly` mode;
-- able to show readiness/missing coverage clearly.
-
-Current configurable geometry:
-- scale: 60–180%
-- opacity: 30–100%
-- width: 300–680 px
-- row height: 24–48 px
-
-Do not turn the combat HUD into a giant spreadsheet. Deep configuration belongs in the coverage matrix/settings.
-
-### Saved settings
-
-Support Coverage currently persists:
-- enabled / visible / locked
-- hide in menus
-- problems only
-- auto assign
-- sharing
-- unknown visibility
-- ready banner
-- optional sounds
-- scale / opacity / width / row height
-- position
-- active profile
-- role overrides
-- assignment locks
-- duplicate backups
-- manual capabilities
-- custom requirements
-- custom catalog
-- profile overrides
-- context profiles
-
-Migrations must preserve user settings wherever possible.
+The module remains compact, movable, lockable, responsive and account/server persistent. Deep build inspection belongs in the dedicated view rather than enlarging the HUD into a spreadsheet.
 
 ## Existing module rules
 

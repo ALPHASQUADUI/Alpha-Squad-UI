@@ -1,508 +1,176 @@
--- Ąlpha Şquad UI - Support Coverage settings page and raidlead matrix
-
-local SC = AlphaSquadUI and AlphaSquadUI.Modules and AlphaSquadUI.Modules.SupportCoverage
+-- Preparation settings and pooled, scrollable coverage lists.
+local SC=AlphaSquadUI and AlphaSquadUI.Modules and AlphaSquadUI.Modules.SupportCoverage
 if not SC then return end
-
-local Catalog = SC.Catalog
-local C = (AlphaSquadUI.Theme and AlphaSquadUI.Theme.colors) or {
-    bg={0.01,0.016,0.03,0.96}, panel={0.02,0.03,0.052,0.98},
-    white={0.95,0.97,1,1}, muted={0.53,0.62,0.72,1},
-    orange={1,0.58,0.16,1}, green={0.34,0.82,0.52,1},
-    red={1,0.30,0.35,1}, gold={0.97,0.78,0.30,1}, cyan={0.20,0.82,1,1},
-}
-
-local PROFILE_ORDER = {"full","progression","damage","trash","boss","custom"}
-local ROLE_ORDER = {"UNKNOWN","MT","OT","H1","H2","DD PARSE","DD SUPPORT"}
-
-local function SetColor(control, color, alpha)
-    if not control or not color then return end
-    control:SetColor(color[1], color[2], color[3], alpha or color[4] or 1)
-end
-
-local function Solid(parent, name, color)
-    local t = WINDOW_MANAGER:CreateControl(name, parent, CT_TEXTURE)
-    t:SetAnchorFill(parent)
-    SetColor(t, color)
-    return t
-end
-
-local function Label(parent, name, font, text, color)
-    local l = WINDOW_MANAGER:CreateControl(name, parent, CT_LABEL)
-    l:SetFont(font)
-    l:SetText(text or "")
-    SetColor(l, color or C.white)
-    l:SetVerticalAlignment(TEXT_ALIGN_CENTER)
-    return l
-end
-
-local function Button(parent, name, text, x, y, w, h, callback)
-    local b = WINDOW_MANAGER:CreateControl(name, parent, CT_CONTROL)
-    b:SetDimensions(w, h)
-    b:SetAnchor(TOPLEFT, parent, TOPLEFT, x, y)
-    b:SetMouseEnabled(true)
-    b.bg = Solid(b, name .. "BG", C.panel)
-    b.label = Label(b, name .. "Label", "ZoFontGame", text or "", C.white)
-    b.label:SetAnchorFill(b)
-    b.label:SetHorizontalAlignment(TEXT_ALIGN_CENTER)
-    b:SetHandler("OnMouseEnter", function() b.bg:SetColor(0.06,0.09,0.13,1) end)
-    b:SetHandler("OnMouseExit", function() b.bg:SetColor(C.panel[1],C.panel[2],C.panel[3],C.panel[4]) end)
-    b:SetHandler("OnMouseUp", function(_, mouseButton, upInside)
-        if mouseButton == MOUSE_BUTTON_INDEX_LEFT and upInside ~= false and callback then callback() end
-    end)
-    return b
-end
-
-local function NextFrom(list, current)
-    local index = 1
-    for i, value in ipairs(list) do
-        if value == current then index = i + 1 break end
-    end
-    if index > #list then index = 1 end
-    return list[index]
-end
+local UI,Catalog=SC.UI,SC.Catalog
+local C=UI.colors
 
 function SC:RefreshSettings()
-    local settings = AlphaSquadUI and AlphaSquadUI.Settings
+    local settings=AlphaSquadUI.Settings
     if settings and settings.RefreshMain then settings.RefreshMain() end
-    if self.matrixWindow and not self.matrixWindow:IsHidden() then self:RefreshMatrix() end
+    self:RefreshMatrix(); self:RefreshInspector()
 end
-
-function SC:BuildIntegratedSettingsPage(page, ui)
+function SC:BuildIntegratedSettingsPage(page,ui)
     if not page or not ui or not self.sv then return end
-
-    local CreateLabel = ui.CreateLabel
-    local CreateCard = ui.CreateCard
-    local AddToggleRow = ui.AddToggleRow
-    local AddStepperRow = ui.AddStepperRow
-    local CreateButton = ui.CreateButton
-    local RegisterRefresher = ui.RegisterRefresher
-
-    local title = CreateLabel(page, "AlphaSquadSupportPageTitle", "ZoFontWinH2", "SUPPORT COVERAGE", C.white)
-    title:SetDimensions(440, 34)
-    title:SetAnchor(TOPLEFT, page, TOPLEFT, 8, 2)
-    title:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
-
-    local sub = CreateLabel(page, "AlphaSquadSupportPageSub", "ZoFontGameSmall",
-        "Raidlead planner • capability scanner • live coverage • U50 catalog", C.muted)
-    sub:SetDimensions(650, 22)
-    sub:SetAnchor(TOPLEFT, page, TOPLEFT, 9, 35)
-    sub:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
-
-    local statusCard = CreateCard(page, "AlphaSquadSupportStatusCard", 8, 66, 658, 94, "RAID READINESS", C.orange)
-    local status = CreateLabel(statusCard, "AlphaSquadSupportStatusText", "ZoFontGameBold", "", C.white)
-    status:SetDimensions(402, 48)
-    status:SetAnchor(TOPLEFT, statusCard, TOPLEFT, 14, 34)
-    status:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
-
-    local matrix = CreateButton(statusCard, "AlphaSquadSupportOpenMatrix", "OPEN COVERAGE MATRIX", 438, 36, 202, 34, function()
-        SC:OpenMatrix()
+    page.contentHeight=710
+    local title=ui.CreateLabel(page,"AlphaSquadSupportPageTitle","ZoFontWinH2","SUPPORT COVERAGE",C.orange)
+    title:SetAnchor(TOPLEFT,page,TOPLEFT,8,2); title:SetDimensions(648,36)
+    local sub=ui.CreateLabel(page,"AlphaSquadSupportPageSub","ZoFontGameSmall","Prepare your group • trial and dungeon checklists • shared builds",C.muted)
+    sub:SetAnchor(TOPLEFT,page,TOPLEFT,8,38); sub:SetDimensions(650,26)
+    local overview=ui.CreateCard(page,"AlphaSquadSupportOverview",8,76,658,130,"GROUP PREPARATION",C.orange)
+    local status=ui.CreateLabel(overview,"AlphaSquadSupportOverviewStatus","ZoFontGameBold","",C.white)
+    status:SetAnchor(TOPLEFT,overview,TOPLEFT,14,34); status:SetDimensions(630,38)
+    ui.CreateButton(overview,"AlphaSquadSupportSettingsCoverage","COVERAGE",14,82,190,32,function() SC:OpenMatrix() end)
+    ui.CreateButton(overview,"AlphaSquadSupportSettingsBuilds","BUILDS",216,82,190,32,function() SC:OpenInspector("BUILD") end)
+    ui.CreateButton(overview,"AlphaSquadSupportSettingsFood","FOOD CHECK",418,82,220,32,function() SC:OpenFoodCheck() end)
+    local module=ui.CreateCard(page,"AlphaSquadSupportModule",8,218,322,354,"MODULE & SHARING",C.orange)
+    local function Toggle(id,label,y,get,set) ui.AddToggleRow(module,"AlphaSquadSupport"..id,label,y,get,set) end
+    Toggle("Enabled","Enable module",40,function() return SC.sv.enabled end,function(v) SC:SetEnabled(v) end)
+    Toggle("Visible","Show preparation HUD",78,function() return SC.sv.visible end,function(v) SC:SetVisible(v) end)
+    Toggle("Problems","Only show issues in HUD",116,function() return SC.sv.problemsOnly end,function(v) SC.sv.problemsOnly=v; SC:RefreshHUD() end)
+    Toggle("Share","Share my build",154,function() return SC.sv.shareData end,function(v) SC:SetShareData(v) end)
+    Toggle("FoodRequired","Check food presence",192,function() return SC.sv.checkFoodPresence end,function(v) SC.sv.checkFoodPresence=v; SC:Refresh("food setting") end)
+    Toggle("GlyphRequired","Check armor glyphs",230,function() return SC.sv.checkMissingGlyphs end,function(v) SC.sv.checkMissingGlyphs=v; SC:Refresh("glyph setting") end)
+    Toggle("HideMenus","Hide HUD in menus",268,function() return SC.sv.hideInMenus end,function(v) SC.sv.hideInMenus=v; SC:ApplyVisibility() end)
+    Toggle("Experimental","Experimental sharing",306,function() return SC.sv.experimentalSharing end,function(v) SC:SetExperimentalSharing(v); SC:RefreshSettings() end)
+    UI.Hover(module,function() return "Build sharing requires both Share my build and Experimental sharing. Experimental sharing is for this test branch only: its transport registration is not ready for public release. Install LibGroupBroadcast on both compatible senders." end)
+    local appearance=ui.CreateCard(page,"AlphaSquadSupportAppearance",344,218,322,354,"HUD APPEARANCE",C.gold)
+    ui.AddToggleRow(appearance,"AlphaSquadSupportLock","Lock position",40,function() return SC.sv.locked end,function(v) SC.sv.locked=v; SC:UpdateLockState() end)
+    local function Step(id,label,y,key,step,min,max,suffix)
+        ui.AddStepperRow(appearance,"AlphaSquadSupport"..id,label,y,function() return SC.sv[key] end,function(v)
+            SC.sv[key]=v; SC:ApplyAppearance(); SC:RefreshHUD(); SC:ClampToScreen(true)
+        end,step,min,max,suffix,C.gold)
+    end
+    Step("Scale","Scale",80,"scale",5,60,180,"%")
+    Step("Width","Width",120,"width",10,300,680,"")
+    Step("RowHeight","Row height",160,"rowHeight",2,24,48,"")
+    Step("Opacity","Background",200,"opacity",5,30,100,"%")
+    ui.CreateButton(appearance,"AlphaSquadSupportResetPosition","RESET POSITION",14,256,284,32,function() SC:ResetPosition() end)
+    local dependencies=ui.CreateCard(page,"AlphaSquadSupportLibraryCard",8,584,658,110,"LIBRARIES & DATA ACCESS",C.gold)
+    local help=ui.CreateLabel(dependencies,"AlphaSquadSupportLibraryHelp","ZoFontGameSmall","",C.muted)
+    help:SetAnchor(TOPLEFT,dependencies,TOPLEFT,14,32); help:SetDimensions(432,62)
+    ui.CreateButton(dependencies,"AlphaSquadSupportLibraries","LIBRARIES",464,48,178,32,function()
+        AlphaSquadUI.Settings.OpenPage("libraries")
     end)
-
-    local profileCard = CreateCard(page, "AlphaSquadSupportProfileCard", 8, 170, 322, 188, "PROFILE & PLANNER", C.gold)
-    local profileLabel = CreateLabel(profileCard, "AlphaSquadSupportProfileCurrent", "ZoFontGameBold", "", C.gold)
-    profileLabel:SetDimensions(286, 30)
-    profileLabel:SetAnchor(TOPLEFT, profileCard, TOPLEFT, 14, 36)
-    profileLabel:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
-
-    CreateButton(profileCard, "AlphaSquadSupportProfileNext", "NEXT PROFILE", 14, 72, 138, 30, function()
-        SC:SetActiveProfile(NextFrom(PROFILE_ORDER, SC.sv.activeProfile))
+    ui.RegisterRefresher(function()
+        local coverage=SC.coverage or {}
+        status:SetText(string.format("%d / %d covered  •  %d missing  •  %d players with limited data",coverage.coveredCount or 0,coverage.requiredCount or 0,coverage.missingCount or 0,coverage.limitedPlayers or 0))
+        UI.Color(status,coverage.ready and C.green or C.gold)
+        help:SetText("ESO does not reveal other players' equipment, skill bars or Champion Points. Compatible sharing software is needed. Open Libraries for installation and setup.")
     end)
-    CreateButton(profileCard, "AlphaSquadSupportProfileSave", "SAVE CONTEXT", 158, 72, 140, 30, function()
-        SC:SaveContextProfile()
-        SC:RefreshSettings()
-    end)
-    CreateButton(profileCard, "AlphaSquadSupportProfileLoad", "LOAD CONTEXT", 14, 108, 138, 30, function()
-        SC:LoadContextProfile()
-        SC:RefreshSettings()
-    end)
-    CreateButton(profileCard, "AlphaSquadSupportRescan", "RESCAN BUILD", 158, 108, 140, 30, function()
-        SC:MarkScanDirty("settings rescan")
-    end)
-
-    local context = CreateLabel(profileCard, "AlphaSquadSupportContext", "ZoFontGameSmall", "", C.muted)
-    context:SetDimensions(282, 40)
-    context:SetAnchor(TOPLEFT, profileCard, TOPLEFT, 14, 144)
-    context:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
-    context:SetVerticalAlignment(TEXT_ALIGN_TOP)
-
-    local controlCard = CreateCard(page, "AlphaSquadSupportControlCard", 344, 170, 322, 260, "MODULE", C.cyan)
-    AddToggleRow(controlCard, "AlphaSquadSupportEnabled", "Enable module", 40,
-        function() return SC.sv.enabled end, function(v) SC:SetEnabled(v) end)
-    AddToggleRow(controlCard, "AlphaSquadSupportVisible", "Show compact HUD", 76,
-        function() return SC.sv.visible end, function(v) SC:SetVisible(v) end)
-    AddToggleRow(controlCard, "AlphaSquadSupportProblems", "Problems only", 112,
-        function() return SC.sv.problemsOnly end, function(v) SC.sv.problemsOnly = v; SC:RefreshHUD() end)
-    AddToggleRow(controlCard, "AlphaSquadSupportAuto", "Auto assign owners", 148,
-        function() return SC.sv.autoAssign end, function(v) SC.sv.autoAssign = v; SC:Refresh("autoassign") end)
-    AddToggleRow(controlCard, "AlphaSquadSupportShare", "Send / receive ASUI data", 184,
-        function() return SC.sv.shareData end,
-        function(v) SC:SetShareData(v) end)
-    AddToggleRow(controlCard, "AlphaSquadSupportUnknown", "Show unverified details", 220,
-        function() return SC.sv.showUnknown end, function(v) SC.sv.showUnknown = v; SC:RefreshHUD() end)
-
-    local auditCard = CreateCard(page, "AlphaSquadSupportAuditCard", 8, 368, 322, 250, "LOCAL BUILD AUDIT", C.green)
-    local audit = CreateLabel(auditCard, "AlphaSquadSupportAuditText", "ZoFontGameSmall", "", C.white)
-    audit:SetDimensions(286, 200)
-    audit:SetAnchor(TOPLEFT, auditCard, TOPLEFT, 14, 38)
-    audit:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
-    audit:SetVerticalAlignment(TEXT_ALIGN_TOP)
-
-    local appearanceCard = CreateCard(page, "AlphaSquadSupportAppearanceCard", 344, 440, 322, 178, "HUD APPEARANCE", C.orange)
-    AddStepperRow(appearanceCard, "AlphaSquadSupportScale", "Scale", 40,
-        function() return SC.sv.scale end,
-        function(v) SC.sv.scale=v; SC:ApplyAppearance(); SC:ClampToScreen(true) end,
-        5, 60, 180, "%", C.cyan)
-    AddStepperRow(appearanceCard, "AlphaSquadSupportWidth", "Width", 76,
-        function() return SC.sv.width end,
-        function(v) SC.sv.width=v; SC:ApplyAppearance(); SC:RefreshHUD() end,
-        10, 300, 680, "", C.cyan)
-    AddStepperRow(appearanceCard, "AlphaSquadSupportRow", "Row height", 112,
-        function() return SC.sv.rowHeight end,
-        function(v) SC.sv.rowHeight=v; SC:ApplyAppearance(); SC:RefreshHUD() end,
-        2, 24, 48, "", C.cyan)
-    AddStepperRow(appearanceCard, "AlphaSquadSupportOpacity", "Background", 148,
-        function() return SC.sv.opacity end,
-        function(v) SC.sv.opacity=v; SC:ApplyAppearance() end,
-        5, 30, 100, "%", C.cyan)
-
-    RegisterRefresher(function()
-        local coverage = SC.coverage or {}
-        local shareMode = SC:GetSharingStatus()
-        status:SetText(string.format("%d/%d COVERED  •  %d MISSING  •  %d LIMITED  •  %s",
-            tonumber(coverage.coveredCount) or 0,
-            tonumber(coverage.requiredCount) or 0,
-            tonumber(coverage.missingCount) or 0,
-            tonumber(coverage.limitedPlayers) or 0,
-            tostring(shareMode)))
-        SetColor(status, coverage.ready and C.green or C.gold)
-
-        local profile = Catalog:GetProfile(SC.sv.activeProfile)
-        profileLabel:SetText((profile and profile.label or SC.sv.activeProfile) .. "  •  " .. SC.catalogPatch)
-        context:SetText("Context: " .. tostring(SC:GetContextKey()))
-
-        local s = SC.localSnapshot or {}
-        local eq = s.equipment or {}
-        local glyphs = eq.glyphs or {}
-        local sets = eq.setList or {}
-        local setNames = {}
-        for i = 1, math.min(3, #sets) do setNames[#setNames + 1] = sets[i].name end
-        local food = s.food or {}
-        local potion = s.potion or {}
-        local foodLabel = "UNKNOWN"
-        if food.verified then foodLabel = food.active and (food.name ~= "" and food.name or "ACTIVE") or "MISSING" end
-        local potionLabel = "UNKNOWN"
-        if potion.known then potionLabel = potion.name ~= "" and potion.name or "CONFIGURED"
-        elseif potion.selectionKnown then potionLabel = "NO POTION SELECTED" end
-        audit:SetText(string.format(
-            "ROLE  %s\nGLYPHS  missing %d • tri %d • mag %d • stam %d • health %d\nFOOD  %s\nPOTION  %s\nSETS  %s",
-            tostring(s.role or "UNKNOWN"),
-            tonumber(glyphs.armorMissing) or 0,
-            tonumber(glyphs.prismatic) or 0,
-            tonumber(glyphs.magicka) or 0,
-            tonumber(glyphs.stamina) or 0,
-            tonumber(glyphs.health) or 0,
-            foodLabel,
-            potionLabel,
-            #setNames > 0 and table.concat(setNames, ", ") or "none detected"
-        ))
-    end)
-end
-
-local function CycleRole(player)
-    local current = SC.sv.roleOverrides[player.key] or player.role or "UNKNOWN"
-    local nextRole = NextFrom(ROLE_ORDER, current)
-    SC.sv.roleOverrides[player.key] = nextRole
-    SC:SanitizePlanningSettings()
-    SC:Refresh("role override")
-    if SC.SchedulePlanBroadcast then SC:SchedulePlanBroadcast() end
-end
-
-local function CycleOwner(effectKey)
-    local coverage = SC.coverage or {}
-    local rowData = nil
-    for _, row in ipairs(coverage.entries or {}) do
-        if row.key == effectKey then rowData = row break end
-    end
-    if not rowData then return end
-
-    local choices = {}
-    for _, owner in ipairs(rowData.owners or {}) do choices[#choices + 1] = owner.key end
-
-    if #choices == 0 then
-        SC.sv.assignmentLocks[effectKey] = nil
-        SC:Refresh("unlock no owner")
-        return
-    end
-
-    local current = SC.sv.assignmentLocks[effectKey]
-    if not current then
-        SC.sv.assignmentLocks[effectKey] = choices[1]
-    else
-        local found = false
-        for i, key in ipairs(choices) do
-            if key == current then
-                SC.sv.assignmentLocks[effectKey] = choices[i + 1]
-                if i == #choices then SC.sv.assignmentLocks[effectKey] = nil end
-                found = true
-                break
-            end
-        end
-        if not found then SC.sv.assignmentLocks[effectKey] = choices[1] end
-    end
-    SC:Refresh("owner lock")
-    if SC.SchedulePlanBroadcast then SC:SchedulePlanBroadcast() end
-end
-
-local function ToggleBackups(effectKey)
-    local coverage = SC.coverage or {}
-    local rowData
-    for _, row in ipairs(coverage.entries or {}) do
-        if row.key == effectKey then rowData = row break end
-    end
-    if not rowData then return end
-
-    SC.sv.duplicateBackups[effectKey] = SC.sv.duplicateBackups[effectKey] or {}
-    local backups = SC.sv.duplicateBackups[effectKey]
-    local assignedKey = rowData.assigned and rowData.assigned.key
-
-    local shouldEnable = false
-    for _, owner in ipairs(rowData.owners or {}) do
-        if owner.key ~= assignedKey and not backups[owner.key] then
-            shouldEnable = true
-            break
-        end
-    end
-
-    for _, owner in ipairs(rowData.owners or {}) do
-        if owner.key ~= assignedKey then backups[owner.key] = shouldEnable or nil end
-    end
-
-    SC:SanitizePlanningSettings()
-    SC:Refresh("backup duplicate")
-end
-
-function SC:RefreshMatrix()
-    local win = self.matrixWindow
-    if not win or win:IsHidden() then return end
-    local coverage = self.coverage or {}
-
-    win.summary:SetText(string.format("%s  •  %d/%d COVERED  •  %d LIMITED  •  PEN %d/%d  •  CRIT +%d%%",
-        tostring(coverage.profileLabel or ""),
-        tonumber(coverage.coveredCount) or 0,
-        tonumber(coverage.requiredCount) or 0,
-        tonumber(coverage.limitedPlayers) or 0,
-        coverage.penetration and coverage.penetration.covered or 0,
-        coverage.penetration and coverage.penetration.target or 18200,
-        coverage.critical and coverage.critical.groupBonus or 0))
-
-    for i, row in ipairs(win.requirementRows) do
-        local data = coverage.entries and coverage.entries[i]
-        row:SetHidden(data == nil)
-        if data then
-            row.effectKey = data.key
-            row.name:SetText(data.effect.label)
-            local statusColor = data.status == "covered" and C.green or (data.unverified and C.gold or C.red)
-            row.status:SetText(data.status == "missing" and (data.unverified and "NO SOURCE ?" or "NO SOURCE") or string.upper(data.status))
-            SetColor(row.status, statusColor)
-
-            local ownerText = data.assigned and data.assigned.displayName or "AUTO / NONE"
-            if data.locked then ownerText = "[LOCKED] " .. ownerText end
-            row.owner.label:SetText(ownerText)
-
-            if #data.duplicatePlayers > 0 then
-                row.duplicate:SetText("DUP: " .. table.concat(data.duplicatePlayers, ", "))
-                SetColor(row.duplicate, C.gold)
-            else
-                row.duplicate:SetText("")
-            end
-
-            local backupCount = 0
-            local backups = SC.sv.duplicateBackups[data.key] or {}
-            for _, owner in ipairs(data.owners or {}) do
-                if backups[owner.key] then backupCount = backupCount + 1 end
-            end
-            row.backup.label:SetText(backupCount > 0 and ("BACKUP " .. backupCount) or "BACKUP")
-        end
-    end
-
-    for i, row in ipairs(win.playerRows) do
-        local player = SC.roster and SC.roster[i]
-        row:SetHidden(player == nil)
-        if player then
-            row.player = player
-            row.user:SetText(player.displayName or "?")
-            row.role.label:SetText(SC.sv.roleOverrides[player.key] or player.role or "UNKNOWN")
-            local buildKnown = player.dataQuality == "ASUI" or player.buildVerified == true
-            row.quality:SetText(buildKnown and "ASUI" or tostring(player.dataQuality or "LIMITED"))
-            SetColor(row.quality, buildKnown and C.green or C.gold)
-
-            local food = player.food
-            local foodText = food and food.verified and (food.active and "FOOD ✓" or "NO FOOD") or "FOOD ?"
-            row.food:SetText(foodText)
-            SetColor(row.food, food and food.verified and (food.active and C.green or C.red) or C.gold)
-
-            local glyphs = player.equipment and player.equipment.glyphs
-            local missing = glyphs and tonumber(glyphs.armorMissing) or 0
-            row.glyph:SetText(glyphs and glyphs.verified and (missing > 0 and ("GLYPH -" .. missing) or "GLYPH ✓") or "GLYPH ?")
-            SetColor(row.glyph, (not glyphs or glyphs.verified ~= true) and C.gold or (missing > 0 and C.red or C.green))
-        end
-    end
-end
-
-function SC:OpenMatrix()
-    if self.inCombat then return false end
-    if not self.matrixWindow then self:CreateMatrixWindow() end
-    if self.inspectorWindow and not self.inspectorWindow:IsHidden() then self:CloseInspector() end
-    if self.reportWindow and not self.reportWindow:IsHidden() then self:ClosePullReport() end
-    self.matrixWindow:SetHidden(false)
-    self.settingsPageVisible = true
-    self:ApplyVisibility()
-    self:RefreshMatrix()
-    return true
 end
 
 function SC:CloseMatrix()
     if self.matrixWindow then self.matrixWindow:SetHidden(true) end
-    self.settingsPageVisible = false
-    self:ApplyVisibility()
+    UI.ClearTooltip()
+    if AlphaSquadUI.Settings.RefreshModuleVisibility then AlphaSquadUI.Settings.RefreshModuleVisibility() else self:ApplyVisibility() end
 end
-
+function SC:OpenMatrix()
+    if self.inCombat then return false end
+    if not self.matrixWindow then self:CreateMatrixWindow() end
+    UI.ShowWindow("supportCoverage",self.matrixWindow)
+    self:RefreshMatrix(); return true
+end
 function SC:CreateMatrixWindow()
-    local win = WINDOW_MANAGER:CreateTopLevelWindow("AlphaSquadSupportCoverageMatrix")
-    self.matrixWindow = win
-    win:SetDimensions(1040, 740)
-    win:SetAnchor(CENTER, GuiRoot, CENTER, 0, 0)
-    win:SetDrawTier(DT_HIGH)
-    win:SetDrawLayer(DL_OVERLAY)
-    win:SetDrawLevel(120)
-    win:SetClampedToScreen(true)
-    win:SetMovable(true)
-    win:SetMouseEnabled(true)
-    win:SetHidden(true)
-    win.bg = Solid(win, "AlphaSquadSupportMatrixBG", {0.009,0.014,0.025,0.995})
-
-    local top = WINDOW_MANAGER:CreateControl("AlphaSquadSupportMatrixTop", win, CT_TEXTURE)
-    top:SetAnchor(TOPLEFT, win, TOPLEFT, 0, 0)
-    top:SetAnchor(TOPRIGHT, win, TOPRIGHT, 0, 0)
-    top:SetHeight(3)
-    SetColor(top, C.orange)
-
-    local title = Label(win, "AlphaSquadSupportMatrixTitle", "ZoFontWinH2", "ĄLPHA ŞQUAD • SUPPORT COVERAGE MATRIX", C.white)
-    title:SetAnchor(TOPLEFT, win, TOPLEFT, 18, 10)
-    title:SetDimensions(620, 34)
-    title:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
-
-    win.summary = Label(win, "AlphaSquadSupportMatrixSummary", "ZoFontGameSmall", "", C.muted)
-    win.summary:SetAnchor(TOPLEFT, win, TOPLEFT, 19, 44)
-    win.summary:SetDimensions(840, 24)
-    win.summary:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
-
-    Button(win, "AlphaSquadSupportMatrixClose", "X", 990, 12, 34, 30, function() SC:CloseMatrix() end)
-
-    local profileX = 18
-    for _, key in ipairs(PROFILE_ORDER) do
-        local profile = Catalog:GetProfile(key)
-        local label = profile and profile.label or key
-        local short = label
-        if #short > 14 then short = string.sub(short, 1, 14) end
-        Button(win, "AlphaSquadSupportProfile_" .. key, short, profileX, 76, 150, 28, function()
-            SC:SetActiveProfile(key)
-            SC:RefreshMatrix()
+    local win=UI.Window("AlphaSquadSupportCoverageMatrix","Ąlpha Şquad UI  •  Coverage",function() SC:CloseMatrix() end)
+    self.matrixWindow=win; UI.RegisterWindow("supportCoverage",win,function() SC:CloseMatrix() end)
+    local trial=UI.Button(win,"AlphaSquadSupportTrial","TRIAL",105,30,function() SC:SetActiveProfile("trial") end)
+    trial:SetAnchor(TOPLEFT,win,TOPLEFT,18,96); win.trial=trial
+    local dungeon=UI.Button(win,"AlphaSquadSupportDungeon","DUNGEON",105,30,function() SC:SetActiveProfile("dungeon") end)
+    dungeon:SetAnchor(TOPLEFT,win,TOPLEFT,131,96); win.dungeon=dungeon
+    win.filterButtons={}
+    for index,filter in ipairs({"ALL","MISSING","DUPLICATES"}) do
+        local key=filter
+        local b=UI.Button(win,"AlphaSquadSupportFilter"..key,key,index==3 and 124 or 95,30,function()
+            SC.matrixFilter=key; SC:RefreshMatrix()
         end)
-        profileX = profileX + 156
+        b:SetAnchor(TOPLEFT,win,TOPLEFT,254+(index-1)*103,96); win.filterButtons[key]=b
     end
-
-    local reqHeader = Label(win, "AlphaSquadSupportReqHeader", "ZoFontGameBold",
-        "REQUIREMENT                     STATUS        OWNER / LOCK                         DUPLICATES", C.orange)
-    reqHeader:SetAnchor(TOPLEFT, win, TOPLEFT, 18, 118)
-    reqHeader:SetDimensions(650, 22)
-    reqHeader:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
-
-    win.requirementRows = {}
-    for i = 1, 20 do
-        local row = WINDOW_MANAGER:CreateControl("AlphaSquadSupportReqRow" .. i, win, CT_CONTROL)
-        row:SetDimensions(650, 27)
-        row:SetAnchor(TOPLEFT, win, TOPLEFT, 18, 143 + (i - 1) * 28)
-        row.bg = Solid(row, "AlphaSquadSupportReqRowBG" .. i, i % 2 == 0 and {0.018,0.027,0.046,0.95} or {0.014,0.022,0.038,0.95})
-
-        row.name = Label(row, "AlphaSquadSupportReqName" .. i, "ZoFontGameSmall", "", C.white)
-        row.name:SetAnchor(TOPLEFT, row, TOPLEFT, 8, 0)
-        row.name:SetDimensions(205, 27)
-        row.name:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
-
-        row.status = Label(row, "AlphaSquadSupportReqStatus" .. i, "ZoFontGameBold", "", C.white)
-        row.status:SetAnchor(TOPLEFT, row, TOPLEFT, 216, 0)
-        row.status:SetDimensions(74, 27)
-        row.status:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
-
-        row.owner = Button(row, "AlphaSquadSupportReqOwner" .. i, "", 292, 1, 175, 25, function()
-            if row.effectKey then CycleOwner(row.effectKey) end
-        end)
-
-        row.duplicate = Label(row, "AlphaSquadSupportReqDup" .. i, "ZoFontGameSmall", "", C.muted)
-        row.duplicate:SetAnchor(TOPLEFT, row, TOPLEFT, 474, 0)
-        row.duplicate:SetDimensions(112, 27)
-        row.duplicate:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
-
-        row.backup = Button(row, "AlphaSquadSupportReqBackup" .. i, "BACKUP", 588, 1, 58, 25, function()
-            if row.effectKey then ToggleBackups(row.effectKey) end
-        end)
-
-        row:SetHidden(true)
-        win.requirementRows[i] = row
-    end
-
-    local playersHeader = Label(win, "AlphaSquadSupportPlayersHeader", "ZoFontGameBold",
-        "GROUP • CLICK ROLE TO ASSIGN MANUALLY", C.orange)
-    playersHeader:SetAnchor(TOPLEFT, win, TOPLEFT, 690, 118)
-    playersHeader:SetDimensions(325, 22)
-    playersHeader:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
-
-    win.playerRows = {}
-    for i = 1, 12 do
-        local row = WINDOW_MANAGER:CreateControl("AlphaSquadSupportPlayerRow" .. i, win, CT_CONTROL)
-        row:SetDimensions(326, 42)
-        row:SetAnchor(TOPLEFT, win, TOPLEFT, 690, 143 + (i - 1) * 45)
-        row.bg = Solid(row, "AlphaSquadSupportPlayerRowBG" .. i, {0.018,0.027,0.046,0.96})
-
-        row.user = Label(row, "AlphaSquadSupportPlayerUser" .. i, "ZoFontGameBold", "", C.white)
-        row.user:SetAnchor(TOPLEFT, row, TOPLEFT, 8, 2)
-        row.user:SetDimensions(145, 20)
-        row.user:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
-
-        row.quality = Label(row, "AlphaSquadSupportPlayerQuality" .. i, "ZoFontGameSmall", "", C.green)
-        row.quality:SetAnchor(TOPLEFT, row, TOPLEFT, 154, 2)
-        row.quality:SetDimensions(62, 20)
-        row.quality:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
-
-        row.role = Button(row, "AlphaSquadSupportPlayerRole" .. i, "", 220, 3, 100, 24, function()
-            if row.player then CycleRole(row.player) end
-        end)
-
-        row.food = Label(row, "AlphaSquadSupportPlayerFood" .. i, "ZoFontGameSmall", "", C.muted)
-        row.food:SetAnchor(TOPLEFT, row, TOPLEFT, 8, 22)
-        row.food:SetDimensions(94, 18)
-        row.food:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
-
-        row.glyph = Label(row, "AlphaSquadSupportPlayerGlyph" .. i, "ZoFontGameSmall", "", C.muted)
-        row.glyph:SetAnchor(TOPLEFT, row, TOPLEFT, 108, 22)
-        row.glyph:SetDimensions(100, 18)
-        row.glyph:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
-
-        row:SetHidden(true)
-        win.playerRows[i] = row
-    end
-
-    local footer = Label(win, "AlphaSquadSupportMatrixFooter", "ZoFontGameSmall",
-        "Owner click = lock/cycle • BACKUP = mark extra owners intentional • NO ASUI = LIMITED / unverified • /assupport custom <effect_key> <abilityId>",
-        C.muted)
-    footer:SetAnchor(BOTTOMLEFT, win, BOTTOMLEFT, 18, -12)
-    footer:SetDimensions(980, 22)
-    footer:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
+    win.builds=UI.Button(win,"AlphaSquadMatrixBuilds","BUILDS",106,30,function() SC:OpenInspector("BUILD") end)
+    win.builds:SetAnchor(TOPRIGHT,win,TOPRIGHT,-18,138)
+    win.food=UI.Button(win,"AlphaSquadMatrixFood","FOOD CHECK",116,30,function() SC:OpenFoodCheck() end)
+    win.food:SetAnchor(TOPRIGHT,win.builds,TOPLEFT,-8,0)
+    win.legend=UI.Label(win,"AlphaSquadSupportMatrixLegend","ON/OFF applies to this list. Hover (i) or a player for source details.","ZoFontGameSmall",C.muted)
+    win.legend:SetAnchor(TOPLEFT,win,TOPLEFT,18,137); win.legend:SetHeight(30)
+    win.list=UI.Scroll(win,"AlphaSquadSupportCoverageList")
+    win.list:SetAnchor(TOPLEFT,win,TOPLEFT,18,178); win.list:SetAnchor(BOTTOMRIGHT,win,BOTTOMRIGHT,-14,-62)
+    win.footer:SetText("COVERED means a qualifying build source is available. Trigger, range, target limits and group data still matter. Unknown data never proves an effect is missing.")
 end
-
+function SC:RefreshMatrix()
+    local win=self.matrixWindow
+    if not win or win:IsHidden() then return end
+    local width=UI.FitWindow(win); local contentWidth=width-66
+    local coverage=self.coverage or {}
+    win.subtitle:SetText(string.format("%s  •  %d / %d covered  •  %d missing  •  %d players with limited data",coverage.profileLabel or "Group preparation",coverage.coveredCount or 0,coverage.requiredCount or 0,coverage.missingCount or 0,coverage.limitedPlayers or 0))
+    win.legend:SetWidth(math.max(180,width-300))
+    UI.Color(win.trial.label,self.sv.activeProfile=="trial" and C.orange or C.muted)
+    UI.Color(win.dungeon.label,self.sv.activeProfile=="dungeon" and C.orange or C.muted)
+    for key,b in pairs(win.filterButtons) do UI.Color(b.label,(self.matrixFilter or "ALL")==key and C.orange or C.muted) end
+    local byKey={}; for _,row in ipairs(coverage.entries or {}) do byKey[row.key]=row end
+    local selected={}; for _,key in ipairs(Catalog:GetRequirements(self.sv.activeProfile,self.sv)) do selected[key]=true end
+    local keys=Catalog:GetAllEffectKeys(); local offset,count=0,0
+    for _,key in ipairs(keys) do
+        local effect=Catalog.effects[key]
+        local tracked=selected[key]==true
+        local data=byKey[key]
+        if not data then
+            local owners=self:GetCapabilityOwners(key)
+            data={key=key,effect=effect,owners=owners,status=#owners>0 and "covered" or "missing",unverified=(coverage.limitedPlayers or 0)>0,duplicatePlayers={}}
+        end
+        local filter=self.matrixFilter or "ALL"
+        local show=filter=="ALL" or (filter=="MISSING" and tracked and data.status~="covered") or (filter=="DUPLICATES" and tracked and #(data.duplicatePlayers or {})>1)
+        if show then
+            count=count+1; local row=win.list.rows[count]
+            if not row then
+                local name="AlphaSquadSupportCoverageEntry"..count
+                row=WINDOW_MANAGER:CreateControl(name,win.list.content,CT_CONTROL)
+                row.bg=UI.Solid(row,name.."BG",C.panel)
+                row.name=UI.Label(row,name.."Name","","ZoFontGameBold")
+                row.name:SetAnchor(TOPLEFT,row,TOPLEFT,12,5); row.name:SetHeight(26)
+                row.info=UI.Button(row,name.."Info","i",26,24,function() if row.data then UI.Tooltip(row.info,Catalog:GetEffectTooltip(row.data.key)) end end)
+                UI.Hover(row.info,function() return row.data and Catalog:GetEffectTooltip(row.data.key) end)
+                row.toggle=UI.Button(row,name.."Toggle","",58,26,function()
+                    if row.data then SC:SetEffectTracking(row.data.key,not SC:IsEffectTracked(row.data.key)); SC:RefreshMatrix() end
+                end)
+                row.toggle:SetAnchor(TOPRIGHT,row,TOPRIGHT,-8,5)
+                row.status=UI.Label(row,name.."Status","","ZoFontGameBold")
+                row.status:SetAnchor(TOPRIGHT,row.toggle,TOPLEFT,-12,0); row.status:SetDimensions(126,26); row.status:SetHorizontalAlignment(TEXT_ALIGN_RIGHT)
+                row.reason=UI.Label(row,name.."Reason","","ZoFontGameSmall",C.muted)
+                row.reason:SetAnchor(TOPLEFT,row,TOPLEFT,12,34); row.reason:SetHeight(24)
+                row.owners={}; win.list.rows[count]=row
+            end
+            row.data=data; row:SetHidden(false)
+            row.name:SetWidth(math.max(100,contentWidth-265)); row.name:SetText(UI.Text(effect.label))
+            row.info:ClearAnchors(); row.info:SetAnchor(TOPLEFT,row,TOPLEFT,contentWidth-251,6)
+            row.toggle.label:SetText(tracked and "ON" or "OFF"); UI.Color(row.toggle.label,tracked and C.green or C.muted)
+            local status,color=UI.Status(data)
+            if not tracked then status="OPTIONAL"; color=C.muted elseif #(data.duplicatePlayers or {})>1 then status="DUPLICATE"; color=C.gold end
+            row.status:SetText(status); UI.Color(row.status,color); UI.Color(row.name,tracked and C.white or C.muted)
+            row.reason:SetWidth(contentWidth-24)
+            if #data.owners>0 then
+                row.reason:SetText(#(data.duplicatePlayers or {})>1 and (tostring(#data.owners).." source carriers • review duplicate conditions") or "Source carrier • hover for skills, sets and conditions")
+            else row.reason:SetText(data.unverified and "Source information unavailable from one or more players." or "No qualifying source found in the available build data.") end
+            for ownerIndex,player in ipairs(data.owners) do
+                local control=row.owners[ownerIndex]
+                if not control then
+                    control=UI.Button(row,"AlphaSquadSupportCoverageEntry"..count.."Owner"..ownerIndex,"",200,26,function(button)
+                        SC.inspectorPlayerKey=button.player.key or button.player.displayName; SC:OpenInspector("BUILD")
+                    end)
+                    UI.Hover(control,function() return control.player and row.data and UI.PlayerSources(control.player,row.data.key) end)
+                    row.owners[ownerIndex]=control
+                end
+                control.player=player; control:SetHidden(false); control:ClearAnchors()
+                control:SetWidth((contentWidth-32)/2); control:SetAnchor(TOPLEFT,row,TOPLEFT,12+((ownerIndex-1)%2)*((contentWidth-32)/2+8),64+math.floor((ownerIndex-1)/2)*30)
+                control.label:SetText(UI.Text(player.displayName or "Unknown player")); UI.Color(control.label,#(data.duplicatePlayers or {})>1 and C.gold or C.green)
+            end
+            for n=#data.owners+1,#row.owners do row.owners[n]:SetHidden(true); row.owners[n].player=nil end
+            local height=math.max(68,68+math.ceil(#data.owners/2)*30)
+            row:ClearAnchors(); row:SetAnchor(TOPLEFT,win.list.content,TOPLEFT,0,offset); row:SetDimensions(contentWidth,height)
+            offset=offset+height+7
+        end
+    end
+    for n=count+1,#win.list.rows do win.list.rows[n]:SetHidden(true); win.list.rows[n].data=nil end
+    UI.FinishScroll(win.list,offset,contentWidth)
+end
 if AlphaSquadUI.Settings and AlphaSquadUI.Settings.RegisterPage then
-    AlphaSquadUI.Settings.RegisterPage("supportcoverage", function(page, ui)
-        SC:BuildIntegratedSettingsPage(page, ui)
-    end)
+    AlphaSquadUI.Settings.RegisterPage("supportcoverage",function(page,ui) SC:BuildIntegratedSettingsPage(page,ui) end)
 end

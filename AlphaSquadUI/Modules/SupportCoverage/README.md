@@ -1,51 +1,50 @@
-# Support Coverage — controlled branch test
+# Support Coverage
 
-Version: **2.7.0-support-coverage-test.4**. Development target: **support-coverage**. This is not an in-game-certified release.
+Precombat group support checks for **Ąlpha Şquad UI**, version **2.7.0-support-coverage-test.5** (`20705`) on `support-coverage`.
 
-## Open the module
+## Workflow
 
-Settings > Alpha Squad > Support Coverage > **DETAILS / HISTORY**, or `/assupport audit`.
+1. Group with the players you want to check.
+2. Open Support Coverage and choose **Trial** or **Dungeon**.
+3. Turn the relevant effects **ON/OFF**. Filter the list by **ALL**, **MISSING** or **DUPLICATES**. Hover an effect's information icon for its description, known sources and conditions.
+4. Review known providers, missing coverage and duplicates. Hover `@UserID` to inspect the identified skill/set/mastery source.
+5. Open **Builds**, choose a player to request its current snapshot and inspect available equipment and build details. Use **REFRESH BUILD** to request a new snapshot. Equipment is listed by body slot from feet toward head, with jewelry and weapons separately.
+6. Open **Food** to review the group's known food/drink status.
 
-The paginated inspector contains CHECKS, BUILD, EXPECTED, EFFECTS, PLANNER and HISTORY. `/assupport matrix` opens the planning matrix; `/assupport history` reopens stored pulls; `/assupport report` opens the latest stored report.
+A source counted on one weapon bar can cover its catalog entry even if it is absent from the other bar. Thresholds still apply: two-handed weapons count as two pieces, and one item from a five-piece set is insufficient.
 
-## Optional build checks
+## Meaning of coverage
 
-Sets, weapons, traits, enchantments, armor weights, Champion slottables, Class Masteries, skills, food, potion, poisons and Mundus each have OFF / WARN / REQUIRED modes. The detailed expectation checks default to OFF. No poison or meta loadout is mandatory.
+`COVERED` describes available build evidence, not live effect application. It does not guarantee an effect is active, that its proc condition will be met, that a target is in range or that all twelve players can receive it. Source tooltips explain these limits where known.
 
-Capture a verified build as the expected reference for a role/profile or a particular player. The Champion comparison defaults to the four Warfare slottables, ignores slot order and checks committed points. Fitness, Craft and all-discipline scopes are optional. An incomplete four-star reference is not accepted as a complete Champion expectation.
+A duplicate means multiple identified providers, not automatically a bad build. Two limited-target sources may be intentional. Sources contributing the same named Major/Minor effect do not imply that effect stacks. A known equipped group set is distinct from an observed active buff.
 
-Sets are counted separately on each weapon bar; two-handed weapons count as two pieces and native normal/Perfected family mappings are used where available. Merely wearing one piece does not establish a five-piece capability. Set sharing uses native set IDs and normal/Perfected family normalization before any labelled name fallback. Skill and Class Mastery mappings use native ability IDs where known; runtime-localized names and labelled English hints are conservative fallbacks.
+Unverified, unsupported, stale and incomplete fields remain `UNKNOWN`. Class identity alone does not prove purchased passives, selected masteries or slotted abilities. Selected potion details do not prove the potion was consumed. No role-specific loadout is forced.
 
-Class Masteries are read from committed skill data and eligibility, not searched for in action slots. Mundus uses the native active-buff index API. Missing APIs or missing peer fields produce UNKNOWN, not invented selections.
+## Build evidence
 
-## Live coverage
+The local scanner reads equipment links/sets, separate front/back bars, Champion slottables, committed Class Masteries and prerequisites, glyph information, food, selected potion and other available local readiness fields.
 
-Observable effects are collected by ID, with native buff-type classification for supported Major/Minor effects, session indexes and explicit custom IDs for other effects. Raw observations can be collected independently of the raid-focused display; retaining raw IDs in history is optional and off by default.
+Peer details require a compatible sender. Native grouping alone does not provide remote gear, full skill bars, CP or mastery selections. LibGroupCombatStats supplies compatible Ultimate identities and supported active class-line data, not complete skill/passive/CP/mastery inspection. LibSetDetection v5 optionally supplies shared set identities and per-bar activation without requiring Alpha Squad on the sender; hidden or unavailable sets remain unknown.
 
-Metrics distinguish individual recipients, individual boss targets and group recipient coverage. Six-target effects are not automatically required on twelve players. Required stacks, target roles, recipient counts and uptime goals are configurable. Unknown time is shown separately and excluded from uptime; a minimum measured-data threshold prevents sparse observations from passing an uptime goal.
+A sender may use the full **Ąlpha Şquad UI** or the lightweight **AlphaSquadBuildShare** companion. Both need LibGroupBroadcast plus its required LibAddonMenu-2.0 and LibDebugLogger dependencies for the compatible experimental build protocol. LibFoodDrinkBuff optionally improves food-buff identification on supported player/group units; missing remote observations still do not prove absence. Install the relevant libraries on the sending clients as well as the receiver.
 
-Boss targets are not OR-merged. Untargetable phases are observation gaps rather than proven downtime. The combat HUD prioritizes problems and shows UNVERIFIED when no reliable live conclusion is available.
+## Dependencies and sharing
 
-## Potions and food
+Open **Libraries** for status and setup. Library installation does not by itself publish a build. For full build details, each participant must explicitly enable a compatible sender, join the group and opt into experimental sharing. In the full suite, enable both **Share my build** and **Experimental sharing**. LibSetDetection set sharing uses its own library controls and does not require enabling Alpha Squad's experimental full-build protocol. Missing or incompatible senders leave remote fields unknown.
 
-Expected food/potion selection can be compared with actual available fields. Food expiry, selected potion stack and cooldown are visible when available. Combat reports separate potion-category use events from inferred cooldown starts. Buffs also supplied by skills or allies are not automatically attributed to a potion. Exact consumed-item attribution remains unverified where the API does not provide it.
+Experimental sharing defaults OFF. Provisional protocol IDs require formal reservation and coexistence validation before a public sharing release. Use matching test versions and do not claim support for arbitrary unrelated addons' equipment protocols.
 
-## Pull reports and history
+Compact capability summaries are automatic while compatible precombat sharing is enabled. Detailed builds are requested on demand; a valid response is cached for 120 seconds and invalidated when the advertised build changes. Transfer delays do not justify guessing missing details.
 
-Reports are named using observed encounter names, for example `Lokkestiiz - Pull 1`, and retain raid/zone, duration, profile and per-subject metrics. Closing a report does not delete it. It can be reopened in HISTORY. Automatic closing is configurable (20 seconds by default), and a new fight closes report/planning windows.
+The build viewer displays names and available details; internal identities are implementation details. Delayed snapshots must not be blended with an old build to invent a complete current loadout.
 
-History is capped at 20 pulls by default (5–50 configurable), 1,024 metrics per pull, 20 subjects and 6,000 retained metrics overall. The tighter cap wins. Manual reset preserves settings. Leaving/disbanding the group clears reports and persisted session history; solo history is not retained. Optional reload recovery requires the same group fingerprint and expires after six hours.
+## Scope and persistence
 
-## Sharing and non-ASUI players
+This version removes pull reports, live uptime, combat history and recorded-loadout planning from the active Support Coverage workflow. Checks are useful before combat; they do not need a pull to populate shared builds.
 
-Native group observations and the existing optional group Ultimate integration remain best-effort evidence. Without ASUI, unavailable equipment/CP/mastery/potion fields are clearly labelled `UNKNOWN`. A witnessed positive buff does not establish a complete remote inventory or its caster.
-
-Experimental sharing is OFF by default. Enable it on matching test clients in CHECKS only for controlled group tests. Protocol IDs 507–510 remain unreserved and must not be publicly released as registered IDs. Signature-only build details, schema-checked live observations and potion evidence are bounded. Detail message kinds do not replace one another in the transport queue. Plan, pull-identity and unchanged potion heartbeats are rate-limited. Queuing/transit delays can make a field UNKNOWN; missing information is never replaced with a guessed value. Legacy wire positions are frozen; old clients cannot supply the new detailed fields.
-
-## Planning and profiles
-
-The planner selects whole current or recorded loadouts, not incompatible sets assembled independently. It prefers fewer changes, respects assignment constraints and never changes equipment. Recorded inventory availability still requires confirmation. Saved raid/boss context profiles include expectations, roles, locks and effect targets; optional auto-loading uses the observed context. Each context stores at most 32 expected templates for its active profile, and loading it preserves every other profile. Curated, patch-verified HM meta presets and a complete target-aware per-player penetration/critical-cap optimizer are not supplied by this test build. No guessed HM state or misleading final-cap number is displayed.
+Supported UI and effect preferences remain persistent in `AlphaSquadSupportCoverageSavedVariables`. Remote build snapshots are bounded transient group data. The addon never equips items, changes another player's role, consumes a potion or posts group messages automatically.
 
 ## Validation
 
-Run `tests/support_coverage.lua`, `tests/ult_tracker.lua` and `tests/overload.lua` with Lua 5.1 and Lua 5.4 from the repository root. The GitHub workflow also validates syntax, manifest paths, version consistency and the installable ZIP. These deterministic tests do not establish ESO runtime/API behavior, real frame times, network throughput or visual correctness. Use the in-game test checklist before requesting any PR.
+Use the repository [test checklist](../../../docs/SUPPORT_COVERAGE_TESTING.md). Automated Lua checks are necessary but cannot certify ESO's runtime UI, real frame time or multi-client transport. No PR is authorized until the maintainer completes in-game testing and explicitly requests it.

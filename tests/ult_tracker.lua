@@ -184,6 +184,14 @@ Group.window = Window()
 Group.sv.visible, Group.sv.enabled = true, true
 Group:ApplyVisibility()
 check(updates.AlphaSquadUI_ULTGroup_Safety ~= nil, "Visible group tracker enables its recovery sync")
+AlphaSquadUI.Settings.AnyExclusiveWindowVisible=function() return true end
+ULT:ApplyVisibility()
+check(ULT.window:IsHidden() and Group.window:IsHidden(), "Any Alpha Squad configuration window hides both Ultimate HUDs")
+check(updates.AlphaSquadUI_ULTTracker_Safety==nil and updates.AlphaSquadUI_ULTGroup_Safety==nil,
+    "Opening a shared configuration window stops both Ultimate safety loops")
+AlphaSquadUI.Settings.AnyExclusiveWindowVisible=function() return false end
+ULT:ApplyVisibility()
+check(not ULT.window:IsHidden() and not Group.window:IsHidden(), "Closing shared configuration restores enabled Ultimate HUDs")
 Group.sv.visible = false
 Group:ApplyVisibility()
 check(updates.AlphaSquadUI_ULTGroup_Safety == nil, "Hidden group tracker stops its recovery sync")

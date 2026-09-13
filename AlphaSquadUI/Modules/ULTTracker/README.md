@@ -21,7 +21,6 @@ For each bar:
 
 - localized Ultimate name
 - icon
-- effective ability ID
 - current Ultimate cost
 - current shared Ultimate resource
 - charging / ready / active state
@@ -103,19 +102,18 @@ ESO does not expose another player's live Ultimate resource directly to arbitrar
 addons. Group tracking therefore integrates with **LibGroupCombatStats**, which
 shares Ultimate data through the official ZOS group broadcast API.
 
-The personal MAIN/BACK tracker does not require this library.
+Install LibGroupCombatStats with the dependencies declared by its current package. The personal MAIN/BACK tracker does not require this library. See the shared **Libraries** page for setup guidance.
 
 When LibGroupCombatStats is available, AlphaSquadUI registers for **ULT only**.
 No DPS or HPS data is requested.
 
-Compatible group data can come from AlphaSquadUI, Hodor Reflexes, or another
-addon registered with LibGroupCombatStats.
+Compatible group Ultimate data can come from Ąlpha Şquad UI or another addon that actively publishes the same LibGroupCombatStats data. Merely installing a library does not guarantee every peer is sharing. This integration does not inspect remote gear, full skill bars, Champion selections or Class Masteries; Support Coverage build sharing is separate.
 
 ### Raidlead configuration
 
 Open:
 
-`Settings > Ąlpha Şquad > ULT Tracker > CONFIGURE GROUP`
+`Settings > Ąlpha Şquad UI > ULT Tracker > CONFIGURE GROUP`
 
 or:
 

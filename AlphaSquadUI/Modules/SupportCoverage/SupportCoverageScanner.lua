@@ -38,15 +38,23 @@ local function Normalize(value)
     return string.lower(tostring(value or ""))
 end
 
-local EQUIP_SLOTS = {}
-for _, value in ipairs({
-    EQUIP_SLOT_HEAD, EQUIP_SLOT_CHEST, EQUIP_SLOT_SHOULDERS, EQUIP_SLOT_WAIST,
-    EQUIP_SLOT_HAND, EQUIP_SLOT_LEGS, EQUIP_SLOT_FEET, EQUIP_SLOT_NECK,
-    EQUIP_SLOT_RING1, EQUIP_SLOT_RING2, EQUIP_SLOT_MAIN_HAND, EQUIP_SLOT_OFF_HAND,
-    EQUIP_SLOT_BACKUP_MAIN, EQUIP_SLOT_BACKUP_OFF,
+local EQUIP_SLOTS, SLOT_DETAILS = {}, {}
+for order, definition in ipairs({
+    {"FEET", "Feet"}, {"LEGS", "Legs"}, {"WAIST", "Waist"}, {"HAND", "Hands"},
+    {"CHEST", "Chest"}, {"SHOULDERS", "Shoulders"}, {"HEAD", "Head"},
+    {"NECK", "Necklace"}, {"RING1", "Ring 1"}, {"RING2", "Ring 2"},
+    {"MAIN_HAND", "Front bar main hand", "PRIMARY"}, {"OFF_HAND", "Front bar off hand", "PRIMARY"},
+    {"BACKUP_MAIN", "Back bar main hand", "BACKUP"}, {"BACKUP_OFF", "Back bar off hand", "BACKUP"},
 }) do
-    if value ~= nil then EQUIP_SLOTS[#EQUIP_SLOTS + 1] = value end
+    local slot = rawget(_G, "EQUIP_SLOT_" .. definition[1])
+    if slot ~= nil then
+        EQUIP_SLOTS[#EQUIP_SLOTS + 1] = slot
+        SLOT_DETAILS[slot] = {slot=slot, slotKey=definition[1], slotName=definition[2],
+            order=order, bar=definition[3] or "BOTH"}
+    end
 end
+SC.EquipmentSlotOrder = EQUIP_SLOTS
+SC.EquipmentSlotDetails = SLOT_DETAILS
 
 local ARMOR_SLOTS = {}
 for _, value in ipairs({
@@ -70,7 +78,20 @@ local function GetLink(slot)
     return link ~= nil and tostring(link) or nil
 end
 
-local function ClassifyEnchant(header, description)
+local function ClassifyEnchant(header, description, enchantId)
+    -- Native categories are language independent, unlike translated glyph text.
+    local category = enchantId and SafeCall(GetEnchantSearchCategoryType, enchantId)
+    if category ~= nil then
+        local categories = {
+            PRISMATIC_DEFENSE="prismatic", REDUCE_ARMOR="crusher", REDUCE_POWER="weakening", MAGICKA="magicka",
+            STAMINA="stamina", HEALTH="health", BERSERKER="weapon_spell_damage",
+            HEALTH_REGEN="recovery", MAGICKA_REGEN="recovery", STAMINA_REGEN="recovery",
+            PRISMATIC_REGEN="recovery",
+        }
+        for suffix, kind in pairs(categories) do
+            if category == rawget(_G, "ENCHANTMENT_SEARCH_CATEGORY_" .. suffix) then return kind end
+        end
+    end
     local text = Normalize((header or "") .. " " .. (description or ""))
 
     local patterns = {
@@ -79,11 +100,12 @@ local function ClassifyEnchant(header, description)
         stamina = {"maximum stamina", "max stamina"},
         health = {"maximum health", "max health"},
         crusher = {"crushing", "crusher", "reduce the target's physical and spell resistance"},
+        weakening = {"weakening"},
         weapon_spell_damage = {"weapon and spell damage"},
         recovery = {"recovery", "regeneration"},
     }
 
-    for _, kind in ipairs({"prismatic","crusher","magicka","stamina","health","weapon_spell_damage","recovery"}) do
+    for _, kind in ipairs({"prismatic","crusher","weakening","magicka","stamina","health","weapon_spell_damage","recovery"}) do
         local list=patterns[kind]
         for _, token in ipairs(list) do
             if text:find(Normalize(token), 1, true) then return kind end
@@ -92,12 +114,52 @@ local function ClassifyEnchant(header, description)
     return text ~= "" and "other" or "unknown"
 end
 
+function SC:DescribeEquipmentItem(slot, link)
+    if type(link) ~= "string" or link == "" then return nil end
+    local descriptor = SLOT_DETAILS[slot] or {slot=slot, slotName="Equipment", bar="BOTH", order=99}
+    local trait, traitDescription = SafeCall(GetItemLinkTraitInfo, link)
+    local hasSet, setName, _, normalEquipped, maxEquipped, setId, perfectedEquipped = SafeCall(GetItemLinkSetInfo, link, false)
+    local hasCharges, enchantName, enchantDescription = SafeCall(GetItemLinkEnchantInfo, link)
+    local enchantId = Integer(SafeCall(GetItemLinkFinalEnchantId, link), 0, MAX_INTEGER_ID)
+    if not enchantId or enchantId == 0 then
+        enchantId = Integer(SafeCall(GetItemLinkAppliedEnchantId, link), 0, MAX_INTEGER_ID)
+        if not enchantId or enchantId == 0 then
+            enchantId = Integer(SafeCall(GetItemLinkDefaultEnchantId, link), 0, MAX_INTEGER_ID)
+        end
+    end
+    local hasEnchant
+    if enchantId ~= nil then hasEnchant = enchantId > 0
+    elseif tostring(enchantName or "") ~= "" or tostring(enchantDescription or "") ~= "" then hasEnchant = true end
+    local item = {
+        slot=slot, slotKey=descriptor.slotKey, slotName=descriptor.slotName, order=descriptor.order,
+        bar=descriptor.bar, link=link, name=tostring(SafeCall(GetItemLinkName, link) or ""),
+        icon=tostring(SafeCall(GetItemLinkIcon, link) or ""), setName=tostring(setName or ""),
+        hasSet=hasSet, setVerified=type(hasSet) == "boolean", setNormalEquipped=Count(normalEquipped, 24),
+        setMaxEquipped=Count(maxEquipped, 24), setPerfectedEquipped=Count(perfectedEquipped, 24),
+        setId=Integer(setId, 1, MAX_INTEGER_ID), trait=trait,
+        traitName=tostring(SafeCall(GetString, SI_ITEMTRAITTYPE, trait) or ""),
+        traitDescription=tostring(traitDescription or ""),
+        armorType=SafeCall(GetItemLinkArmorType, link), weaponType=SafeCall(GetItemLinkWeaponType, link),
+        quality=Integer(SafeCall(GetItemLinkDisplayQuality, link), 0, 16),
+        level=Integer(SafeCall(GetItemLinkRequiredLevel, link), 0, 100),
+        championPoints=Integer(SafeCall(GetItemLinkRequiredChampionPoints, link), 0, 3600),
+        enchantId=enchantId, hasEnchant=hasEnchant, enchantHasCharges=hasCharges,
+        enchantName=tostring(enchantName or ""), enchantDescription=tostring(enchantDescription or ""),
+        isArmor=ARMOR_SLOTS[slot] == true, isWeapon=descriptor.bar ~= "BOTH",
+    }
+    if hasEnchant == nil then item.enchant = "unknown"
+    elseif not hasEnchant then item.enchant = "missing"
+    else item.enchant = ClassifyEnchant(enchantName, enchantDescription, enchantId) end
+    return item
+end
+
 function SC:ScanEquipment()
     local snapshot = {
         complete = GetItemLink ~= nil and GetItemLinkSetInfo ~= nil,
         sets = {},
         setList = {},
         items = {},
+        slots = {},
         glyphs = {
             armorTotal = 0,
             armorMissing = 0,
@@ -115,30 +177,19 @@ function SC:ScanEquipment()
 
     for _, slot in ipairs(EQUIP_SLOTS) do
         local link = GetLink(slot)
+        local descriptor = SLOT_DETAILS[slot]
+        local state = {slot=slot, slotKey=descriptor.slotKey, slotName=descriptor.slotName,
+            order=descriptor.order, bar=descriptor.bar, known=link ~= nil, empty=link == ""}
+        snapshot.slots[#snapshot.slots + 1] = state
         if link == nil then
             snapshot.complete = false
             snapshot.glyphs.unknown = (snapshot.glyphs.unknown or 0) + (ARMOR_SLOTS[slot] and 1 or 0)
         elseif link ~= "" then
-            local itemName = SafeCall(GetItemLinkName, link) or ""
-            local item = {
-                slot = slot,
-                link = link,
-                name = itemName,
-                enchant = "unknown",
-                hasEnchant = nil,
-                trait = SafeCall(GetItemLinkTraitInfo, link),
-                armorType = SafeCall(GetItemLinkArmorType, link),
-                weaponType = SafeCall(GetItemLinkWeaponType, link),
-                enchantId = nil,
-                enchantHasCharges = nil,
-                isArmor = ARMOR_SLOTS[slot] == true,
-                isWeapon = slot == EQUIP_SLOT_MAIN_HAND or slot == EQUIP_SLOT_OFF_HAND
-                    or slot == EQUIP_SLOT_BACKUP_MAIN or slot == EQUIP_SLOT_BACKUP_OFF,
-            }
+            local item = self:DescribeEquipmentItem(slot, link)
+            state.item = item
 
-            local hasSet, setName, _, normalEquipped, maxEquipped, setId, perfectedEquipped =
-                SafeCall(GetItemLinkSetInfo, link, true)
-            if hasSet == nil then snapshot.complete = false end
+            local hasSet, setName, setId = item.hasSet, item.setName, item.setId
+            if not item.setVerified then snapshot.complete = false end
             if hasSet and setName and setName ~= "" then
                 local numericSetId = Integer(setId, 1, MAX_INTEGER_ID) or 0
                 local setKey = numericSetId > 0 and tostring(numericSetId) or "name:" .. Normalize(setName)
@@ -146,9 +197,9 @@ function SC:ScanEquipment()
                     local entry = {
                         id = numericSetId,
                         name = setName,
-                        equipped = Count(normalEquipped, 24),
-                        perfected = Count(perfectedEquipped, 24),
-                        maxEquipped = Count(maxEquipped, 24),
+                        equipped = item.setNormalEquipped,
+                        perfected = item.setPerfectedEquipped,
+                        maxEquipped = item.setMaxEquipped,
                         mainCount = 0, backCount = 0,
                     }
                     snapshot.sets[setKey] = entry
@@ -176,25 +227,15 @@ function SC:ScanEquipment()
                 if not mainOnly then set.backCount = set.backCount + pieces end
             end
 
-            local hasCharges, enchantHeader, enchantDescription = SafeCall(GetItemLinkEnchantInfo, link)
-            item.enchantHasCharges = hasCharges
-            local enchantId = SafeCall(GetItemLinkFinalEnchantId, link)
-            if not enchantId or enchantId == 0 then
-                enchantId = SafeCall(GetItemLinkAppliedEnchantId, link)
-                if not enchantId or enchantId == 0 then enchantId = SafeCall(GetItemLinkDefaultEnchantId, link) end
-            end
-            item.enchantId = Integer(enchantId, 0, MAX_INTEGER_ID)
-            if item.enchantId ~= nil then
-                item.hasEnchant = item.enchantId > 0
-            elseif tostring(enchantHeader or "") ~= "" or tostring(enchantDescription or "") ~= "" then
-                item.hasEnchant = true
-            end
-            if item.hasEnchant == nil then
-                item.enchant = "unknown"
-            elseif item.hasEnchant then
-                item.enchant = ClassifyEnchant(enchantHeader, enchantDescription)
-            else
-                item.enchant = "missing"
+            if item.isWeapon then
+                item.enchantCharges = Integer(SafeCall(GetChargeInfoForItem, BAG_WORN, slot), 0, 1000000)
+                if item.enchantCharges == nil then
+                    item.enchantCharges = Integer(SafeCall(GetItemLinkNumEnchantCharges, link), 0, 1000000)
+                end
+                if item.enchantCharges and item.enchantCharges > 0 then item.enchantHasCharges = true end
+                if item.enchantCharges == 0 then item.enchantHasCharges = false end
+                -- This API refers to our worn slots and must never be called while decoding a peer's links.
+                item.enchantSuppressedByPoison = SafeCall(IsItemAffectedByPairedPoison, slot)
             end
 
             if ARMOR_SLOTS[slot] then
@@ -208,9 +249,18 @@ function SC:ScanEquipment()
                 else
                     snapshot.glyphs.other = snapshot.glyphs.other + 1
                 end
-            elseif item.enchant == "crusher" and item.enchantHasCharges ~= false then
+            elseif item.isWeapon and item.enchant == "crusher" and item.enchantHasCharges ~= false
+                and item.enchantSuppressedByPoison ~= true then
                 snapshot.glyphs.crusher = snapshot.glyphs.crusher + 1
                 AddCapability(snapshot.capabilities, "crusher", "Crusher Enchantment")
+                local capability = snapshot.capabilities.crusher
+                capability.conditional, capability.evidence = true, "EQUIPPED_ENCHANT"
+                capability.mainBar = capability.mainBar or item.bar == "PRIMARY"
+                capability.backBar = capability.backBar or item.bar == "BACKUP"
+                capability.sourceDetails = capability.sourceDetails or {}
+                capability.sourceDetails["Crusher Enchantment (" .. item.slotName .. ")"] = {name="Crusher Enchantment",
+                    kind="enchant", slot=slot, slotName=item.slotName, mainBar=item.bar == "PRIMARY",
+                    backBar=item.bar == "BACKUP", conditions="Requires a charged weapon enchantment without paired poison."}
             end
 
             snapshot.items[#snapshot.items + 1] = item
@@ -279,34 +329,65 @@ function SC:ScanSkills()
                 boundId = validBoundId or 0
                 if boundId > 0 then
                     local effectiveId = boundId
-                    if GetEffectiveAbilityIdForAbilityOnHotbar then
+                    local slotType = SafeCall(GetSlotType, slot, category)
+                    local crafted = ACTION_TYPE_CRAFTED_ABILITY ~= nil and slotType == ACTION_TYPE_CRAFTED_ABILITY
+                    local craftedId = crafted and boundId or nil
+                    if crafted then
+                        -- Crafted slots bind a grimoire ID, not an ability ID.
+                        effectiveId = Integer(SafeCall(GetAbilityIdForCraftedAbilityId, craftedId), 1, MAX_INTEGER_ID)
+                        if not effectiveId then result.known = false end
+                    elseif GetEffectiveAbilityIdForAbilityOnHotbar then
                         local resolved = SafeCall(GetEffectiveAbilityIdForAbilityOnHotbar, boundId, category)
                         resolved = Integer(resolved, 1, MAX_INTEGER_ID)
                         if resolved then effectiveId = resolved end
                     end
 
                     local name = SafeCall(GetSlotName, slot, category)
-                    if not name or name == "" then name = SafeCall(GetAbilityName, effectiveId) or "" end
+                    if not name or name == "" then name = SafeCall(GetAbilityName, effectiveId or 0) or "" end
                     local icon = SafeCall(GetSlotTexture, slot, category) or ""
                     local entry = {
                         slot = slot,
                         boundAbilityId = boundId,
-                        abilityId = effectiveId,
+                        abilityId = effectiveId or 0,
                         name = tostring(name or ""),
                         icon = tostring(icon or ""),
                         ultimate = slot == ultimateSlot,
+                        bar = key == "primary" and "PRIMARY" or "BACKUP",
+                        description = tostring(SafeCall(GetAbilityDescription, effectiveId or 0) or ""),
+                        craftedAbilityId = craftedId,
                     }
+                    local skillType, lineIndex = SafeCall(GetSpecificSkillAbilityKeysByAbilityId, effectiveId or 0)
+                    if skillType and lineIndex then
+                        entry.lineId = Integer(SafeCall(GetSkillLineId, skillType, lineIndex), 1, MAX_INTEGER_ID)
+                        entry.lineName = tostring(SafeCall(GetSkillLineNameById, entry.lineId or 0) or "")
+                    end
+                    if crafted then
+                        local first, second, third = SafeCall(GetCraftedAbilityActiveScriptIds, craftedId)
+                        entry.scripts, entry.scriptsKnown = {}, true
+                        for _, scriptId in ipairs({first or false, second or false, third or false}) do
+                            scriptId = Integer(scriptId, 1, MAX_INTEGER_ID)
+                            if scriptId then
+                                entry.scripts[#entry.scripts + 1] = {id=scriptId,
+                                    name=tostring(SafeCall(GetCraftedAbilityScriptDisplayName, scriptId) or ""),
+                                    description=tostring(SafeCall(GetCraftedAbilityScriptDescription, craftedId, scriptId) or "")}
+                            else entry.scriptsKnown = false end
+                        end
+                    end
                     result[key][#result[key] + 1] = entry
 
                     if Catalog then
                         local matched = Catalog:MatchSkill(entry.abilityId, entry.name)
-                        if entry.boundAbilityId ~= entry.abilityId then
+                        if not crafted and entry.boundAbilityId ~= entry.abilityId then
                             for capability in pairs(Catalog:MatchSkill(entry.boundAbilityId, entry.name)) do
                                 matched[capability] = true
                             end
                         end
                         for capability in pairs(matched) do
                             AddCapability(result.capabilities, capability, entry.name)
+                            local cap = result.capabilities[capability]
+                            cap.mainBar = cap.mainBar or key == "primary"
+                            cap.backBar = cap.backBar or key == "backup"
+                            cap.conditional, cap.evidence = true, "SLOTTED_SKILL"
                         end
                     end
                 end
@@ -338,6 +419,8 @@ function SC:ScanSkills()
                     points = Integer(SafeCall(GetNumPointsSpentOnChampionSkill,starId), 0, 3600),
                     discipline = self.GetChampionDiscipline and self:GetChampionDiscipline(starId),
                     name = tostring(name or ""),
+                    description = tostring(SafeCall(GetChampionSkillDescription, starId, 0) or ""),
+                    icon = tostring(SafeCall(GetAbilityIcon, SafeCall(GetChampionAbilityId, starId) or 0) or ""),
                 }
             end
         end
@@ -488,11 +571,6 @@ end
 
 function SC:GetRoleHint(unitTag, capabilities)
     unitTag = unitTag or "player"
-    local key = self:GetPlayerKey(unitTag)
-    if self.sv and self.sv.roleOverrides and self.sv.roleOverrides[key] then
-        return self.sv.roleOverrides[key]
-    end
-
     local selectedRole
     if GetGroupMemberSelectedRole then selectedRole = SafeCall(GetGroupMemberSelectedRole, unitTag) end
     if (selectedRole == nil or selectedRole == LFG_ROLE_INVALID)
@@ -504,7 +582,7 @@ function SC:GetRoleHint(unitTag, capabilities)
 
     local supportCount = 0
     for _ in pairs(capabilities or {}) do supportCount = supportCount + 1 end
-    if selectedRole == LFG_ROLE_DPS or supportCount > 0 then
+    if selectedRole ~= nil and selectedRole == LFG_ROLE_DPS then
         return supportCount >= 2 and "DD SUPPORT" or "DD PARSE"
     end
     return "UNKNOWN"
@@ -539,8 +617,8 @@ function SC:ScanLocalPlayer()
         -- Capability sources are finite hints; absence is not proof that a player
         -- cannot provide an effect through a source unknown to this catalog.
         capabilitiesComplete = false,
-        connected = true,
-        dead = IsUnitDead and IsUnitDead("player") or false,
+        connected = self.IsOnline and self:IsOnline("player"),
+        dead = SafeCall(IsUnitDead, "player") == true,
         scannedAt = self.NowMs(),
         equipment = equipment,
         skills = skills,
@@ -555,6 +633,15 @@ function SC:ScanLocalPlayer()
     for key,value in pairs(snapshot.masteries.capabilities or {}) do
         snapshot.capabilities[key]=snapshot.capabilities[key] or value
     end
+    if self.DeriveBuildCapabilities then
+        snapshot.capabilities = self:DeriveBuildCapabilities(snapshot)
+    elseif self.ScanClassPassives then
+        for key,value in pairs(self:ScanClassPassives(skills, snapshot.masteries)) do
+            snapshot.capabilities[key] = snapshot.capabilities[key] or value
+        end
+    end
+    snapshot.role = self:GetRoleHint("player", snapshot.capabilities)
+    snapshot.supportScore = self:GetSupportScore(snapshot.capabilities, skills)
     return snapshot
 end
 
@@ -586,7 +673,7 @@ function SC:ScanLimitedUnit(unitTag)
         asui = false,
         capabilitiesComplete = false,
         connected = self.IsOnline and self:IsOnline(unitTag),
-        dead = IsUnitDead and IsUnitDead(unitTag) or false,
+        dead = SafeCall(IsUnitDead, unitTag) == true,
         food = self:ScanFood(unitTag),
         ult = ult,
         capabilities = capabilities,

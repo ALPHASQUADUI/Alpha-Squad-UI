@@ -36,20 +36,6 @@ local function GetUnitTagByIndex(index)
     return "group" .. tostring(index)
 end
 
-local function MergeManualCapabilities(sc, entry)
-    local manual = sc.sv and sc.sv.manualCapabilities and sc.sv.manualCapabilities[entry.key]
-    if type(manual) ~= "table" then return end
-    entry.capabilities = entry.capabilities or {}
-    for effectKey, enabled in pairs(manual) do
-        if enabled and Catalog.effects[effectKey] then
-            entry.capabilities[effectKey] = entry.capabilities[effectKey] or {sources={}}
-            entry.capabilities[effectKey].sources["Manual"] = true
-        elseif enabled == false then
-            entry.capabilities[effectKey] = nil
-        end
-    end
-end
-
 local function SnapshotView(source)
     if not source then return nil end
     local view = {}
@@ -59,6 +45,7 @@ local function SnapshotView(source)
 end
 
 function SC:BuildRoster()
+    if self.PruneExternalSources then self:PruneExternalSources() end
     local roster, byKey = {}, {}
     local groupSize = tonumber(GetGroupSize and GetGroupSize())
     if not groupSize or groupSize~=groupSize or groupSize==math.huge or groupSize==-math.huge then groupSize=0 end
@@ -70,8 +57,6 @@ function SC:BuildRoster()
             localData.unitTag = "player"
             localData.key = localData.displayName
             localData.index = 1
-            localData.role = (self.sv.roleOverrides and self.sv.roleOverrides[localData.key]) or localData.role
-            MergeManualCapabilities(self, localData)
             roster[1] = localData
             byKey[localData.key] = localData
         end
@@ -100,15 +85,20 @@ function SC:BuildRoster()
                 end
             else
                 local peer = self.peerData[key]
+                local characterName = self.Try(GetUnitName, unitTag)
+                if peer and peer.characterName and peer.characterName ~= "" and characterName and characterName ~= peer.characterName then
+                    self.peerData[key] = nil
+                    if self.detailReceivers then self.detailReceivers[key] = nil end
+                    peer = nil
+                end
                 entry = peer and SnapshotView(peer) or (self.ScanLimitedUnit and self:ScanLimitedUnit(unitTag))
                 if entry then
                     if peer and self.NowMs() - (peer.scannedAt or 0) > 75000 then
-                        -- Keep fresh live/detail evidence but never keep old build capabilities green.
-                        entry.capabilities, entry.equipment = {}, nil
-                        entry.food, entry.potion = nil, nil
-                        entry.buildVerified = false
-                        local liveFresh=peer.liveUpdatedAt and self.NowMs()-(peer.liveUpdatedAt or 0)<=5500
-                        entry.dataQuality = liveFresh and "ASUI LIVE" or "STALE"
+                        -- Expired summaries invalidate every private build field.
+                        entry.capabilities, entry.equipment, entry.skills, entry.masteries = {}, nil, nil, nil
+                        entry.food, entry.potion, entry.poisons, entry.mundus = self:ScanFood(unitTag), nil, nil, nil
+                        entry.buildVerified, entry.capabilitiesComplete = false, false
+                        entry.dataQuality = "STALE"
                     end
                     entry.unitTag = unitTag
                     entry.connected = self:IsOnline(unitTag)
@@ -121,8 +111,8 @@ function SC:BuildRoster()
                 entry.displayName = key
                 entry.unitTag = unitTag
                 entry.index = index
-                entry.role = (self.sv.roleOverrides and self.sv.roleOverrides[key]) or entry.role or "UNKNOWN"
-                MergeManualCapabilities(self, entry)
+                if not isSelf and self.MergeExternalCapabilities then self:MergeExternalCapabilities(entry, true) end
+                entry.role = entry.role or "UNKNOWN"
                 roster[#roster + 1] = entry
                 byKey[key] = entry
                 activeKeys[key] = true
@@ -146,25 +136,6 @@ function SC:BuildRoster()
     return roster
 end
 
-local function RoleScore(effectKey, role)
-    role = tostring(role or "")
-    local effect = Catalog.effects[effectKey]
-    if not effect then return 0 end
-
-    local score = 0
-    if role == "DD SUPPORT" then score = score + 35 end
-    if role == "HEAL" or role == "H1" or role == "H2" then score = score + 25 end
-    if role == "OT" or role == "MT/OT" then score = score + 20 end
-    if role == "MT" then score = score + 15 end
-    if role == "DD PARSE" then score = score + 5 end
-
-    if effect.category == "penetration" and (role == "MT" or role == "OT" or role == "MT/OT") then score = score + 30 end
-    if effect.category == "sustain" and (role == "HEAL" or role == "H1" or role == "H2") then score = score + 20 end
-    if effect.category == "defense" and (role == "HEAL" or role == "H1" or role == "H2" or role == "MT" or role == "OT" or role == "MT/OT") then score = score + 20 end
-
-    return score
-end
-
 function SC:GetCapabilityOwners(effectKey)
     local owners = {}
     for _, entry in ipairs(self.roster or {}) do
@@ -174,53 +145,14 @@ function SC:GetCapabilityOwners(effectKey)
     end
 
     table.sort(owners, function(a, b)
-        local qa = (a.dataQuality == "ASUI" or a.buildVerified == true) and 100 or 0
-        local qb = (b.dataQuality == "ASUI" or b.buildVerified == true) and 100 or 0
-        local sa = qa + RoleScore(effectKey, a.role) + ScoreValue(a.supportScore)
-        local sb = qb + RoleScore(effectKey, b.role) + ScoreValue(b.supportScore)
-        if sa ~= sb then return sa > sb end
         return tostring(a.displayName or "") < tostring(b.displayName or "")
     end)
 
     return owners
 end
 
-function SC:GetAssignedOwner(effectKey, owners)
-    owners = owners or self:GetCapabilityOwners(effectKey)
-    local locked = self.sv.assignmentLocks and self.sv.assignmentLocks[effectKey]
-    if locked and not self.byKey[locked] then return nil, true, "LOCKED_MISSING" end
-    if locked and self.byKey[locked] then
-        local entry = self.byKey[locked]
-        if entry.connected ~= false and entry.dead ~= true and entry.capabilities and entry.capabilities[effectKey] then
-            return entry, true
-        end
-        return entry, true, "LOCKED_MISSING"
-    end
-
-    self.assignmentLoad = self.assignmentLoad or {}
-    if self.sv.autoAssign and owners[1] then
-        -- Spread duties across observed capable owners; never fabricate equipment swaps.
-        local chosen, bestScore
-        for _, owner in ipairs(owners) do
-            local score = RoleScore(effectKey, owner.role) - 12 * ((self.assignmentLoad or {})[owner.key] or 0)
-            if owner.connected ~= false and (not bestScore or score > bestScore) then chosen, bestScore = owner, score end
-        end
-        if chosen then
-            self.assignmentLoad[chosen.key] = (self.assignmentLoad[chosen.key] or 0) + 1
-            return chosen, false
-        end
-    end
-    return nil, false
-end
-
-local function IsBackup(sc, effectKey, playerKey)
-    local backups = sc.sv.duplicateBackups and sc.sv.duplicateBackups[effectKey]
-    return type(backups) == "table" and backups[playerKey] == true
-end
-
 function SC:EvaluateCoverage(reason)
-    self.assignmentLoad = {}
-    local profileKey = self.sv.activeProfile or "full"
+    local profileKey = self.sv.activeProfile or "trial"
     local requirements = Catalog:GetRequirements(profileKey, self.sv)
     local result = {
         profileKey = profileKey,
@@ -288,22 +220,10 @@ function SC:EvaluateCoverage(reason)
         end
     end
 
-    for _, player in ipairs(self.roster or {}) do
-        player.audit = self:EvaluateBuildAudit(player)
-        for _, check in ipairs(player.audit.rows) do
-            if check.status == "MISMATCH" then
-                result.issues[#result.issues + 1] = {severity=check.mode == "REQUIRED" and "error" or "warning", text=player.displayName .. " - " .. check.label .. " mismatch"}
-            elseif check.status == "UNKNOWN" then
-                result.issues[#result.issues + 1] = {severity="unknown", text=player.displayName .. " - " .. check.label .. " unverified"}
-            end
-        end
-        if player.audit.requiredFailures > 0 or player.audit.requiredUnknown > 0 then result.ready = false end
-    end
-
     for _, effectKey in ipairs(requirements) do
         local effect = Catalog.effects[effectKey]
         local owners = self:GetCapabilityOwners(effectKey)
-        local assigned, locked, lockProblem = self:GetAssignedOwner(effectKey, owners)
+        local assigned = owners[1]
 
         local unsupportedPeer=false
         if effect.wireV1Unavailable then
@@ -313,7 +233,15 @@ function SC:EvaluateCoverage(reason)
         end
         local status
         local unverified = result.capabilityDataIncomplete or result.limitedPlayers > 0 or unsupportedPeer
-        if #owners > 0 then
+        local allPersonal = not effect.personal
+        if effect.personal then
+            allPersonal = #self.roster > 0
+            for _, player in ipairs(self.roster) do
+                if player.connected ~= false and player.dead ~= true
+                    and not (player.capabilities and player.capabilities[effectKey]) then allPersonal = false end
+            end
+        end
+        if #owners > 0 and allPersonal then
             status = "covered"
             result.coveredCount = result.coveredCount + 1
         else
@@ -324,26 +252,11 @@ function SC:EvaluateCoverage(reason)
         end
 
         local duplicatePlayers = {}
-        if #owners > 1 then
-            for _, owner in ipairs(owners) do
-                if not assigned or owner.key ~= assigned.key then
-                    if not IsBackup(self, effectKey, owner.key) then
-                        duplicatePlayers[#duplicatePlayers + 1] = owner.displayName
-                    end
-                end
-            end
-            if #duplicatePlayers > 0 then
-                result.duplicates[effectKey] = duplicatePlayers
-            end
-        end
-
-        if lockProblem == "LOCKED_MISSING" then
-            result.ready = false
-            result.issues[#result.issues + 1] = {
-                severity = "error",
-                text = effect.label .. " locked owner missing capability",
-                key = effectKey,
-            }
+        if #owners > 1 and not effect.personal then
+            -- Every source holder is visible. Repeated named buffs do not stack;
+            -- limited-target sources may still need multiple users for a trial.
+            for _, owner in ipairs(owners) do duplicatePlayers[#duplicatePlayers + 1] = owner.displayName end
+            result.duplicates[effectKey] = duplicatePlayers
         end
 
         result.entries[#result.entries + 1] = {
@@ -352,7 +265,9 @@ function SC:EvaluateCoverage(reason)
             status = status,
             owners = owners,
             assigned = assigned,
-            locked = locked,
+            locked = false,
+            sourceOnly = true,
+            partialRecipients = effect.coverageLimit and effect.coverageLimit < #self.roster or false,
             duplicatePlayers = duplicatePlayers,
             unverified = status == "missing" and unverified,
         }
@@ -360,7 +275,7 @@ function SC:EvaluateCoverage(reason)
         if status == "missing" then
             result.issues[#result.issues + 1] = {
                 severity = unverified and "unknown" or (effect.priority == "core" and "error" or "warning"),
-                text = effect.label .. (unverified and " - no reported source (roster incomplete)" or " - no source"),
+                text = effect.label .. (effect.personal and " - check each player" or (unverified and " - no reported source (roster incomplete)" or " - no source")),
                 key = effectKey,
                 unverified = unverified,
             }
@@ -417,13 +332,8 @@ function SC:EvaluateCoverage(reason)
         if sa ~= sb then return sa < sb end
         return a.text < b.text
     end)
-    result.budgetEvidence = "PLANNED_ONLY"
+    result.budgetEvidence = "SOURCE_CAPABILITY_ONLY"
     self.coverage = result
-
-    if not self.inCombat and self.sv.showReadyBanner and self.ShowReadyBanner then
-        local limited=result.limitedPlayers+((result.unknownCount>0 or result.readinessUnknownCount>0) and 1 or 0)
-        self:ShowReadyBanner(result.ready, result.coveredCount, result.requiredCount, limited)
-    end
 
     return result
 end

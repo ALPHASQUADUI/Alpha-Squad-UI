@@ -2,9 +2,32 @@
 
 All notable changes to Ąlpha Şquad UI are documented here.
 
-## 2.7.0-support-coverage-test.4 — Unreleased
 
-This development candidate requires in-game ESO validation before a pull request or public release.
+## 2.7.0-support-coverage-test.5 — Unreleased
+
+Precombat-focused branch candidate. Requires in-game validation before an explicit maintainer PR request; no public sharing release is claimed.
+
+### Support Coverage
+- Replaced the active pull-report, uptime, history and loadout-planning workflow with precombat Trial/Dungeon support checks.
+- Added independent effect ON/OFF controls, source explanations and duplicate-provider inspection by account.
+- Added group Builds and Food views with scrolling lists and named equipment, skill, Champion, mastery and consumable evidence where available.
+- Preserved separate weapon-bar set thresholds; a qualifying set on either bar can supply a source without requiring both bars.
+- Kept source availability distinct from active effect application, proc conditions and recipient coverage; unsupported and stale data remains UNKNOWN.
+- Added compatible detailed build sharing and a lightweight AlphaSquadBuildShare companion for players who do not install the full UI suite.
+- Added optional LibSetDetection set-source integration and conservative LibGroupCombatStats evidence for group members using compatible third-party sharing.
+- Retired the plan/live protocols and kept experimental build protocols provisional and opt-in.
+- Suspended Support scans and build sends during combat; used cached precombat snapshots, bounded transport and lightweight recovery updates.
+
+### Suite and documentation
+- Updated settings branding to Ąlpha Şquad UI with the accented letters and ESO's standard interface font.
+- Improved responsive windows, scrolling and dependency/setup guidance.
+- Documented native remote-inspection limits, LibGroupCombatStats ULT-only scope, companion setup and the current in-game checklist.
+- Preserved existing SavedVariables namespaces and relevant tracker preferences.
+
+
+## 2.7.0-support-coverage-test.4 — Superseded development candidate
+
+Historical record of the previous candidate. Its report/planner features are superseded by test.5; this entry is not the current feature list.
 
 ### Support Coverage
 - Added evidence-aware readiness, build expectations, per-target live coverage, a bounded planner and recoverable pull history.

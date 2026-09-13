@@ -10,6 +10,11 @@ local function MasteryName(name)
     return string.lower(tostring(name or ""):gsub("’","'"):gsub("%^.*$", ""))
 end
 
+local function NaturalNumber(value, maximum)
+    if type(value) ~= "number" or value ~= value or value < 0 or value > maximum or value % 1 ~= 0 then return nil end
+    return value
+end
+
 function SC:IsSelf(unitTag)
     if unitTag == "player" then return true end
     return Try(AreUnitsEqual, unitTag, "player") == true
@@ -22,30 +27,43 @@ function SC:IsOnline(unitTag)
 end
 
 function SC:ScanClassMasteries()
-    local result = {known=false, eligible=nil, selected={}, learned={}, learnedIds={}, capabilities={}, nativeLines=0, foreignLines=0}
+    local result = {known=false, eligible=nil, selected={}, learned={}, learnedIds={}, capabilities={},
+        skillLines={}, passives={}, nativeLines=0, foreignLines=0}
     local manager = SKILLS_DATA_MANAGER
     if not manager or not manager.GetSkillTypeData or not SKILL_TYPE_CLASS then return result end
     local classType = Try(manager.GetSkillTypeData, manager, SKILL_TYPE_CLASS)
     if not classType or not classType.SkillLineIterator or not GetSkillLineDynamicInfo then return result end
     local classId = Try(GetUnitClassId, "player")
-    local complete, mastered = type(classId)=="number" and classId>0, 0
+    local complete, mastered = NaturalNumber(classId, 255) ~= nil and classId > 0, 0
     local ok = pcall(function()
         for _, line in classType:SkillLineIterator() do
             local skillType, lineIndex = line:GetIndices()
             -- Read committed state, not the UI's pending respec/activation state.
             local rank, _, active, _, _, _, isMastery = Try(GetSkillLineDynamicInfo, skillType, lineIndex)
-            if rank == nil or isMastery == nil then complete = false end
+            if not NaturalNumber(rank, 100) or type(isMastery) ~= "boolean" or type(active) ~= "boolean" then complete = false end
+            local lineClass = Try(line.GetClassId, line)
+            local lineId = Try(line.GetId, line) or Try(GetSkillLineId, skillType, lineIndex)
+            local lineName = Try(line.GetName, line) or Try(GetSkillLineNameById, lineId or 0)
+            if active or (isMastery and lineClass == classId) then
+                result.skillLines[#result.skillLines + 1] = {id=NaturalNumber(lineId, 2147483647),
+                    name=tostring(lineName or ""), rank=NaturalNumber(rank, 100), active=active == true,
+                    classId=NaturalNumber(lineClass, 255), mastery=isMastery == true, native=lineClass == classId}
+            end
             if isMastery then
-                if line:GetClassId() == classId then
+                if lineClass == classId then
                     for _, skill in line:SkillIterator() do
                         if skill:IsPurchased() then
                             local progression = skill:GetCurrentProgressionData()
                             if progression then
                                 local id,name=Try(progression.GetAbilityId,progression),Try(progression.GetName,progression)
-                                if type(id)=="number" and id==id and id>0 and id<math.huge and id%1==0
+                                local selectedRank=NaturalNumber(Try(skill.GetCurrentRank, skill) or 1, 100)
+                                if NaturalNumber(id,2147483647) and id>0 and selectedRank and selectedRank>0
                                     and type(name)=="string" and name~="" then
                                     result.selected[#result.selected + 1] = {
-                                        id=id, name=name, rank=skill.GetCurrentRank and skill:GetCurrentRank() or 1,
+                                        id=id, name=name, rank=selectedRank,
+                                        icon=tostring(Try(GetAbilityIcon, id) or ""),
+                                        description=tostring(Try(GetAbilityDescription, id) or ""),
+                                        lineId=lineId,
                                     }
                                 else complete=false end
                             else complete = false end
@@ -57,26 +75,32 @@ function SC:ScanClassMasteries()
                     if skill:IsPurchased() then
                         local progression=skill:GetCurrentProgressionData()
                         if progression then
-                            local learnedRank=skill.GetCurrentRank and skill:GetCurrentRank() or 1
+                            local learnedRank=NaturalNumber(Try(skill.GetCurrentRank, skill) or 1, 100)
                             local learnedId=Try(progression.GetAbilityId,progression)
                             local learnedName=Try(progression.GetName,progression)
-                            if type(learnedName)=="string" and learnedName~="" then
+                            if type(learnedName)=="string" and learnedName~="" and learnedRank and learnedRank>0 then
                                 result.learned[MasteryName(learnedName)]=learnedRank
                             else
                                 complete=false
                             end
-                            if type(learnedId)=="number" and learnedId==learnedId and learnedId>0
-                                and learnedId<math.huge and learnedId%1==0 then
+                            if NaturalNumber(learnedId,2147483647) and learnedId>0 and learnedRank and learnedRank>0 then
                                 result.learnedIds[learnedId]=learnedRank
+                                if Try(skill.IsPassive, skill) == true then
+                                    result.passives[#result.passives + 1] = {id=learnedId,
+                                        name=tostring(learnedName or ""), rank=learnedRank, lineId=lineId,
+                                        lineName=tostring(lineName or ""), active=true,
+                                        icon=tostring(Try(GetAbilityIcon, learnedId) or ""),
+                                        description=tostring(Try(GetAbilityDescription, learnedId) or "")}
+                                end
                             else
                                 complete=false
                             end
-                        end
+                        else complete=false end
                     end
                 end
-                if line:GetClassId() == classId then
+                if lineClass == classId then
                     result.nativeLines = result.nativeLines + 1
-                    if tonumber(rank) and rank >= 50 then mastered = mastered + 1 end
+                    if NaturalNumber(rank, 100) and rank >= 50 then mastered = mastered + 1 end
                 else
                     result.foreignLines = result.foreignLines + 1
                 end
@@ -88,15 +112,15 @@ function SC:ScanClassMasteries()
         local allMaxed = Try(HasMaxRankInAllClassSkillLines)
         local activePlayerLines = Try(manager.GetNumPlayerClassActiveSkillLines, manager)
         local activeClassLines = Try(manager.GetNumActiveClassSkillLines, manager)
-        if allMaxed ~= nil and activePlayerLines ~= nil and activeClassLines ~= nil then
-            result.eligible = allMaxed == true and activePlayerLines == activeClassLines
+        if type(allMaxed) == "boolean" and NaturalNumber(activePlayerLines, 24) and NaturalNumber(activeClassLines, 24) then
+            result.eligible = allMaxed == true and activePlayerLines == 3 and activeClassLines == 3
             result.eligibilityEvidence = "NATIVE_CLASS_MASTERY_API"
         else
             result.eligible = result.nativeLines == 3 and result.foreignLines == 0 and mastered == 3
             result.eligibilityEvidence = "SKILL_LINE_FALLBACK"
         end
     end
-    if not ok then result.selected = {}; result.learned={}; result.learnedIds={} end
+    if not ok then result.selected = {}; result.learned={}; result.learnedIds={}; result.passives={}; result.skillLines={} end
     if result.known and result.eligible then
         for _,selected in ipairs(result.selected) do
             for _,source in ipairs(self.Catalog.masterySources or {}) do
@@ -126,6 +150,54 @@ function SC:ScanClassMasteries()
     end
     table.sort(result.selected, function(a, b) return a.id < b.id end)
     return result
+end
+
+function SC:ScanClassPassives(skills, masteries)
+    local capabilities = {}
+    if not masteries or not masteries.known then return capabilities end
+    for _, source in ipairs(self.Catalog.passiveSources or {}) do
+        local learnedRank, evidence = 0, "LEARNED_PASSIVE_NAME"
+        for _, id in ipairs(source.abilityIds or {}) do
+            local rank = NaturalNumber((masteries.learnedIds or {})[id], 100)
+            if rank and rank > learnedRank then learnedRank, evidence = rank, "LEARNED_PASSIVE_ID" end
+        end
+        if learnedRank == 0 then
+            local localizedName = source.name
+            for _, id in ipairs(source.abilityIds or {}) do
+                local candidate = Try(GetAbilityName, id)
+                if type(candidate) == "string" and candidate ~= "" then localizedName=candidate; break end
+            end
+            learnedRank = NaturalNumber((masteries.learned or {})[MasteryName(localizedName)], 100) or 0
+        end
+        if learnedRank >= (source.rank or 1) then
+            local unrestricted = #(source.skillLineIds or {}) == 0
+            local main, back = unrestricted, unrestricted
+            for _, bar in ipairs({"primary", "backup"}) do
+                for _, skill in ipairs((skills or {})[bar] or {}) do
+                    for _, lineId in ipairs(source.skillLineIds or {}) do
+                        if skill.lineId == lineId then
+                            if bar == "primary" then main = true else back = true end
+                        end
+                    end
+                end
+            end
+            if main or back then
+                for _, key in ipairs(source.provides or {}) do
+                    if self.Catalog.effects[key] then
+                        local cap = capabilities[key] or {sources={}, sourceDetails={}, mainBar=false, backBar=false}
+                        cap.sources[source.name] = true
+                        cap.mainBar, cap.backBar = cap.mainBar or main, cap.backBar or back
+                        cap.conditional, cap.evidence = true, evidence
+                        cap.sourceDetails[source.name] = {kind="passive", name=source.name,
+                            conditions=source.conditions, trigger=source.trigger, rank=learnedRank,
+                            mainBar=main, backBar=back, evidence=evidence}
+                        capabilities[key] = cap
+                    end
+                end
+            end
+        end
+    end
+    return capabilities
 end
 
 function SC:GetChampionDiscipline(starId)
@@ -172,45 +244,7 @@ function SC:RefreshReadinessFacts()
     return changed
 end
 
-function SC:SamplePotionEvidence()
-    if not self.pull then return end
-    local potion = self:ScanPotion()
-    local now = self.NowMs()
-    local evidence = self.pull.potions
-    local key = self:GetPlayerKey("player")
-    local entry = evidence[key] or {count=0, inferredCount=0, evidence="UNKNOWN", opportunitiesMs=0}
-    entry.categoryMonitoring = ITEM_SOUND_CATEGORY_POTION ~= nil and EVENT_INVENTORY_ITEM_USED ~= nil
-    evidence[key] = entry
-    local previous = self.potionObservation
-    local remaining = potion.cooldownRemaining
-    if potion.known and remaining ~= nil then
-        entry.cooldownMonitoring = true
-        entry.evidence = "LOCAL_COOLDOWN"
-        entry.itemId = potion.itemId
-        entry.name = potion.name
-        if previous and previous.link == potion.link and now - previous.at <= 2500 then
-            local elapsed = math.max(0, now - previous.at)
-            if previous.remaining ~= nil and previous.remaining <= 0 then entry.opportunitiesMs = entry.opportunitiesMs + elapsed end
-            if previous.remaining ~= nil and remaining > 1000 and remaining > previous.remaining + 1000 then
-                -- A cooldown transition is evidence, not proof of the exact consumed item.
-                entry.inferredCount = entry.inferredCount + 1
-                entry.evidence = "INFERRED_COOLDOWN"
-                entry.lastObservedAt = now - self.pull.startedAt
-            end
-        end
-    end
-    self.potionObservation = {at=now, remaining=remaining, link=potion.link}
-end
-
-function SC:OnConsumableUsed(itemSoundCategory)
-    -- ESO's inventory-used event carries a sound category, not an item ID.
-    -- Count only documented potion-category events; never infer a use from a buff alone.
-    if not self.pull or ITEM_SOUND_CATEGORY_POTION == nil or itemSoundCategory ~= ITEM_SOUND_CATEGORY_POTION then return end
-    local key = self:GetPlayerKey("player")
-    local entry = self.pull.potions[key] or {count=0, inferredCount=0, opportunitiesMs=0}
-    self.pull.potions[key] = entry
-    entry.categoryMonitoring = true
-    entry.count = entry.count + 1
-    entry.evidence = "POTION_CATEGORY_EVENT"
-    entry.exactItemVerified = false
+function SC:OnConsumableUsed()
+    -- Refresh readiness once after the item event; there are no consumption reports.
+    if self.ScheduleRefresh and not self.inCombat then self:ScheduleRefresh("consumable used", 250) end
 end

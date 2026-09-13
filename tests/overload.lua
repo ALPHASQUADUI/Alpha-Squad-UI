@@ -56,6 +56,12 @@ AOT.window={
 }
 AOT:ApplyVisualSettings()
 check(updates.AlphaSquadUI_HealthSync~=nil,"A visible gameplay HUD restores the recovery heartbeat")
+AlphaSquadUI.Settings={AnyExclusiveWindowVisible=function() return true end}
+AOT:ApplyVisualSettings()
+check(hidden and updates.AlphaSquadUI_HealthSync==nil,"Shared configuration hides Overload and stops its recovery loop")
+AlphaSquadUI.Settings.AnyExclusiveWindowVisible=function() return false end
+AOT:ApplyVisualSettings()
+check(not hidden and updates.AlphaSquadUI_HealthSync~=nil,"Closing shared configuration wakes the enabled Overload HUD")
 
 AOT:SetAutoDormant(true)
 check(updates.AlphaSquadUI_HealthSync==nil,"Dormant Overload unregisters its recovery heartbeat")

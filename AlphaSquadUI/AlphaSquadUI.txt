@@ -1,11 +1,11 @@
 ## Title: |cE66A19Ąlpha Şquad UI|r
 ## APIVersion: 101050 101051
-## Version: 2.7.0-support-coverage-test.4
-## AddOnVersion: 20704
+## Version: 2.7.0-support-coverage-test.5
+## AddOnVersion: 20705
 ## Author: SeRuM1
-## Description: Modular Alpha Squad UI with optional support readiness, build checks and bounded pull history.
+## Description: Modular Alpha Squad UI with pre-combat group readiness and voluntary build inspection.
 ## SavedVariables: AlphaSquadOverloadTrackerSavedVariables AlphaSquadULTTrackerSavedVariables AlphaSquadSupportCoverageSavedVariables
-## OptionalDependsOn: LibGroupCombatStats LibGroupBroadcast LibFoodDrinkBuff
+## OptionalDependsOn: LibGroupCombatStats LibGroupBroadcast LibFoodDrinkBuff LibSetDetection
 
 Core/Core.lua
 Core/Theme.lua
@@ -25,17 +25,14 @@ Modules/SupportCoverage/SupportCoverageCatalog.lua
 Modules/SupportCoverage/SupportCoverageAudit.lua
 Modules/SupportCoverage/SupportCoverageScanner.lua
 Modules/SupportCoverage/SupportCoverageBuild.lua
-Modules/SupportCoverage/SupportCoverageHistory.lua
+Modules/SupportCoverage/SupportCoverageSources.lua
+Modules/SupportCoverage/SupportCoverageBuildCodec.lua
 Modules/SupportCoverage/SupportCoverageShare.lua
 Modules/SupportCoverage/SupportCoverageDetails.lua
-Modules/SupportCoverage/SupportCoverageLiveShare.lua
 Modules/SupportCoverage/SupportCoverageEngine.lua
-Modules/SupportCoverage/SupportCoverageTracking.lua
+Modules/SupportCoverage/SupportCoverageExternal.lua
 Modules/SupportCoverage/SupportCoverageUI.lua
-Modules/SupportCoverage/SupportCoveragePlanner.lua
 Modules/SupportCoverage/SupportCoverageInspector.lua
 Modules/SupportCoverage/SupportCoverageSettings.lua
-Modules/SupportCoverage/SupportCoverageSources.lua
-Modules/SupportCoverage/SupportCoverageIntegration.lua
 
 Modules/Overload/Overload.lua
