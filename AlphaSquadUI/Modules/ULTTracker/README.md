@@ -52,8 +52,9 @@ ULT Tracker is event-driven:
 - Ultimate use
 - player activation
 
-A 1.5 second safety refresh is retained only as a fallback. The fast animation
-update exists only while a tracked Ultimate is actually READY.
+A 1.5 second safety refresh is retained only as a fallback while the tracker is
+enabled, visible and unobscured. The fast animation update exists only while a
+visible tracked Ultimate is actually READY.
 
 ## Commands
 
@@ -167,7 +168,7 @@ Group tracking remains event-driven through LibGroupCombatStats Ultimate events.
 - hidden settings panels are not refreshed
 - disabled group HUDs do not rebuild rows
 - only READY rows use a lightweight pulse update
-- one 2-second safety refresh runs only while Group Tracking is enabled
+- one 2-second safety refresh runs only while Group Tracking and its parent are enabled, visible and unobscured
 - row controls are created once and reused
 - no combat-log parsing is required
 

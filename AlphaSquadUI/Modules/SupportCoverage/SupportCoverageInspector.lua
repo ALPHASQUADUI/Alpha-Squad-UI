@@ -87,7 +87,7 @@ end
 
 function SC:ResizeInspector()
     for _, win in ipairs({self.inspectorWindow or false, self.reportWindow or false}) do
-        if win then win:SetScale(math.min(1, (GuiRoot:GetWidth()-24)/1000, (GuiRoot:GetHeight()-24)/750)) end
+        if win then win:SetScale(math.max(0.1, math.min(1, (GuiRoot:GetWidth()-24)/1000, (GuiRoot:GetHeight()-24)/750))) end
     end
 end
 function SC:GetInspectedPlayer()
@@ -101,6 +101,8 @@ function SC:CloseInspector()
 end
 function SC:OpenInspector(tab)
     if self.inCombat then return end
+    if self.reportWindow then self:ClosePullReport() end
+    if self.matrixWindow and not self.matrixWindow:IsHidden() then self:CloseMatrix() end
     self.inspectorTab, self.inspectorPage = tab or "CHECKS", 1
     if not self.inspectorWindow then
         local win = CreateWindow("AlphaSquadSupportInspector", "SUPPORT COVERAGE - INSPECTOR", function() SC:CloseInspector() end)
@@ -117,6 +119,7 @@ function SC:OpenInspector(tab)
             local player = SC:GetInspectedPlayer()
             if player then
                 SC.sv.roleOverrides[player.key or player.displayName] = Next(ROLES, player.role)
+                SC:SanitizePlanningSettings()
                 SC:Refresh("inspector role")
             end
         end)
@@ -131,7 +134,14 @@ function SC:OpenInspector(tab)
             local player = SC:GetInspectedPlayer()
             if player then
                 local _, key = SC:GetExpectedTemplate(player)
-                SC.sv.buildTemplates[key] = nil; SC:RefreshInspector()
+                SC.sv.buildTemplates[key] = nil
+                local playerKey = player.key or player.displayName
+                if playerKey then
+                    local scoped = tostring(SC.sv.activeProfile) .. ":" .. playerKey
+                    if SC.sv.playerTemplates[scoped] == key then SC.sv.playerTemplates[scoped] = nil end
+                    if SC.sv.playerTemplates[playerKey] == key then SC.sv.playerTemplates[playerKey] = nil end
+                end
+                SC:Refresh("clear expected"); SC:RefreshInspector()
             end
         end)
         Button(win, "AlphaSquadInspectorResetHistory", "RESET HISTORY", 785, 82, 195, function()
@@ -187,8 +197,8 @@ function SC:GetInspectorRows()
             self.sv.reportAutoCloseSeconds=Next({0,10,20,30,60,120}, self.sv.reportAutoCloseSeconds); self:RefreshInspector()
         end)
         Add("Experimental test sharing", "Unreserved IDs 507-510. Controlled tests only; public release is blocked.", self.sv.experimentalSharing and "ON" or "OFF", function()
-            self.sv.experimentalSharing=not self.sv.experimentalSharing
-            if self.sv.experimentalSharing then self:InitializeSharing(); self:MarkScanDirty("test sharing") end
+            self:SetExperimentalSharing(not self.sv.experimentalSharing)
+            if self.sv.experimentalSharing then self:MarkScanDirty("test sharing") end
             self:RefreshInspector()
         end, C.gold)
     elseif self.inspectorTab == "PLANNER" then
@@ -262,7 +272,15 @@ function SC:GetInspectorRows()
     else
         for _, key in ipairs(self.Audit.order) do
             local value=self.Audit.Value(player,key)
-            Add(self.Audit.labels[key], value or ((player and player.asui) and "Unavailable or not shared by this ASUI client." or "No ASUI build data; this field cannot be analyzed."), nil,nil,value and C.white or C.muted)
+            local hashKey=key=="champion" and "champion_"..string.lower(self.sv.championScope or "COMBAT") or key
+            local signatureMatches=not player or not player.buildDetailFingerprint or not player.detailBuildFingerprint
+                or player.buildDetailFingerprint==player.detailBuildFingerprint
+            local shared=player and signatureMatches and player.auditHashes and player.detailAt
+                and self.NowMs()-math.max(player.detailAt,player.detailAliveAt or 0)<=120000
+                and player.auditHashes[hashKey]~=nil
+            local detail=value or (shared and "Shared signature available; the private raw value is not transmitted.")
+                or ((player and player.asui) and "Unavailable or not shared by this ASUI client." or "No ASUI build data; this field cannot be analyzed.")
+            Add(self.Audit.labels[key],detail,nil,nil,value and C.white or shared and C.gold or C.muted)
         end
         if player then
             for _, set in ipairs(player.equipment and player.equipment.setList or {}) do
@@ -289,9 +307,12 @@ function SC:ClosePullReport()
     local win=self.reportWindow
     if win then win:SetHidden(true); win.report=nil end
     self.reportGeneration=(self.reportGeneration or 0)+1
+    if self.ApplyVisibility then self:ApplyVisibility() end
 end
 function SC:OpenPullReport(report)
     if not report or self.inCombat then return end
+    if self.inspectorWindow then self.inspectorWindow:SetHidden(true) end
+    if self.matrixWindow and not self.matrixWindow:IsHidden() then self:CloseMatrix() end
     if not self.reportWindow then
         local win=CreateWindow("AlphaSquadSupportPullReport","SUPPORT PERFORMANCE",function() SC:ClosePullReport() end)
         self.reportWindow=win
@@ -301,7 +322,7 @@ function SC:OpenPullReport(report)
         Label(win,"AlphaSquadReportEvidence","ZoFontGameSmall","Uptime is measured time only. Unknown time is shown separately. Assigned owners are not confirmed casters.",960,30,18,122)
     end
     self.reportWindow.report,self.reportWindow.page=report,1
-    self:ResizeInspector(); self.reportWindow:SetHidden(false); self:RefreshPullReport()
+    self:ResizeInspector(); self.reportWindow:SetHidden(false); self:RefreshPullReport(); self:ApplyVisibility()
     self.reportGeneration=(self.reportGeneration or 0)+1
     local generation=self.reportGeneration
     local delay=self.sv.reportAutoCloseSeconds

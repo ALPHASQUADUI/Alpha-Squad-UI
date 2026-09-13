@@ -12,5 +12,5 @@ Critical rules:
 - New settings pages register through `AlphaSquadUI.Settings.RegisterPage`.
 - Validate Lua, manifest paths, version consistency and ZIP packaging before PR.
 - Gameplay/UI/API changes require in-game ESO testing.
-- Support Coverage sharing protocol IDs 510/509/508 are provisional and must not be treated as public-release-safe until formally reserved/verified.
+- Support Coverage sharing protocol IDs 507–510 are provisional and must not be treated as public-release-safe until formally reserved/verified.
 - Project conversation continuity is stored in `docs/PROJECT_CONTEXT.md`.

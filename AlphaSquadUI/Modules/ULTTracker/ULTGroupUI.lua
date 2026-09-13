@@ -315,8 +315,20 @@ function Group:ApplyVisibility()
         or (self.sv.hideInMenus and ULT.uiObscured)
 
     self.window:SetHidden(hidden)
+    if self.SetSafetyUpdateActive then self:SetSafetyUpdateActive(not hidden) end
 
-    if hidden then self:SetReadyPulseActive(false) end
+    if hidden then
+        self:SetReadyPulseActive(false)
+    else
+        local anyReady = false
+        for _, row in ipairs(self.window.rows or {}) do
+            if not row:IsHidden() and row.ready and not row.recentlyUsed then
+                anyReady = true
+                break
+            end
+        end
+        self:SetReadyPulseActive(anyReady)
+    end
 end
 
 function Group:RefreshRow(row, entry)
@@ -346,17 +358,27 @@ function Group:RefreshRow(row, entry)
 
     local percent = tonumber(entry.chargePercent) or 0
     percent = math.min(100, math.max(0, math.floor(percent + 0.5)))
-    row.percent:SetText(tostring(percent) .. "%")
+    if entry.connected == false then row.percent:SetText("OFF")
+    elseif entry.dead == true then row.percent:SetText("DEAD")
+    else row.percent:SetText(tostring(percent) .. "%") end
 
     local progressWidth = row.geometryProgressWidth or math.max(80, self:GetRowWidth() - 52)
     row.progress:SetWidth(math.floor(progressWidth * (percent / 100)))
 
     row.ready = entry.anyReady == true
+    row.unavailable = entry.unavailable == true
     row.recentlyUsed = entry.recentlyUsed == true
 
     row.readyOverlay:SetColor(1.00, 0.46, 0.05, 0)
 
-    if row.recentlyUsed then
+    if row.unavailable then
+        row:SetAlpha(0.25)
+        SetColor(row.accent, COLORS.muted, 0.16)
+        SetColor(row.iconBorder, COLORS.muted, 0.18)
+        SetColor(row.percent, COLORS.muted, 0.60)
+        SetColor(row.progress, COLORS.muted, 0.25)
+        row.bg:SetColor(0.010, 0.014, 0.022, 0.30)
+    elseif row.recentlyUsed then
         row:SetAlpha(0.20)
         SetColor(row.accent, COLORS.muted, 0.16)
         SetColor(row.iconBorder, COLORS.muted, 0.18)
@@ -447,8 +469,6 @@ function Group:RefreshHUD()
 
     self.window:SetDimensions(self:GetListWidth(), height)
 
-    local anyReady = false
-
     for index, row in ipairs(self.window.rows) do
         local entry = entries[index]
 
@@ -457,7 +477,7 @@ function Group:RefreshHUD()
             row:SetAnchor(TOPLEFT, self.window, TOPLEFT, 6, HEADER_H + 4 + ((index - 1) * (rowHeight + GAP)))
         end
 
-        if self:RefreshRow(row, entry) then anyReady = true end
+        self:RefreshRow(row, entry)
     end
 
     self.window.empty:SetHidden(count > 0)
@@ -465,7 +485,6 @@ function Group:RefreshHUD()
         self.window.empty:SetText(self:GetTrackedAbilityCount() == 0 and "Select Ultimates to track" or "No matching players")
     end
 
-    self:SetReadyPulseActive(anyReady and not self.window:IsHidden())
     self:ApplyAppearance()
     self:UpdateLockState()
     self:ApplyVisibility()

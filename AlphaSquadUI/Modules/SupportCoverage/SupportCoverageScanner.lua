@@ -4,12 +4,31 @@ local SC = AlphaSquadUI and AlphaSquadUI.Modules and AlphaSquadUI.Modules.Suppor
 if not SC then return end
 
 local Catalog = SC.Catalog
+local MAX_INTEGER_ID = 2147483647
 
 local function SafeCall(fn, ...)
     if type(fn) ~= "function" then return nil end
-    local ok, a, b, c, d, e, f, g, h = pcall(fn, ...)
+    local ok, a, b, c, d, e, f, g, h, i, j, k, l, m, n = pcall(fn, ...)
     if not ok then return nil end
-    return a, b, c, d, e, f, g, h
+    return a, b, c, d, e, f, g, h, i, j, k, l, m, n
+end
+
+local function FiniteNumber(value)
+    value = tonumber(value)
+    if not value or value ~= value or value == math.huge or value == -math.huge then return nil end
+    return value
+end
+
+local function Integer(value, minimum, maximum)
+    value = FiniteNumber(value)
+    if not value or value % 1 ~= 0 or value < minimum or value > maximum then return nil end
+    return value
+end
+
+local function Count(value, maximum)
+    value = FiniteNumber(value)
+    if not value then return 0 end
+    return math.floor(math.max(0, math.min(maximum, value)))
 end
 
 local function Normalize(value)
@@ -106,11 +125,12 @@ function SC:ScanEquipment()
                 link = link,
                 name = itemName,
                 enchant = "unknown",
-                hasEnchant = false,
+                hasEnchant = nil,
                 trait = SafeCall(GetItemLinkTraitInfo, link),
                 armorType = SafeCall(GetItemLinkArmorType, link),
                 weaponType = SafeCall(GetItemLinkWeaponType, link),
-                enchantId = SafeCall(GetItemLinkAppliedEnchantId, link),
+                enchantId = nil,
+                enchantHasCharges = nil,
                 isArmor = ARMOR_SLOTS[slot] == true,
                 isWeapon = slot == EQUIP_SLOT_MAIN_HAND or slot == EQUIP_SLOT_OFF_HAND
                     or slot == EQUIP_SLOT_BACKUP_MAIN or slot == EQUIP_SLOT_BACKUP_OFF,
@@ -120,14 +140,15 @@ function SC:ScanEquipment()
                 SafeCall(GetItemLinkSetInfo, link, true)
             if hasSet == nil then snapshot.complete = false end
             if hasSet and setName and setName ~= "" then
-                local setKey = tonumber(setId) and tostring(setId) or Normalize(setName)
+                local numericSetId = Integer(setId, 1, MAX_INTEGER_ID) or 0
+                local setKey = numericSetId > 0 and tostring(numericSetId) or "name:" .. Normalize(setName)
                 if not setSeen[setKey] then
                     local entry = {
-                        id = tonumber(setId) or 0,
+                        id = numericSetId,
                         name = setName,
-                        equipped = tonumber(normalEquipped) or 0,
-                        perfected = tonumber(perfectedEquipped) or 0,
-                        maxEquipped = tonumber(maxEquipped) or 0,
+                        equipped = Count(normalEquipped, 24),
+                        perfected = Count(perfectedEquipped, 24),
+                        maxEquipped = Count(maxEquipped, 24),
                         mainCount = 0, backCount = 0,
                     }
                     snapshot.sets[setKey] = entry
@@ -139,8 +160,9 @@ function SC:ScanEquipment()
             end
 
             if hasSet and setName and setName ~= "" then
-                local setKey = tonumber(setId) and tostring(setId) or Normalize(setName)
-                item.setId = tonumber(setId)
+                local numericSetId = Integer(setId, 1, MAX_INTEGER_ID) or 0
+                local setKey = numericSetId > 0 and tostring(numericSetId) or "name:" .. Normalize(setName)
+                item.setId = numericSetId > 0 and numericSetId or nil
                 local set = snapshot.sets[setKey]
                 local twoHanded = item.isWeapon and item.weaponType ~= nil and (
                     item.weaponType == WEAPONTYPE_TWO_HANDED_SWORD or item.weaponType == WEAPONTYPE_TWO_HANDED_AXE
@@ -154,9 +176,20 @@ function SC:ScanEquipment()
                 if not mainOnly then set.backCount = set.backCount + pieces end
             end
 
-            local hasEnchant, enchantHeader, enchantDescription = SafeCall(GetItemLinkEnchantInfo, link)
-            item.hasEnchant = hasEnchant
-            if hasEnchant == nil then
+            local hasCharges, enchantHeader, enchantDescription = SafeCall(GetItemLinkEnchantInfo, link)
+            item.enchantHasCharges = hasCharges
+            local enchantId = SafeCall(GetItemLinkFinalEnchantId, link)
+            if not enchantId or enchantId == 0 then
+                enchantId = SafeCall(GetItemLinkAppliedEnchantId, link)
+                if not enchantId or enchantId == 0 then enchantId = SafeCall(GetItemLinkDefaultEnchantId, link) end
+            end
+            item.enchantId = Integer(enchantId, 0, MAX_INTEGER_ID)
+            if item.enchantId ~= nil then
+                item.hasEnchant = item.enchantId > 0
+            elseif tostring(enchantHeader or "") ~= "" or tostring(enchantDescription or "") ~= "" then
+                item.hasEnchant = true
+            end
+            if item.hasEnchant == nil then
                 item.enchant = "unknown"
             elseif item.hasEnchant then
                 item.enchant = ClassifyEnchant(enchantHeader, enchantDescription)
@@ -175,7 +208,7 @@ function SC:ScanEquipment()
                 else
                     snapshot.glyphs.other = snapshot.glyphs.other + 1
                 end
-            elseif item.enchant == "crusher" then
+            elseif item.enchant == "crusher" and item.enchantHasCharges ~= false then
                 snapshot.glyphs.crusher = snapshot.glyphs.crusher + 1
                 AddCapability(snapshot.capabilities, "crusher", "Crusher Enchantment")
             end
@@ -186,6 +219,9 @@ function SC:ScanEquipment()
             snapshot.glyphs.armorMissing = snapshot.glyphs.armorMissing + 1
         end
     end
+
+    snapshot.glyphs.verified = (snapshot.glyphs.unknown or 0) == 0
+        and snapshot.glyphs.armorTotal == 7
 
     for _, set in ipairs(snapshot.setList) do
         set.activeOnMain, set.activeOnBack = false, false
@@ -238,12 +274,15 @@ function SC:ScanSkills()
             for slot = 3, ultimateSlot do
                 local boundId = SafeCall(GetSlotBoundId, slot, category)
                 if boundId == nil then result.known = false end
-                boundId = tonumber(boundId) or 0
+                local validBoundId = Integer(boundId, 0, MAX_INTEGER_ID)
+                if validBoundId == nil then result.known = false end
+                boundId = validBoundId or 0
                 if boundId > 0 then
                     local effectiveId = boundId
                     if GetEffectiveAbilityIdForAbilityOnHotbar then
                         local resolved = SafeCall(GetEffectiveAbilityIdForAbilityOnHotbar, boundId, category)
-                        if tonumber(resolved) and tonumber(resolved) > 0 then effectiveId = tonumber(resolved) end
+                        resolved = Integer(resolved, 1, MAX_INTEGER_ID)
+                        if resolved then effectiveId = resolved end
                     end
 
                     local name = SafeCall(GetSlotName, slot, category)
@@ -251,6 +290,7 @@ function SC:ScanSkills()
                     local icon = SafeCall(GetSlotTexture, slot, category) or ""
                     local entry = {
                         slot = slot,
+                        boundAbilityId = boundId,
                         abilityId = effectiveId,
                         name = tostring(name or ""),
                         icon = tostring(icon or ""),
@@ -259,7 +299,12 @@ function SC:ScanSkills()
                     result[key][#result[key] + 1] = entry
 
                     if Catalog then
-                        local matched = Catalog:MatchSkillName(entry.name)
+                        local matched = Catalog:MatchSkill(entry.abilityId, entry.name)
+                        if entry.boundAbilityId ~= entry.abilityId then
+                            for capability in pairs(Catalog:MatchSkill(entry.boundAbilityId, entry.name)) do
+                                matched[capability] = true
+                            end
+                        end
                         for capability in pairs(matched) do
                             AddCapability(result.capabilities, capability, entry.name)
                         end
@@ -273,22 +318,24 @@ function SC:ScanSkills()
         local startSlot, endSlot = 1, 12
         if GetAssignableChampionBarStartAndEndSlots then
             local a, b = SafeCall(GetAssignableChampionBarStartAndEndSlots)
-            if tonumber(a) and tonumber(b) then
-                startSlot, endSlot = tonumber(a), tonumber(b)
-            end
+            a, b = Integer(a, 1, 64), Integer(b, 1, 64)
+            if a and b and a <= b and b - a <= 23 then startSlot, endSlot = a, b
+            else result.championKnown = false end
         end
 
         for slot = startSlot, endSlot do
             local starId = SafeCall(GetSlotBoundId, slot, HOTBAR_CATEGORY_CHAMPION)
             if starId == nil then result.championKnown = false end
-            starId = tonumber(starId) or 0
+            local validStarId = Integer(starId, 0, MAX_INTEGER_ID)
+            if validStarId == nil then result.championKnown = false end
+            starId = validStarId or 0
             if starId > 0 then
                 local name = ""
                 if GetChampionSkillName then name = SafeCall(GetChampionSkillName, starId) or "" end
                 result.champion[#result.champion + 1] = {
                     slot = slot,
                     id = starId,
-                    points = SafeCall(GetNumPointsSpentOnChampionSkill,starId),
+                    points = Integer(SafeCall(GetNumPointsSpentOnChampionSkill,starId), 0, 3600),
                     discipline = self.GetChampionDiscipline and self:GetChampionDiscipline(starId),
                     name = tostring(name or ""),
                 }
@@ -309,16 +356,17 @@ function SC:ScanFood(unitTag)
         if unitTag == "player" and LFDB_BUFF_TYPE_NONE ~= nil and buffType == LFDB_BUFF_TYPE_NONE then
             return {active=false, verified=true, source="LibFoodDrinkBuff"}
         end
-        if abilityId and tonumber(abilityId) and tonumber(abilityId) > 0 then
+        abilityId = Integer(abilityId, 1, MAX_INTEGER_ID)
+        if abilityId then
             return {
                 active = true,
                 verified = true,
                 source = "LibFoodDrinkBuff",
-                abilityId = tonumber(abilityId) or 0,
+                abilityId = abilityId,
                 name = tostring(buffName or ""),
                 isDrink = isDrink == true,
-                timeStarted = tonumber(timeStarted) or 0,
-                timeEnds = tonumber(timeEnds) or 0,
+                timeStarted = FiniteNumber(timeStarted) or 0,
+                timeEnds = FiniteNumber(timeEnds) or 0,
                 icon = tostring(icon or ""),
             }
         end
@@ -331,21 +379,26 @@ function SC:ScanFood(unitTag)
     end
 
     local now = GetGameTimeMilliseconds and GetGameTimeMilliseconds() / 1000 or 0
-    local count = tonumber(GetNumBuffs(unitTag)) or 0
+    local count = tonumber(SafeCall(GetNumBuffs, unitTag))
+    if not count or count~=count or count==math.huge or count==-math.huge then
+        return {active=false, verified=false, source="ESO heuristic"}
+    end
+    count = math.max(0, math.min(256, math.floor(count)))
     for i = 1, count do
         local name, started, ending, _, _, icon, _, _, _, _, abilityId, canClickOff =
-            GetUnitBuffInfo(unitTag, i)
-        local duration = (tonumber(ending) or 0) - (tonumber(started) or 0)
-        if canClickOff and duration >= 1800 and (tonumber(ending) or 0) > now then
+            SafeCall(GetUnitBuffInfo, unitTag, i)
+        started, ending = FiniteNumber(started), FiniteNumber(ending)
+        local duration = started and ending and ending - started or 0
+        if canClickOff and duration >= 1800 and ending > now then
             return {
                 active = true,
                 verified = false,
                 source = "ESO heuristic",
-                abilityId = tonumber(abilityId) or 0,
+                abilityId = Integer(abilityId, 1, MAX_INTEGER_ID) or 0,
                 name = tostring(name or ""),
                 isDrink = false,
-                timeStarted = tonumber(started) or 0,
-                timeEnds = tonumber(ending) or 0,
+                timeStarted = started or 0,
+                timeEnds = ending or 0,
                 icon = tostring(icon or ""),
             }
         end
@@ -355,26 +408,44 @@ function SC:ScanFood(unitTag)
 end
 
 function SC:ScanPotion()
-    local result = {known=false, name="", itemId=0, effects="", link=nil, cooldownRemaining=nil}
+    local result = {
+        known=false, selectionKnown=false, isPotion=false, name="", itemId=0,
+        effects="", link=nil, cooldownRemaining=nil,
+    }
     if not GetCurrentQuickslot or not GetSlotItemLink then return result end
 
-    local slot = SafeCall(GetCurrentQuickslot)
+    local slot = Integer(SafeCall(GetCurrentQuickslot), 1, 64)
     if not slot then return result end
+    result.slot = slot
 
     local link = SafeCall(GetSlotItemLink, slot, HOTBAR_CATEGORY_QUICKSLOT_WHEEL)
-    if not link or link == "" then link = SafeCall(GetSlotItemLink, slot) end
-    if not link or link == "" then return result end
+    if link == nil then return result end
+    link = tostring(link)
+    if link == "" then
+        result.selectionKnown = true
+        result.evidence = "EMPTY_QUICKSLOT"
+        return result
+    end
 
     local itemType = SafeCall(GetItemLinkItemType, link)
-    local consumable = SafeCall(IsItemLinkConsumable, link)
-    if ITEMTYPE_POTION == nil or itemType ~= ITEMTYPE_POTION then return result end
+    if ITEMTYPE_POTION == nil or itemType == nil then return result end
+
+    result.selectionKnown = true
+    result.link = link
+    result.name = tostring(SafeCall(GetItemLinkName, link) or "")
+    if itemType ~= ITEMTYPE_POTION then
+        result.evidence = "SELECTED_NON_POTION"
+        return result
+    end
 
     result.known = true
-    result.link = link
-    result.slot = slot
+    result.isPotion = true
     result.cooldownRemaining, result.cooldownDuration = SafeCall(GetSlotCooldownInfo, slot, HOTBAR_CATEGORY_QUICKSLOT_WHEEL)
-    result.name = tostring(SafeCall(GetItemLinkName, link) or "")
-    result.itemId = tonumber(SafeCall(GetItemLinkItemId, link)) or 0
+    result.cooldownRemaining = FiniteNumber(result.cooldownRemaining)
+    result.cooldownDuration = FiniteNumber(result.cooldownDuration)
+    if result.cooldownRemaining then result.cooldownRemaining = math.max(0, result.cooldownRemaining) end
+    if result.cooldownDuration then result.cooldownDuration = math.max(0, result.cooldownDuration) end
+    result.itemId = Integer(SafeCall(GetItemLinkItemId, link), 0, MAX_INTEGER_ID) or 0
 
     if GetItemLinkOnUseAbilityInfo then
         local hasAbility, header, description = SafeCall(GetItemLinkOnUseAbilityInfo, link)
@@ -422,18 +493,18 @@ function SC:GetRoleHint(unitTag, capabilities)
         return self.sv.roleOverrides[key]
     end
 
-    local isDps, isHealer, isTank = false, false, false
-    if GetGroupMemberRoles then
-        local a, b, c = SafeCall(GetGroupMemberRoles, unitTag)
-        isDps, isHealer, isTank = a == true, b == true, c == true
+    local selectedRole
+    if GetGroupMemberSelectedRole then selectedRole = SafeCall(GetGroupMemberSelectedRole, unitTag) end
+    if (selectedRole == nil or selectedRole == LFG_ROLE_INVALID)
+        and self.IsSelf and self:IsSelf(unitTag) and GetSelectedLFGRole then
+        selectedRole = SafeCall(GetSelectedLFGRole)
     end
-
-    if isTank then return "MT/OT" end
-    if isHealer then return "HEAL" end
+    if selectedRole ~= nil and selectedRole == LFG_ROLE_TANK then return "MT/OT" end
+    if selectedRole ~= nil and selectedRole == LFG_ROLE_HEAL then return "HEAL" end
 
     local supportCount = 0
     for _ in pairs(capabilities or {}) do supportCount = supportCount + 1 end
-    if isDps or supportCount > 0 then
+    if selectedRole == LFG_ROLE_DPS or supportCount > 0 then
         return supportCount >= 2 and "DD SUPPORT" or "DD PARSE"
     end
     return "UNKNOWN"
@@ -451,11 +522,11 @@ function SC:ScanLocalPlayer()
     end
 
     local displayName = self:GetPlayerKey("player")
-    local classId = tonumber(SafeCall(GetUnitClassId, "player")) or 0
+    local classId = Integer(SafeCall(GetUnitClassId, "player"), 0, 255) or 0
     local className = tostring(SafeCall(GetUnitClass, "player") or "")
 
     local snapshot = {
-        protocolVersion = 1,
+        protocolVersion = 2,
         catalogPatch = self.catalogPatch,
         displayName = displayName,
         characterName = tostring(SafeCall(GetUnitName, "player") or ""),
@@ -465,6 +536,9 @@ function SC:ScanLocalPlayer()
         supportScore = self:GetSupportScore(capabilities, skills),
         dataQuality = "ASUI",
         asui = true,
+        -- Capability sources are finite hints; absence is not proof that a player
+        -- cannot provide an effect through a source unknown to this catalog.
+        capabilitiesComplete = false,
         connected = true,
         dead = IsUnitDead and IsUnitDead("player") or false,
         scannedAt = self.NowMs(),
@@ -505,11 +579,12 @@ function SC:ScanLimitedUnit(unitTag)
         catalogPatch = self.catalogPatch,
         displayName = self:GetPlayerKey(unitTag),
         characterName = tostring(SafeCall(GetUnitName, unitTag) or ""),
-        classId = tonumber(SafeCall(GetUnitClassId, unitTag)) or 0,
+        classId = Integer(SafeCall(GetUnitClassId, unitTag), 0, 255) or 0,
         className = tostring(SafeCall(GetUnitClass, unitTag) or ""),
         role = self:GetRoleHint(unitTag, capabilities),
         dataQuality = quality,
         asui = false,
+        capabilitiesComplete = false,
         connected = self.IsOnline and self:IsOnline(unitTag),
         dead = IsUnitDead and IsUnitDead(unitTag) or false,
         food = self:ScanFood(unitTag),

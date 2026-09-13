@@ -63,8 +63,8 @@ Do not break existing settings, positions, filters or player preferences during 
 Primary active branch: **`support-coverage`**
 
 Development version:
-- `2.7.0-support-coverage-test`
-- `AddOnVersion 20700`
+- `2.7.0-support-coverage-test.4`
+- `AddOnVersion 20704`
 
 Support Coverage is a **raidlead support-planning, capability-scanning and live-coverage module**.
 
@@ -92,11 +92,21 @@ It must be useful for 12-player endgame trial groups without becoming a combat-o
 Files:
 - `SupportCoverage.lua` — lifecycle, SavedVariables, events, slash commands
 - `SupportCoverageCatalog.lua` — patch-specific support catalog and profiles
+- `SupportCoverageAudit.lua` — expected-build comparisons and evidence-aware readiness
 - `SupportCoverageScanner.lua` — local equipment/skill/food/potion capability scanner
+- `SupportCoverageBuild.lua` — Champion, mastery and build evidence helpers
+- `SupportCoverageHistory.lua` — bounded pull history and report snapshots
 - `SupportCoverageShare.lua` — compact group sharing and plan/live protocols
+- `SupportCoverageDetails.lua` — build-bound signature/detail transport
+- `SupportCoverageLiveShare.lua` — bounded observed-coverage transport
 - `SupportCoverageEngine.lua` — roster building, coverage evaluation, assignment planning
+- `SupportCoverageTracking.lua` — local live observations and pull timing
 - `SupportCoverageUI.lua` — responsive raidlead HUD / readiness presentation
+- `SupportCoveragePlanner.lua` — whole-loadout proposals with manual-choice preservation
+- `SupportCoverageInspector.lua` — detailed build, readiness and history views
 - `SupportCoverageSettings.lua` — integrated settings and coverage matrix
+- `SupportCoverageSources.lua` — native set and skill identities with conservative fallbacks
+- `SupportCoverageIntegration.lua` — group bonuses, saved contexts and bounded persistence
 
 Keep patch data separated from evaluation logic so future ESO updates can be audited safely.
 
@@ -112,7 +122,7 @@ The current catalog is tagged **U50** and includes coverage concepts such as:
 - Elemental Catalyst
 - Z'en's Redress
 - Martial Knowledge
-- Stagger
+- Heat Shock (stable compatibility key: `stagger`)
 - Major / Minor Breach
 - Crusher
 - Alkosh
@@ -158,8 +168,11 @@ Local player scanning currently covers:
 - item links / set information
 - armor glyph/enchant classification
 - slotted skills
+- Champion slottables
+- committed Class Masteries and prerequisites
 - food
-- potion
+- selected potion, stack and cooldown evidence
+- optional poisons and Mundus
 - inferred support capabilities
 - support score / role hint
 
@@ -176,8 +189,9 @@ The current Support Coverage sharing code uses **provisional development protoco
 - build protocol: 510
 - plan protocol: 509
 - live protocol: 508
+- signature/detail protocol: 507
 
-**Do not publish a stable public release with these provisional IDs unless they have been formally reserved/verified against LibGroupBroadcast IDs.**
+**Do not publish a stable public release with IDs 507–510 unless they have been formally reserved/verified against LibGroupBroadcast IDs.**
 
 Sharing must fail gracefully when libraries are missing.
 
@@ -278,6 +292,8 @@ Before proposing a PR:
 - test in ESO for runtime/API/UI changes.
 
 Syntax success does **not** prove ESO runtime correctness.
+
+The current authorization is to push validated changes to `support-coverage` only. Do not create a PR, merge, tag or public release before the maintainer has tested this candidate in ESO and explicitly asks for the next step.
 
 ## Documentation rules
 

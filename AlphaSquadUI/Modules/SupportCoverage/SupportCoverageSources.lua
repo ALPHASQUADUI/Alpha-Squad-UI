@@ -5,6 +5,16 @@ local Try=SC.Try
 local function Normalize(value)
     return tostring(value or ""):gsub("%^.*$",""):gsub("’","'"):lower()
 end
+local function FiniteNumber(value)
+    value=tonumber(value)
+    if not value or value~=value or value==math.huge or value==-math.huge then return nil end
+    return value
+end
+local function AbilityId(value)
+    value=FiniteNumber(value)
+    if not value or value<=0 or value>2147483647 or value%1~=0 then return nil end
+    return value
+end
 
 local nativeBuffs={
     major_courage="MAJOR_COURAGE",minor_courage="MINOR_COURAGE",
@@ -51,7 +61,8 @@ function SC:ObserveEffectsOnUnit(tag)
     if not tag or type(GetNumBuffs)~="function" or type(GetUnitBuffInfo)~="function" then return observed,false,raw end
     if not self.effectIdIndex then self:RebuildEffectIndex() end
     local count=Try(GetNumBuffs,tag)
-    if type(count)~="number" then return observed,false,raw end
+    if type(count)~="number" or count~=count or count==math.huge or count==-math.huge then return observed,false,raw end
+    count=math.max(0,math.floor(count))
     local complete=true
     local nativeComplete=type(GetAbilityBuffType)=="function"
     local now=self.NowMs()
@@ -60,26 +71,35 @@ function SC:ObserveEffectsOnUnit(tag)
     if count>0 then self.observerHasData[subject]=true end
     for index=1,math.min(count,self.History.MAX_EFFECTS_PER_UNIT) do
         local ok,name,started,ending,slot,stacks,icon,_,effectType,_,statusType,id,_,castByPlayer=pcall(GetUnitBuffInfo,tag,index)
-        if not ok or type(id)~="number" or id<=0 then complete=false
+        id=AbilityId(id)
+        if not ok or not id then complete=false
         else
             local key=self.effectIdIndex[id]
             local source=key and "ABILITY_ID" or nil
             if GetAbilityBuffType then
-                local validCall,buffType,valid=pcall(GetAbilityBuffType,id,tag)
-                if not validCall or valid==false then nativeComplete=false end
-                if validCall and valid~=false and self.nativeBuffIndex[buffType] then
-                    key=self.nativeBuffIndex[buffType];source="NATIVE_BUFF_TYPE"
+                local validCall,buffType=pcall(GetAbilityBuffType,id,tag)
+                local finiteBuffType=validCall and FiniteNumber(buffType) or nil
+                if not finiteBuffType then nativeComplete=false end
+                local nativeKey=finiteBuffType and self.nativeBuffIndex[finiteBuffType]
+                if nativeKey then
+                    key=nativeKey;source="NATIVE_BUFF_TYPE"
                 end
             end
             if not key then key=self.effectNameIndex[Normalize(name)];source="OBSERVED_NAME" end
-            local value={name=name,abilityId=id,started=started,ending=ending,slot=slot,
-                stacks=tonumber(stacks),icon=icon,effectType=effectType,statusEffectType=statusType,
-                castByPlayer=castByPlayer,observedAt=now,evidence=source or "RAW_ABILITY_ID"}
+            local captureRaw=self.sv.collectAllEffects or self.sv.logRawEffects
+            local value
+            if key or captureRaw then
+                local stackCount=FiniteNumber(stacks)
+                if stackCount then stackCount=math.max(0,math.min(100,math.floor(stackCount))) end
+                value={name=name,abilityId=id,started=started,ending=ending,slot=slot,
+                    stacks=stackCount,icon=icon,effectType=effectType,statusEffectType=statusType,
+                    castByPlayer=castByPlayer,observedAt=now,evidence=source or "RAW_ABILITY_ID"}
+            end
             if key then
                 self.effectIdIndex[id]=key;self.effectReadableKeys[key]=true
                 if not observed[key] or (value.stacks or 0)>(observed[key].stacks or 0) then observed[key]=value end
             end
-            if self.sv.collectAllEffects then raw[id]=value end
+            if captureRaw then raw[id]=value end
         end
     end
     if count>self.History.MAX_EFFECTS_PER_UNIT then complete=false;if self.pull then self.pull.truncated=true end end
@@ -91,19 +111,30 @@ function SC:ObserveEffectsOnUnit(tag)
 end
 
 function SC:ScanMundus()
-    local result={known=false,ids={},names={}}
+    local result={known=false,ids={},types={},names={}}
     if type(GetUnitActiveMundusStoneBuffIndices)~="function" or type(GetUnitBuffInfo)~="function" then return result end
     local success,indices=pcall(function() return {GetUnitActiveMundusStoneBuffIndices("player")} end)
     if not success then return result end
     result.known=true
     for _,index in ipairs(indices) do
-        if type(index)=="number" and index>0 then
-            local ok,name,_,_,_,_,_,_,_,_,_,id=pcall(GetUnitBuffInfo,"player",index)
-            if not ok or type(id)~="number" or id<=0 then result.known=false
-            else result.ids[#result.ids+1]=id;result.names[#result.names+1]=name end
-        end
+        index=FiniteNumber(index)
+        if index and index>0 and index%1==0 and index<=256 then
+            local ok,name,timeStarted,timeEnding,buffSlot,stackCount,iconFilename,
+                deprecatedBuffType,effectType,abilityType,statusEffectType,abilityId=
+                pcall(GetUnitBuffInfo,"player",index)
+            abilityId=AbilityId(abilityId)
+            if not ok or not abilityId then result.known=false
+            else
+                result.ids[#result.ids+1]=abilityId
+                result.names[#result.names+1]=tostring(name or "")
+                local mundusType=FiniteNumber(Try(GetAbilityMundusStoneType,abilityId))
+                if mundusType and mundusType>=0 and mundusType%1==0 then result.types[#result.types+1]=mundusType end
+            end
+        elseif index~=0 then result.known=false end
     end
     table.sort(result.ids)
+    table.sort(result.types)
+    table.sort(result.names)
     return result
 end
 
@@ -112,16 +143,17 @@ function SC:ScanEquipment()
     local result=equipmentScan(self)
     local families={}
     for _,set in ipairs(result.setList or {}) do
-        local base=Try(GetItemSetUnperfectedSetId,set.id)
-        local familyId=tonumber(base) and base>0 and base or set.id
-        local family=families[familyId]
+        local base=AbilityId(Try(GetItemSetUnperfectedSetId,set.id))
+        local familyId=base or AbilityId(set.id) or 0
+        local familyKey=familyId>0 and tostring(familyId) or "name:"..Normalize(set.name)
+        local family=families[familyKey]
         if not family then
-            family={id=familyId,name=set.name,mainCount=0,backCount=0,variants={},names={},
+            family={key=familyKey,id=familyId,name=set.name,mainCount=0,backCount=0,variants={},names={},
                 equipped=set.equipped,perfected=set.perfected,maxEquipped=set.maxEquipped}
-            families[familyId]=family
+            families[familyKey]=family
         end
-        family.mainCount=family.mainCount+(set.mainCount or 0)
-        family.backCount=family.backCount+(set.backCount or 0)
+        family.mainCount=family.mainCount+(FiniteNumber(set.mainCount) or 0)
+        family.backCount=family.backCount+(FiniteNumber(set.backCount) or 0)
         family.variants[#family.variants+1]={id=set.id,mainCount=set.mainCount,backCount=set.backCount}
         family.names[#family.names+1]=set.name
     end
@@ -153,9 +185,12 @@ function SC:ScanEquipment()
                 end
             end
         end
-        result.sets[tostring(family.id)]=family;result.setList[#result.setList+1]=family
+        result.sets[family.key]=family;result.setList[#result.setList+1]=family
     end
-    table.sort(result.setList,function(a,b) return a.id<b.id end)
+    table.sort(result.setList,function(a,b)
+        if a.id~=b.id then return a.id<b.id end
+        return Normalize(a.name)<Normalize(b.name)
+    end)
     result.capabilities=capabilities
     for _,item in ipairs(result.items or {}) do
         if item.isWeapon and item.weaponType==nil then result.complete=false end
@@ -171,7 +206,8 @@ local potionScan=SC.ScanPotion
 function SC:ScanPotion()
     local potion=potionScan(self)
     if potion.known then
-        potion.count=Try(GetSlotItemCount,potion.slot,HOTBAR_CATEGORY_QUICKSLOT_WHEEL)
+        local count=FiniteNumber(Try(GetSlotItemCount,potion.slot,HOTBAR_CATEGORY_QUICKSLOT_WHEEL))
+        potion.count=count and math.floor(math.max(0,math.min(1000000,count))) or nil
         potion.evidence="SELECTED_QUICKSLOT"
         -- Selection is not a cast event, including when the stack becomes empty.
     end

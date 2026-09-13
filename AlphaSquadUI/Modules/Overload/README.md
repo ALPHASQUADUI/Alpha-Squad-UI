@@ -13,6 +13,10 @@ Features include the movable HUD, Ultimate counter, emergency reserve alerts,
 ready reminder, PvP suppression option, menu auto-hide and dormant behavior
 when no Overload morph is slotted.
 
+Tracking is event-first. Its 1-second recovery sync exists only while the HUD is
+enabled, visible, unobscured, not PvP-suppressed and not dormant; hidden and
+dormant states keep no polling update alive.
+
 The gameplay implementation intentionally remains consolidated in `Overload.lua`
 to minimize regression risk. Any future file split should preserve gameplay
 behavior and SavedVariables exactly.

@@ -23,12 +23,23 @@ jobs:
       - name: Install Lua and ZIP
         run: |
           sudo apt-get update
-          sudo apt-get install -y lua5.4 zip
+          sudo apt-get install -y lua5.1 lua5.4 zip unzip
 
       - name: Validate Lua syntax
         run: |
           set -euo pipefail
+          find AlphaSquadUI -type f -name '*.lua' -print0 | sort -z | xargs -0 -n1 luac5.1 -p
           find AlphaSquadUI -type f -name '*.lua' -print0 | sort -z | xargs -0 -n1 luac5.4 -p
+
+      - name: Run deterministic regression tests
+        run: |
+          set -euo pipefail
+          lua5.1 tests/support_coverage.lua
+          lua5.4 tests/support_coverage.lua
+          lua5.1 tests/ult_tracker.lua
+          lua5.4 tests/ult_tracker.lua
+          lua5.1 tests/overload.lua
+          lua5.4 tests/overload.lua
 
       - name: Validate addon manifest paths
         run: |
@@ -66,6 +77,8 @@ jobs:
         run: |
           set -euo pipefail
           zip -r AlphaSquadUI.zip AlphaSquadUI -x '*/.gitkeep'
+          unzip -t AlphaSquadUI.zip
+          test "$(zipinfo -1 AlphaSquadUI.zip | head -n 1)" = "AlphaSquadUI/"
 
       - name: Upload validated build
         uses: actions/upload-artifact@v4

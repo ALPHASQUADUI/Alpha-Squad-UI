@@ -3,13 +3,33 @@ local SC = AlphaSquadUI.Modules.SupportCoverage
 local Catalog, History = SC.Catalog, SC.History
 local EM = EVENT_MANAGER
 
+local function FiniteNumber(value)
+    value=tonumber(value)
+    if not value or value~=value or value==math.huge or value==-math.huge then return nil end
+    return value
+end
+
+local function NormalizeEffectName(value)
+    return tostring(value or ""):gsub("%^.*$", ""):gsub("’", "'"):lower()
+end
+
+local function EffectId(value)
+    value=FiniteNumber(value)
+    if not value or value<=0 or value>2147483647 or value%1~=0 then return nil end
+    return value
+end
+
 function SC:RebuildEffectIndex()
     self.effectIdIndex, self.effectNameIndex, self.effectReadableKeys = {}, {}, {}
     for key, effect in pairs(Catalog.effects) do
-        self.effectNameIndex[string.lower(effect.label)] = key
-        for _, id in ipairs(effect.abilityIds or {}) do self.effectIdIndex[id] = key; self.effectReadableKeys[key] = true end
+        self.effectNameIndex[NormalizeEffectName(effect.label)] = key
+        for _, alias in ipairs(effect.aliases or {}) do self.effectNameIndex[NormalizeEffectName(alias)] = key end
+        for _, rawId in ipairs(effect.abilityIds or {}) do
+            local id=EffectId(rawId)
+            if id then self.effectIdIndex[id] = key; self.effectReadableKeys[key] = true end
+        end
         for id, enabled in pairs(self.sv.customCatalog[key] or {}) do
-            id = tonumber(id)
+            id = EffectId(id)
             if enabled and id then self.effectIdIndex[id] = key; self.effectReadableKeys[key] = true end
         end
     end
@@ -18,7 +38,7 @@ function SC:RebuildEffectIndex()
         ["minor brutality"]="minor_brutality_sorcery", ["minor sorcery"]="minor_brutality_sorcery",
         ["major savagery"]="major_savagery_prophecy", ["major prophecy"]="major_savagery_prophecy",
         ["minor savagery"]="minor_savagery_prophecy", ["minor prophecy"]="minor_savagery_prophecy",
-    }) do self.effectNameIndex[name] = key end
+    }) do self.effectNameIndex[NormalizeEffectName(name)] = key end
 end
 
 function SC:ObserveEffectsOnUnit(unitTag)
@@ -26,7 +46,8 @@ function SC:ObserveEffectsOnUnit(unitTag)
     if not unitTag or not GetNumBuffs or not GetUnitBuffInfo then return observed, false, raw end
     if not self.effectIdIndex then self:RebuildEffectIndex() end
     local count = self.Try(GetNumBuffs, unitTag)
-    if count == nil then return observed, false, raw end
+    if type(count)~="number" or count~=count or count==math.huge or count==-math.huge then return observed, false, raw end
+    count=math.max(0,math.floor(count))
     local complete = true
     local now = self.NowMs()
     local subject = self:GetObservationSubject(unitTag)
@@ -36,7 +57,7 @@ function SC:ObserveEffectsOnUnit(unitTag)
         local ok, name, started, ending, slot, stacks, icon, _, effectType, _, statusType, abilityId, _, castByPlayer = pcall(GetUnitBuffInfo, unitTag, index)
         if not ok then complete = false
         elseif abilityId and abilityId > 0 then
-            local key = self.effectIdIndex[abilityId] or self.effectNameIndex[string.lower(name or "")]
+            local key = self.effectIdIndex[abilityId] or self.effectNameIndex[NormalizeEffectName(name)]
             local value = {name=name, abilityId=abilityId, started=started, ending=ending, stacks=tonumber(stacks) or 0,
                 icon=icon, slot=slot, effectType=effectType, statusEffectType=statusType, castByPlayer=castByPlayer,
                 observedAt=now, evidence=self.effectIdIndex[abilityId] and "ABILITY_ID" or "OBSERVED_NAME"}
@@ -56,9 +77,10 @@ end
 function SC:GetObservationSubject(unitTag)
     if self:IsSelf(unitTag) then return "player:" .. self:GetPlayerKey("player") end
     if unitTag:match("^boss%d+$") or unitTag == "reticleover" then
-        local id = self.Try(GetUnitId, unitTag)
         local name = self.Try(GetUnitName, unitTag) or unitTag
-        return "boss:" .. tostring(id or (unitTag .. ":" .. name))
+        -- ESO exposes combat-event unit IDs, but no general GetUnitId(unitTag)
+        -- getter. The current unit tag plus observed name is stable for this pull.
+        return "boss:" .. tostring(unitTag .. ":" .. name)
     end
     return "player:" .. self:GetPlayerKey(unitTag)
 end
@@ -84,10 +106,12 @@ end
 local function EffectValue(sc, key, observed, canProveAbsence)
     local value = observed and observed[key]
     if value then
-        local required = (sc.pull and sc.pull.rules and sc.pull.rules[key] or sc:GetEffectRule(key)).expectedStacks
+        local required = FiniteNumber((sc.pull and sc.pull.rules and sc.pull.rules[key] or sc:GetEffectRule(key)).expectedStacks) or 1
+        required=math.max(1,math.min(100,required))
         if required > 1 then
-            if value.stacks == nil then return nil end
-            if tonumber(value.stacks) < required then return 0 end
+            local stacks=FiniteNumber(value.stacks)
+            if not stacks then return nil end
+            if stacks < required then return 0 end
         end
         return 1
     end
@@ -111,7 +135,8 @@ function SC:RecordObservation(subject, name, effects, complete, raw, scope, now,
             local value = EffectValue(self, key, effects, complete)
             local validUntil = expiry
             local active = effects and effects[key]
-            if active and tonumber(active.ending) and active.ending > 0 then validUntil = math.min(validUntil, active.ending * 1000) end
+            local ending=active and FiniteNumber(active.ending)
+            if ending and ending > 0 then validUntil = math.min(validUntil, ending * 1000) end
             History.Observe(pull, subject, key, now, value, validUntil, {scope=scope, label=effect.label, evidence=active and active.evidence or "SAMPLED", targetUptime=(pull.rules and pull.rules[key] or self:GetEffectRule(key)).uptimeTarget})
         end
     end
@@ -120,7 +145,8 @@ function SC:RecordObservation(subject, name, effects, complete, raw, scope, now,
         for id, value in pairs(raw or {}) do
             local key = "ability:" .. id
             present[key] = true
-            local expires = tonumber(value.ending) and value.ending > 0 and math.min(expiry, value.ending * 1000) or expiry
+            local ending=FiniteNumber(value.ending)
+            local expires = ending and ending > 0 and math.min(expiry, ending * 1000) or expiry
             History.Observe(pull, subject, key, now, 1, expires, {scope=scope, label=value.name, evidence="RAW_ABILITY_ID"})
         end
         for _, metric in pairs(pull.metrics) do
@@ -137,8 +163,7 @@ function SC:SampleLiveCoverage()
     local own, ownComplete, ownRaw = self:ObserveEffectsOnUnit("player")
     self.localLive = {capabilities=own, updatedAt=now, complete=ownComplete}
     self.rawObserved = ownRaw
-    if self.ShareLiveSnapshot and not (self.share and self.share.detailProtocol) then self:ShareLiveSnapshot() end
-    if self.ShareVerifiedLive then self:ShareVerifiedLive() end
+    if self.ShareLiveSnapshot then self:ShareLiveSnapshot() end
     if self.SharePullIdentity then self:SharePullIdentity() end
     self:SamplePotionEvidence()
     if self.SharePotionEvidence then self:SharePotionEvidence() end

@@ -134,11 +134,11 @@ function SC:BuildIntegratedSettingsPage(page, ui)
         function() return SC.sv.problemsOnly end, function(v) SC.sv.problemsOnly = v; SC:RefreshHUD() end)
     AddToggleRow(controlCard, "AlphaSquadSupportAuto", "Auto assign owners", 148,
         function() return SC.sv.autoAssign end, function(v) SC.sv.autoAssign = v; SC:Refresh("autoassign") end)
-    AddToggleRow(controlCard, "AlphaSquadSupportShare", "Share ASUI build data", 184,
+    AddToggleRow(controlCard, "AlphaSquadSupportShare", "Send / receive ASUI data", 184,
         function() return SC.sv.shareData end,
-        function(v) SC.sv.shareData = v; if v then SC:ShareLocalSnapshot("settings") end end)
-    AddToggleRow(controlCard, "AlphaSquadSupportUnknown", "Keep LIMITED as unknown", 220,
-        function() return SC.sv.showUnknown end, function(v) SC.sv.showUnknown = v; SC:Refresh("unknown") end)
+        function(v) SC:SetShareData(v) end)
+    AddToggleRow(controlCard, "AlphaSquadSupportUnknown", "Show unverified details", 220,
+        function() return SC.sv.showUnknown end, function(v) SC.sv.showUnknown = v; SC:RefreshHUD() end)
 
     local auditCard = CreateCard(page, "AlphaSquadSupportAuditCard", 8, 368, 322, 250, "LOCAL BUILD AUDIT", C.green)
     local audit = CreateLabel(auditCard, "AlphaSquadSupportAuditText", "ZoFontGameSmall", "", C.white)
@@ -188,6 +188,11 @@ function SC:BuildIntegratedSettingsPage(page, ui)
         for i = 1, math.min(3, #sets) do setNames[#setNames + 1] = sets[i].name end
         local food = s.food or {}
         local potion = s.potion or {}
+        local foodLabel = "UNKNOWN"
+        if food.verified then foodLabel = food.active and (food.name ~= "" and food.name or "ACTIVE") or "MISSING" end
+        local potionLabel = "UNKNOWN"
+        if potion.known then potionLabel = potion.name ~= "" and potion.name or "CONFIGURED"
+        elseif potion.selectionKnown then potionLabel = "NO POTION SELECTED" end
         audit:SetText(string.format(
             "ROLE  %s\nGLYPHS  missing %d • tri %d • mag %d • stam %d • health %d\nFOOD  %s\nPOTION  %s\nSETS  %s",
             tostring(s.role or "UNKNOWN"),
@@ -196,8 +201,8 @@ function SC:BuildIntegratedSettingsPage(page, ui)
             tonumber(glyphs.magicka) or 0,
             tonumber(glyphs.stamina) or 0,
             tonumber(glyphs.health) or 0,
-            food.active and (food.name ~= "" and food.name or "ACTIVE") or "MISSING",
-            potion.known and (potion.name ~= "" and potion.name or "CONFIGURED") or "UNKNOWN",
+            foodLabel,
+            potionLabel,
             #setNames > 0 and table.concat(setNames, ", ") or "none detected"
         ))
     end)
@@ -207,6 +212,7 @@ local function CycleRole(player)
     local current = SC.sv.roleOverrides[player.key] or player.role or "UNKNOWN"
     local nextRole = NextFrom(ROLE_ORDER, current)
     SC.sv.roleOverrides[player.key] = nextRole
+    SC:SanitizePlanningSettings()
     SC:Refresh("role override")
     if SC.SchedulePlanBroadcast then SC:SchedulePlanBroadcast() end
 end
@@ -271,6 +277,7 @@ local function ToggleBackups(effectKey)
         if owner.key ~= assignedKey then backups[owner.key] = shouldEnable or nil end
     end
 
+    SC:SanitizePlanningSettings()
     SC:Refresh("backup duplicate")
 end
 
@@ -294,12 +301,12 @@ function SC:RefreshMatrix()
         if data then
             row.effectKey = data.key
             row.name:SetText(data.effect.label)
-            local statusColor = data.status == "covered" and C.green or (data.status == "unknown" and C.gold or C.red)
-            row.status:SetText(string.upper(data.status))
+            local statusColor = data.status == "covered" and C.green or (data.unverified and C.gold or C.red)
+            row.status:SetText(data.status == "missing" and (data.unverified and "NO SOURCE ?" or "NO SOURCE") or string.upper(data.status))
             SetColor(row.status, statusColor)
 
             local ownerText = data.assigned and data.assigned.displayName or "AUTO / NONE"
-            if data.locked then ownerText = "🔒 " .. ownerText end
+            if data.locked then ownerText = "[LOCKED] " .. ownerText end
             row.owner.label:SetText(ownerText)
 
             if #data.duplicatePlayers > 0 then
@@ -325,27 +332,33 @@ function SC:RefreshMatrix()
             row.player = player
             row.user:SetText(player.displayName or "?")
             row.role.label:SetText(SC.sv.roleOverrides[player.key] or player.role or "UNKNOWN")
-            row.quality:SetText(player.dataQuality == "ASUI" and "ASUI" or "NO ASUI")
-            SetColor(row.quality, player.dataQuality == "ASUI" and C.green or C.gold)
+            local buildKnown = player.dataQuality == "ASUI" or player.buildVerified == true
+            row.quality:SetText(buildKnown and "ASUI" or tostring(player.dataQuality or "LIMITED"))
+            SetColor(row.quality, buildKnown and C.green or C.gold)
 
             local food = player.food
-            local foodText = food and food.active and "FOOD ✓" or (player.dataQuality == "ASUI" and "NO FOOD" or "FOOD ?")
+            local foodText = food and food.verified and (food.active and "FOOD ✓" or "NO FOOD") or "FOOD ?"
             row.food:SetText(foodText)
-            SetColor(row.food, food and food.active and C.green or (player.dataQuality == "ASUI" and C.red or C.muted))
+            SetColor(row.food, food and food.verified and (food.active and C.green or C.red) or C.gold)
 
-            local missing = player.equipment and player.equipment.glyphs and tonumber(player.equipment.glyphs.armorMissing) or 0
-            row.glyph:SetText(player.dataQuality == "ASUI" and (missing > 0 and ("GLYPH -" .. missing) or "GLYPH ✓") or "GLYPH ?")
-            SetColor(row.glyph, player.dataQuality ~= "ASUI" and C.muted or (missing > 0 and C.red or C.green))
+            local glyphs = player.equipment and player.equipment.glyphs
+            local missing = glyphs and tonumber(glyphs.armorMissing) or 0
+            row.glyph:SetText(glyphs and glyphs.verified and (missing > 0 and ("GLYPH -" .. missing) or "GLYPH ✓") or "GLYPH ?")
+            SetColor(row.glyph, (not glyphs or glyphs.verified ~= true) and C.gold or (missing > 0 and C.red or C.green))
         end
     end
 end
 
 function SC:OpenMatrix()
+    if self.inCombat then return false end
     if not self.matrixWindow then self:CreateMatrixWindow() end
+    if self.inspectorWindow and not self.inspectorWindow:IsHidden() then self:CloseInspector() end
+    if self.reportWindow and not self.reportWindow:IsHidden() then self:ClosePullReport() end
     self.matrixWindow:SetHidden(false)
     self.settingsPageVisible = true
     self:ApplyVisibility()
     self:RefreshMatrix()
+    return true
 end
 
 function SC:CloseMatrix()

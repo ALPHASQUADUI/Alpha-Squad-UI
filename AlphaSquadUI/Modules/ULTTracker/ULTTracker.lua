@@ -74,6 +74,7 @@ local Clamp = AlphaSquadUI.Utils and AlphaSquadUI.Utils.Clamp
 if not Clamp then
     Clamp = function(value, minimum, maximum)
         value = tonumber(value) or minimum
+        if value ~= value or value == math.huge or value == -math.huge then value = minimum end
         if value < minimum then return minimum end
         if value > maximum then return maximum end
         return value
@@ -81,6 +82,12 @@ if not Clamp then
 end
 
 ULT.Clamp = Clamp
+
+local function FiniteOr(value, fallback)
+    value = tonumber(value)
+    if not value or value ~= value or value == math.huge or value == -math.huge then return fallback end
+    return value
+end
 
 function ULT:GetDefaultPosition()
     local width = GuiRoot:GetWidth() or 1920
@@ -91,7 +98,7 @@ end
 function ULT:GetUltimatePower()
     if not GetUnitPower or not ULTIMATE_POWER_TYPE then return 0 end
     local current = GetUnitPower("player", ULTIMATE_POWER_TYPE)
-    return tonumber(current) or 0
+    return math.min(1000000, math.max(0, FiniteOr(current, 0)))
 end
 
 function ULT:GetActiveBarCategory()
@@ -102,10 +109,11 @@ function ULT:GetActiveBarCategory()
 end
 
 function ULT:GetEffectiveAbilityId(boundId, category)
-    if not boundId or boundId <= 0 then return 0 end
+    boundId = FiniteOr(boundId, 0)
+    if boundId <= 0 or boundId > 2147483647 or boundId % 1 ~= 0 then return 0 end
     if GetEffectiveAbilityIdForAbilityOnHotbar then
-        local resolved = GetEffectiveAbilityIdForAbilityOnHotbar(boundId, category)
-        if resolved and resolved > 0 then return resolved end
+        local resolved = FiniteOr(GetEffectiveAbilityIdForAbilityOnHotbar(boundId, category), 0)
+        if resolved > 0 and resolved <= 2147483647 and resolved % 1 == 0 then return resolved end
     end
     return boundId
 end
@@ -115,28 +123,29 @@ function ULT:GetUltimateCost(category, effectiveId)
 
     if GetSlotAbilityCost and ULTIMATE_POWER_TYPE then
         local ok, result = pcall(GetSlotAbilityCost, ULTIMATE_SLOT, ULTIMATE_POWER_TYPE, category)
-        if ok then cost = tonumber(result) or 0 end
+        if ok then cost = FiniteOr(result, 0) end
     end
 
     if cost <= 0 and effectiveId and effectiveId > 0 and GetAbilityCost and ULTIMATE_POWER_TYPE then
         local ok, result = pcall(GetAbilityCost, effectiveId, ULTIMATE_POWER_TYPE, nil, "player")
-        if ok then cost = tonumber(result) or 0 end
+        if ok then cost = FiniteOr(result, 0) end
     end
 
     if cost <= 0 and effectiveId and effectiveId > 0 and GetAbilityBaseCostInfo then
         local ok, baseCost, mechanic = pcall(GetAbilityBaseCostInfo, effectiveId, nil, "player")
-        if ok and tonumber(baseCost) and (mechanic == nil or mechanic == ULTIMATE_POWER_TYPE) then
-            cost = tonumber(baseCost) or 0
+        baseCost = FiniteOr(baseCost, nil)
+        if ok and baseCost and (mechanic == nil or mechanic == ULTIMATE_POWER_TYPE) then
+            cost = baseCost
         end
     end
 
-    return math.max(0, math.floor(cost + 0.5))
+    return math.min(1000000, math.max(0, math.floor(FiniteOr(cost, 0) + 0.5)))
 end
 
 function ULT:ReadBar(bar)
     local category = bar.category
     local boundId = GetSlotBoundId and GetSlotBoundId(ULTIMATE_SLOT, category) or 0
-    boundId = tonumber(boundId) or 0
+    boundId = FiniteOr(boundId, 0)
 
     if boundId <= 0 then
         bar.abilityId = 0
@@ -233,10 +242,16 @@ function ULT:SetFlashUpdate(enabled)
     end
 end
 
-function ULT:Refresh(reason)
+function ULT:Refresh(reason, observedUltimate)
     if not self.initialized or not self.sv then return end
+    if not self.sv.enabled then
+        self:SetFlashUpdate(false)
+        return
+    end
 
-    self.currentUltimate = self:GetUltimatePower()
+    local currentUltimate = FiniteOr(observedUltimate, nil)
+    if currentUltimate == nil then currentUltimate = self:GetUltimatePower() end
+    self.currentUltimate = math.min(1000000, math.max(0, currentUltimate))
 
     local previousPrimaryReady = self.bars.primary.ready
     local previousBackupReady = self.bars.backup.ready
@@ -263,14 +278,18 @@ function ULT:Refresh(reason)
         (self:ShouldTrackBar("primary") and self.bars.primary.ready)
         or (self:ShouldTrackBar("backup") and self.bars.backup.ready)
 
-    self:SetFlashUpdate(anyReady and self.sv.readyFlash and not self.uiObscured)
+    local hudVisible = self.sv.visible and not self.uiObscured
+    if hudVisible and self.window and self.window.IsHidden then
+        hudVisible = not self.window:IsHidden()
+    end
+    self:SetFlashUpdate(anyReady and self.sv.readyFlash and hudVisible)
 
     if self.RefreshHUD then self:RefreshHUD() end
     if self.RefreshSettings then self:RefreshSettings() end
 end
 
 function ULT:OnUltimateUsed(slotNum)
-    if slotNum ~= ULTIMATE_SLOT then return end
+    if slotNum ~= ULTIMATE_SLOT or not self.sv or not self.sv.enabled then return end
 
     local activeCategory = self:GetActiveBarCategory()
     local now = NowMs()
@@ -293,14 +312,19 @@ end
 function ULT:SetEnabled(enabled)
     self.sv.enabled = enabled == true
     if not self.sv.enabled then self:SetFlashUpdate(false) end
+    self:SetSafetyUpdateActive(self.sv.enabled and not self.uiObscured)
+    if self.Group and self.Group.SetSafetyUpdateActive then
+        self.Group:SetSafetyUpdateActive(self.sv.enabled and self.Group.sv and self.Group.sv.enabled and not self.uiObscured)
+    end
     if self.ApplyVisibility then self:ApplyVisibility() end
     if self.Group and self.Group.ApplyVisibility then self.Group:ApplyVisibility() end
-    self:Refresh("enable changed")
+    if self.sv.enabled then self:Refresh("enable changed") end
 end
 
 function ULT:SetVisible(visible)
     self.sv.visible = visible == true
     if self.ApplyVisibility then self:ApplyVisibility() end
+    if self.sv.enabled and self.sv.visible then self:Refresh("visibility changed") end
 end
 
 function ULT:SetLocked(locked)
@@ -327,9 +351,29 @@ end
 function ULT:RefreshUIObscured()
     self.uiObscured = not (SceneVisible(HUD_SCENE) or SceneVisible(HUD_UI_SCENE))
     if self.uiObscured then self:SetFlashUpdate(false) end
+    self:SetSafetyUpdateActive(self.sv and self.sv.enabled and not self.uiObscured)
+    if self.Group and self.Group.SetSafetyUpdateActive then
+        self.Group:SetSafetyUpdateActive(self.sv and self.sv.enabled and self.Group.sv and self.Group.sv.enabled and not self.uiObscured)
+    end
     if self.ApplyVisibility then self:ApplyVisibility() end
     if self.Group and self.Group.ApplyVisibility then self.Group:ApplyVisibility() end
     if not self.uiObscured then self:Refresh("hud visible") end
+end
+
+function ULT:SetSafetyUpdateActive(enabled)
+    enabled = enabled == true
+    if self.safetyUpdateActive == enabled then return end
+    self.safetyUpdateActive = enabled
+    local name = "AlphaSquadUI_ULTTracker_Safety"
+    if enabled then
+        EM:RegisterForUpdate(name, 1500, function()
+            if ULT and ULT.sv and ULT.sv.enabled and not ULT.uiObscured then
+                ULT:Refresh("safety")
+            end
+        end)
+    else
+        EM:UnregisterForUpdate(name)
+    end
 end
 
 function ULT:RegisterSceneCallbacks()
@@ -354,8 +398,7 @@ function ULT:RegisterEvents()
         EM:RegisterForEvent(name, EVENT_POWER_UPDATE, function(_, unitTag, _, powerType, powerValue)
             if unitTag ~= "player" then return end
             if ULTIMATE_POWER_TYPE and powerType ~= ULTIMATE_POWER_TYPE then return end
-            ULT.currentUltimate = tonumber(powerValue) or ULT:GetUltimatePower()
-            ULT:Refresh("power")
+            ULT:Refresh("power", powerValue)
         end)
         if REGISTER_FILTER_UNIT_TAG and REGISTER_FILTER_POWER_TYPE and ULTIMATE_POWER_TYPE then
             EM:AddFilterForEvent(name, EVENT_POWER_UPDATE,
@@ -423,12 +466,7 @@ function ULT:RegisterEvents()
         end)
     end
 
-    -- Slow safety sync only. Event-driven updates do the real work.
-    EM:RegisterForUpdate(prefix .. "_Safety", 1500, function()
-        if ULT and ULT.sv and ULT.sv.enabled and not ULT.uiObscured then
-            ULT:Refresh("safety")
-        end
-    end)
+    -- The slow fallback is registered only while the visible feature is active.
 end
 
 function ULT:RegisterSlashCommands()
@@ -440,7 +478,11 @@ function ULT:RegisterSlashCommands()
             if ULT.ToggleSettings then ULT:ToggleSettings() end
         elseif lower == "lock" then
             ULT:SetLocked(true)
-        elseif lower == "unlock" or lower == "move" then
+        elseif lower == "unlock" then
+            ULT:SetLocked(false)
+        elseif lower == "move" then
+            ULT:SetEnabled(true)
+            ULT:SetVisible(true)
             ULT:SetLocked(false)
         elseif lower == "show" then
             ULT:SetVisible(true)
@@ -461,13 +503,21 @@ function ULT:RegisterSlashCommands()
         elseif lower == "group" or lower == "group config" or lower == "group settings" then
             if ULT.Group and ULT.Group.ToggleConfig then ULT.Group:ToggleConfig() end
         elseif lower == "group show" then
+            ULT:SetEnabled(true)
             if ULT.Group then ULT.Group:SetEnabled(true); ULT.Group:SetVisible(true) end
         elseif lower == "group hide" then
             if ULT.Group then ULT.Group:SetVisible(false) end
         elseif lower == "group lock" then
             if ULT.Group then ULT.Group:SetLocked(true) end
-        elseif lower == "group unlock" or lower == "group move" then
-            if ULT.Group then ULT.Group:SetLocked(false); ULT.Group:SetVisible(true) end
+        elseif lower == "group unlock" then
+            if ULT.Group then ULT.Group:SetLocked(false) end
+        elseif lower == "group move" then
+            ULT:SetEnabled(true)
+            if ULT.Group then
+                ULT.Group:SetEnabled(true)
+                ULT.Group:SetVisible(true)
+                ULT.Group:SetLocked(false)
+            end
         elseif lower == "group reset" then
             if ULT.Group and ULT.Group.ResetPosition then ULT.Group:ResetPosition() end
         elseif lower == "status" then
@@ -504,8 +554,15 @@ function ULT:Initialize()
     local worldNamespace = GetWorldName and GetWorldName() or nil
     self.sv = ZO_SavedVars:NewAccountWide(self.savedVarsName, 1, worldNamespace, defaults)
 
-    self.sv.scale = Clamp(self.sv.scale, 70, 150)
-    self.sv.opacity = Clamp(self.sv.opacity, 30, 100)
+    for key, value in pairs(defaults) do
+        if self.sv[key] == nil or (type(value) == "boolean" and type(self.sv[key]) ~= "boolean") then
+            self.sv[key] = value
+        end
+    end
+    self.sv.scale = Clamp(FiniteOr(self.sv.scale, defaults.scale), 70, 150)
+    self.sv.opacity = Clamp(FiniteOr(self.sv.opacity, defaults.opacity), 30, 100)
+    self.sv.x = Clamp(FiniteOr(self.sv.x, defaults.x), -100000, 100000)
+    self.sv.y = Clamp(FiniteOr(self.sv.y, defaults.y), -100000, 100000)
     if self.sv.trackMode ~= "main" and self.sv.trackMode ~= "back" and self.sv.trackMode ~= "both" then
         self.sv.trackMode = "both"
     end
@@ -519,6 +576,7 @@ function ULT:Initialize()
     self:RegisterSlashCommands()
 
     self.initialized = true
+    self:SetSafetyUpdateActive(self.sv.enabled and not self.uiObscured)
 
     zo_callLater(function()
         if ULT then

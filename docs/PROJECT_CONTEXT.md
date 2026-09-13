@@ -1,6 +1,6 @@
 # Ąlpha Şquad UI — Project Context
 
-Last updated: **2026-09-12**
+Last updated: **2026-09-13**
 
 This file stores project-relevant conversation context so work remains understandable across ChatGPT mobile/desktop sessions and coding agents.
 
@@ -49,10 +49,10 @@ Therefore future audits must inspect active feature branches, not only `main`.
 At the time this context was written, `support-coverage` was ahead of `main` and contained the full development module.
 
 Development version:
-`2.7.0-support-coverage-test`
+`2.7.0-support-coverage-test.4`
 
 AddOnVersion:
-`20700`
+`20704`
 
 New SavedVariables:
 `AlphaSquadSupportCoverageSavedVariables`
@@ -61,6 +61,14 @@ Manifest optional dependencies:
 - LibGroupCombatStats
 - LibGroupBroadcast
 - LibFoodDrinkBuff
+
+## Current test-candidate handoff
+
+The `test.4` audit includes Support Coverage scanner/sharing/planner/history fixes, defensive SavedVariables handling and hidden/dormant lifecycle fixes for personal ULT, Group ULT and Overload. Detailed changes are in `CHANGELOG.md`.
+
+The deterministic suites contain 226 Support Coverage assertions, 38 ULT Tracker assertions and 9 Overload assertions: 273 per Lua runtime. Run all three suites on both Lua 5.1 and 5.4; syntax and packaging checks remain separate. No in-game ESO acceptance has been completed in this environment.
+
+The maintainer explicitly authorized publishing these code and documentation changes on `support-coverage`, but **no PR, merge, tag or public release**. In-game testing comes first. Branch GitHub Actions builds provide the installable test artifact; see `releases/README.md` for the download steps.
 
 ## Support Coverage intent
 
@@ -86,11 +94,21 @@ Core responsibilities:
 AlphaSquadUI/Modules/SupportCoverage/
 ├── SupportCoverage.lua
 ├── SupportCoverageCatalog.lua
+├── SupportCoverageAudit.lua
 ├── SupportCoverageScanner.lua
+├── SupportCoverageBuild.lua
+├── SupportCoverageHistory.lua
 ├── SupportCoverageShare.lua
+├── SupportCoverageDetails.lua
+├── SupportCoverageLiveShare.lua
 ├── SupportCoverageEngine.lua
+├── SupportCoverageTracking.lua
 ├── SupportCoverageUI.lua
-└── SupportCoverageSettings.lua
+├── SupportCoveragePlanner.lua
+├── SupportCoverageInspector.lua
+├── SupportCoverageSettings.lua
+├── SupportCoverageSources.lua
+└── SupportCoverageIntegration.lua
 ```
 
 ## Current profiles
@@ -118,8 +136,11 @@ The scanner currently works with:
 - equipment and sets;
 - armor glyph/enchant classification;
 - skills;
+- Champion slottables;
+- committed Class Masteries and prerequisites;
 - food;
-- potions;
+- selected potion, stack and cooldown evidence;
+- optional poisons and Mundus;
 - support capabilities;
 - support score;
 - role hints.
@@ -148,6 +169,7 @@ Deep planning:
 - 510 — AlphaSquadSupportCoverage
 - 509 — AlphaSquadSupportPlan
 - 508 — AlphaSquadSupportLive
+- 507 — AlphaSquadSupportDetailsTest
 
 The source itself explicitly states that these must be formally reserved before public release.
 
@@ -158,7 +180,9 @@ This is a **release blocker** for stable public sharing unless verified/reserved
 The user requires:
 - no direct development pushes to `main`;
 - work on non-main branches;
+- publish the current validated candidate on `support-coverage` without creating a PR;
 - PR before merge;
+- wait for the maintainer's ESO tests and explicit request before opening that PR;
 - no automatic merge unless explicitly requested.
 
 ## User preference for project work

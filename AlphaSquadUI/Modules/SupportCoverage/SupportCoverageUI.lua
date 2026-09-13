@@ -2,6 +2,7 @@
 
 local SC = AlphaSquadUI and AlphaSquadUI.Modules and AlphaSquadUI.Modules.SupportCoverage
 if not SC then return end
+local Catalog = SC.Catalog
 
 local C = (AlphaSquadUI.Theme and AlphaSquadUI.Theme.colors) or {
     bg={0.01,0.016,0.03,0.96}, panel={0.02,0.03,0.052,0.98},
@@ -116,6 +117,7 @@ function SC:ApplyVisibility()
         or sharedSettingsVisible
         or (self.settingsPageVisible == true)
     self.window:SetHidden(hidden)
+    if self.SetSafetyUpdateActive then self:SetSafetyUpdateActive(not hidden) end
     if hidden and self.banner then self.banner:SetHidden(true) end
 end
 
@@ -222,7 +224,7 @@ end
 
 function SC:ShowReadyBanner(ready, covered, required, limited)
     if not self.banner or self.inCombat then return end
-    local signature = string.format("%s:%d:%d:%d", tostring(ready), covered or 0, required or 0, limited or 0)
+    local signature = string.format("%s:%s:%d:%d:%d", tostring(self.sv.activeProfile), tostring(ready), covered or 0, required or 0, limited or 0)
     if self.lastBannerSignature == signature then return end
     self.lastBannerSignature = signature
 
@@ -231,6 +233,10 @@ function SC:ShowReadyBanner(ready, covered, required, limited)
         self.banner.label:SetText(string.format("COVERAGE READY  %d/%d", covered or 0, required or 0))
         SetColor(self.banner.label, C.green)
         self.banner.accent:SetColor(C.green[1], C.green[2], C.green[3], 1)
+        if self.sv.optionalSounds and PlaySound and SOUNDS then
+            local sound=SOUNDS.POSITIVE_CLICK or SOUNDS.GENERAL_ALERT_NOTIFICATION
+            if sound then PlaySound(sound) end
+        end
     else
         self.banner.label:SetText(string.format("COVERAGE CHECK  %d/%d%s",
             covered or 0, required or 0, (limited or 0) > 0 and "  •  LIMITED DATA" or ""))
@@ -256,7 +262,10 @@ function SC:ShowPersonalAssignmentBanner()
     if not self.assignmentBanner or self.inCombat then return end
     local assignments = self.GetMyRemoteAssignments and self:GetMyRemoteAssignments() or {}
     local role = self.remotePlan and self.remotePlan.myRole or nil
-    if #assignments == 0 and (not role or role == "UNKNOWN") then return end
+    if #assignments == 0 and (not role or role == "UNKNOWN") then
+        self.assignmentBanner:SetHidden(true)
+        return
+    end
 
     local parts = {}
     if role and role ~= "UNKNOWN" then parts[#parts + 1] = role end
@@ -280,9 +289,9 @@ function SC:ShowPullSummaryBanner(pull)
     if not self.assignmentBanner or not pull or self.inCombat then return end
 
     local worstKey, worstUptime, worstGap = nil, 101, 0
-    for key, data in pairs(pull.summary or {}) do
-        if data.uptime and data.uptime < worstUptime then
-            worstKey, worstUptime, worstGap = key, data.uptime, data.longestGapMs or 0
+    for _, data in ipairs(pull.rows or {}) do
+        if Catalog and Catalog.effects[data.key] and data.uptime and data.uptime < worstUptime then
+            worstKey, worstUptime, worstGap = data.key, data.uptime, data.longestGapMs or 0
         end
     end
 

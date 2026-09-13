@@ -4,6 +4,7 @@ AlphaSquadUI.Utils = AlphaSquadUI.Utils or {}
 
 function AlphaSquadUI.Utils.Clamp(value, minimum, maximum)
     value = tonumber(value) or minimum
+    if value ~= value or value == math.huge or value == -math.huge then value = minimum end
     if value < minimum then return minimum end
     if value > maximum then return maximum end
     return value

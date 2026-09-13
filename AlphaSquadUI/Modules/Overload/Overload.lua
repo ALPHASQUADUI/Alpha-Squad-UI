@@ -86,6 +86,7 @@ local AOT = {
     settingsNavButtons = {},
     activeSettingsPage = "overload",
 }
+AlphaSquadUI.Modules.Overload = AOT
 
 local COLORS = {
     bg = {0.018, 0.025, 0.045, 0.96},
@@ -108,10 +109,17 @@ local Clamp = AlphaSquadUI.Utils and AlphaSquadUI.Utils.Clamp
 if not Clamp then
     Clamp = function(value, minimum, maximum)
         value = tonumber(value) or minimum
+        if value ~= value or value == math.huge or value == -math.huge then value = minimum end
         if value < minimum then return minimum end
         if value > maximum then return maximum end
         return value
     end
+end
+
+local function FiniteOr(value, fallback)
+    value = tonumber(value)
+    if not value or value ~= value or value == math.huge or value == -math.huge then return fallback end
+    return value
 end
 
 local Normalize = AlphaSquadUI.Utils and AlphaSquadUI.Utils.Normalize
@@ -296,6 +304,9 @@ function AOT:ApplyVisualSettings()
         or settingsVisible
         or self:IsPvPSuppressed()
     self.window:SetHidden(hidden)
+    -- Native power/effect/slot events remain active at all times. The recovery
+    -- heartbeat is needed only while the gameplay HUD can actually be seen.
+    self:SetHealthSyncActive(not hidden)
     self:UpdateLockState()
 end
 
@@ -304,6 +315,7 @@ function AOT:SetAutoDormant(dormant)
     if self.autoDormant == dormant then
         if dormant and self.window then
             self.window:SetHidden(true)
+            self:SetHealthSyncActive(false)
         end
         return
     end
@@ -312,8 +324,8 @@ function AOT:SetAutoDormant(dormant)
 
     if dormant then
         -- No Overload is equipped: become completely silent and visually inactive.
-        -- Keep only the lightweight slot polling/events alive so we can wake up
-        -- automatically when Overload is equipped again (including via subclassing).
+        -- Native slot/hotbar events can wake the tracker automatically when
+        -- Overload is equipped again (including via subclassing).
         self.isOverloadActive = false
         self.overloadEffectConfirmed = false
         self.slotToggleConfirmed = false
@@ -330,6 +342,7 @@ function AOT:SetAutoDormant(dormant)
 
         self:SetEmergencyFlashUpdate(false)
         self:SetReadyReminderFlashUpdate(false)
+        self:SetHealthSyncActive(false)
 
         if self.window then
             self.window:SetHidden(true)
@@ -349,6 +362,7 @@ end
 
 function AOT:SetAddonEnabled(enabled)
     self.sv.addonEnabled = enabled == true
+    if not self.sv.addonEnabled then self:SetHealthSyncActive(false) end
     self:ApplyVisualSettings()
 
     if self.sv.addonEnabled then
@@ -358,6 +372,24 @@ function AOT:SetAddonEnabled(enabled)
     end
 
     self:RefreshSettingsWindow()
+end
+
+function AOT:SetHealthSyncActive(enabled)
+    enabled = enabled == true
+    if self.healthSyncActive == enabled then return end
+    self.healthSyncActive = enabled
+    local updateName = ADDON_NAME .. "_HealthSync"
+    if not enabled then
+        EVENT_MANAGER:UnregisterForUpdate(updateName)
+        return
+    end
+    EVENT_MANAGER:RegisterForUpdate(updateName, 1000, function()
+        if not AOT.sv or not AOT.sv.addonEnabled then
+            AOT:SetHealthSyncActive(false)
+            return
+        end
+        AOT:RefreshOverloadState("health sync")
+    end)
 end
 
 function AOT:SetTrackerVisible(visible)
@@ -558,7 +590,8 @@ end
 function AOT:GetUltimatePower()
     if not GetUnitPower or not ULTIMATE_POWER_TYPE then return 0, 0, 0 end
     local current, maximum, effectiveMaximum = GetUnitPower("player", ULTIMATE_POWER_TYPE)
-    return tonumber(current) or 0, tonumber(maximum) or 0, tonumber(effectiveMaximum) or 0
+    return math.max(0, FiniteOr(current, 0)), math.max(0, FiniteOr(maximum, 0)),
+        math.max(0, FiniteOr(effectiveMaximum, 0))
 end
 
 function AOT:SetDisplayedVariant(variant)
@@ -576,13 +609,13 @@ function AOT:GetReserveAlertLevel(currentUltimate)
         return "none"
     end
 
-    local current = tonumber(currentUltimate)
-    if current == nil then
+    local current = FiniteOr(currentUltimate, nil)
+    if not current then
         current = select(1, self:GetUltimatePower())
     end
 
-    local threshold = tonumber(self.sv.reserveThreshold) or 130
-    local alertThreshold = tonumber(self.sv.reserveWarningThreshold) or 160
+    local threshold = FiniteOr(self.sv.reserveThreshold, 130)
+    local alertThreshold = FiniteOr(self.sv.reserveWarningThreshold, 160)
     if alertThreshold < threshold then alertThreshold = threshold end
 
     if current <= threshold then
@@ -606,12 +639,12 @@ function AOT:GetReadyReminderEligible(currentUltimate)
         return true, testVariant
     end
 
-    local current = tonumber(currentUltimate)
-    if current == nil then
+    local current = FiniteOr(currentUltimate, nil)
+    if not current then
         current = select(1, self:GetUltimatePower())
     end
 
-    local threshold = tonumber(self.sv.readyReminderThreshold) or 400
+    local threshold = FiniteOr(self.sv.readyReminderThreshold, 400)
     if current < threshold then
         return false, nil
     end
@@ -856,8 +889,8 @@ end
 function AOT:UpdateReserveVisual(currentUltimate)
     if not self.window or not self.sv then return end
 
-    local current = tonumber(currentUltimate)
-    if current == nil then
+    local current = FiniteOr(currentUltimate, nil)
+    if not current then
         current = select(1, self:GetUltimatePower())
     end
 
@@ -1053,8 +1086,8 @@ end
 function AOT:CheckReserveCutoff(currentUltimate)
     if not self.sv or not self.sv.addonEnabled then return end
 
-    local current = tonumber(currentUltimate)
-    if current == nil then
+    local current = FiniteOr(currentUltimate, nil)
+    if not current then
         current = select(1, self:GetUltimatePower())
     end
 
@@ -1069,8 +1102,8 @@ function AOT:CheckReserveCutoff(currentUltimate)
         return
     end
 
-    local threshold = tonumber(self.sv.reserveThreshold) or 130
-    local alertThreshold = tonumber(self.sv.reserveWarningThreshold) or 160
+    local threshold = FiniteOr(self.sv.reserveThreshold, 130)
+    local alertThreshold = FiniteOr(self.sv.reserveWarningThreshold, 160)
     if alertThreshold < threshold then alertThreshold = threshold end
     local newLevel = "none"
 
@@ -1825,8 +1858,8 @@ function AOT:CreateSettingsWindow()
         AOT:ResetPosition()
     end)
     CreateButton(appearance, "AlphaSquadOptMove", "UNLOCK & MOVE", 164, 132, 144, 34, function()
-        AOT.sv.addonEnabled = true
-        AOT.sv.visible = true
+        AOT:SetAddonEnabled(true)
+        AOT:SetTrackerVisible(true)
         AOT:SetLocked(false)
         win:SetHidden(true)
         AOT:ApplyVisualSettings()
@@ -1946,6 +1979,8 @@ function AOT:RegisterDirectSettingsPanel()
             AOT:ApplyVisualSettings()
             local ult = AlphaSquadUI and AlphaSquadUI.Modules and AlphaSquadUI.Modules.ULTTracker
             if ult and ult.ApplyVisibility then ult:ApplyVisibility() end
+            local support = AlphaSquadUI and AlphaSquadUI.Modules and AlphaSquadUI.Modules.SupportCoverage
+            if support and support.ApplyVisibility then support:ApplyVisibility() end
         end, 0)
     end
 
@@ -1959,6 +1994,8 @@ function AOT:RegisterDirectSettingsPanel()
             AOT:ApplyVisualSettings()
             local ult = AlphaSquadUI and AlphaSquadUI.Modules and AlphaSquadUI.Modules.ULTTracker
             if ult and ult.ApplyVisibility then ult:ApplyVisibility() end
+            local support = AlphaSquadUI and AlphaSquadUI.Modules and AlphaSquadUI.Modules.SupportCoverage
+            if support and support.ApplyVisibility then support:ApplyVisibility() end
         end, 0)
         if SetCameraOptionsPreviewModeEnabled then
             SetCameraOptionsPreviewModeEnabled(false, CAMERA_OPTIONS_PREVIEW_NONE)
@@ -1999,6 +2036,8 @@ function AOT:ToggleSettingsWindow()
     self:ApplyVisualSettings()
     local ult = AlphaSquadUI and AlphaSquadUI.Modules and AlphaSquadUI.Modules.ULTTracker
     if ult and ult.ApplyVisibility then ult:ApplyVisibility() end
+    local support = AlphaSquadUI and AlphaSquadUI.Modules and AlphaSquadUI.Modules.SupportCoverage
+    if support and support.ApplyVisibility then support:ApplyVisibility() end
 end
 
 function AOT:PrintHelp()
@@ -2032,8 +2071,8 @@ function AOT:RegisterSlashCommands()
             self:SetLocked(true)
             Chat(string.format("Position locked and saved at X:%d Y:%d.", self.sv.x or 0, self.sv.y or 0))
         elseif lower == "unlock" or lower == "move" then
-            self.sv.addonEnabled = true
-            self.sv.visible = true
+            self:SetAddonEnabled(true)
+            self:SetTrackerVisible(true)
             self:SetLocked(false)
             Chat("Position unlocked. Drag the tracker with any mouse button, then lock it to save that position.")
         elseif lower == "reset" then
@@ -2230,17 +2269,9 @@ function AOT:RegisterEvents()
         end
     end
 
-    -- Event-driven tracking is primary. This slow heartbeat is only a safety net
-    -- for rare missed API transitions, keeping idle CPU usage negligible.
-    local lastDormantPoll = 0
-    EVENT_MANAGER:RegisterForUpdate(ADDON_NAME .. "_HealthSync", 1000, function()
-        if AOT.autoDormant then
-            local now = GetMs()
-            if now - lastDormantPoll < 3000 then return end
-            lastDormantPoll = now
-        end
-        AOT:RefreshOverloadState("health sync")
-    end)
+    -- Event-driven tracking is primary. ApplyVisualSettings owns the recovery
+    -- heartbeat lifecycle so hidden/dormant contexts have no polling update.
+    self:ApplyVisualSettings()
 end
 
 function AOT:Initialize()
@@ -2269,19 +2300,20 @@ function AOT:Initialize()
 
     -- Migration from old versions.
     if self.sv.enabled ~= nil then
-        self.sv.visible = self.sv.enabled
+        if type(self.sv.enabled)=="boolean" then self.sv.visible = self.sv.enabled end
         self.sv.enabled = nil
     end
-    if self.sv.reserveCutoffEnabled == nil then self.sv.reserveCutoffEnabled = true end
-    if self.sv.reserveThreshold == nil then self.sv.reserveThreshold = 130 end
-    if self.sv.reserveWarningThreshold == nil then self.sv.reserveWarningThreshold = 160 end
+    for key,value in pairs(defaults) do
+        if self.sv[key]==nil or (type(value)=="boolean" and type(self.sv[key])~="boolean") then self.sv[key]=value end
+    end
+    self.sv.scale=Clamp(FiniteOr(self.sv.scale,defaults.scale),60,160)
+    self.sv.opacity=Clamp(FiniteOr(self.sv.opacity,defaults.opacity),30,100)
+    self.sv.x=Clamp(FiniteOr(self.sv.x,defaults.x),-100000,100000)
+    self.sv.y=Clamp(FiniteOr(self.sv.y,defaults.y),-100000,100000)
+    self.sv.reserveThreshold=math.floor(Clamp(FiniteOr(self.sv.reserveThreshold,defaults.reserveThreshold),25,500)+0.5)
+    self.sv.reserveWarningThreshold=math.floor(Clamp(FiniteOr(self.sv.reserveWarningThreshold,defaults.reserveWarningThreshold),25,500)+0.5)
     if self.sv.reserveWarningThreshold < self.sv.reserveThreshold then self.sv.reserveWarningThreshold = self.sv.reserveThreshold end
-    if self.sv.reserveSound == nil then self.sv.reserveSound = true end
-    if self.sv.readyReminderEnabled == nil then self.sv.readyReminderEnabled = true end
-    if self.sv.readyReminderThreshold == nil then self.sv.readyReminderThreshold = 400 end
-    self.sv.readyReminderThreshold = Clamp(self.sv.readyReminderThreshold, 100, 500)
-    if self.sv.readyReminderSound == nil then self.sv.readyReminderSound = true end
-    if self.sv.disableInPvP == nil then self.sv.disableInPvP = false end
+    self.sv.readyReminderThreshold=math.floor(Clamp(FiniteOr(self.sv.readyReminderThreshold,defaults.readyReminderThreshold),100,500)+0.5)
 
     self.localizedPowerName = GetAbilityName and GetAbilityName(VARIANTS.power.abilityId) or "Power Overload"
     self.localizedEnergyName = GetAbilityName and GetAbilityName(VARIANTS.energy.abilityId) or "Energy Overload"

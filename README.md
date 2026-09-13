@@ -20,7 +20,7 @@ Key features:
 - movable/lockable HUD
 - scale and background opacity controls
 - optional PvP suppression
-- event-first tracking with a slow safety sync
+- event-first tracking with a slow safety sync only while the HUD can be seen
 
 ### ULT Tracker
 
@@ -52,6 +52,7 @@ The compact group HUD shows:
 - READY players sorted to the top
 - charging players sorted by percentage
 - recently spent Ultimates strongly dimmed
+- dead and disconnected players retained for context but never shown as actionable READY
 
 HUD geometry is persistent and configurable:
 
@@ -61,13 +62,25 @@ HUD geometry is persistent and configurable:
 - Background Opacity: 30–100%
 - position / lock state / visibility
 
+### Support Coverage (development candidate)
+
+The `support-coverage` branch adds a raidlead readiness and analysis module. Version `2.7.0-support-coverage-test.4` is intentionally not presented as a stable release until its UI, ESO API behavior, combat timing and group sharing have been tested in game.
+
+It provides evidence-aware support coverage, optional expected-build checks, per-recipient and per-boss live observations, whole-loadout planning and bounded pull reports. Missing or stale information remains `UNKNOWN`; it is never converted into a successful check.
+
+Saved encounter contexts restore only their active profile's expected templates. Loading one context therefore cannot overwrite templates captured later for other profiles.
+
+Experimental LibGroupBroadcast sharing is off by default. Protocol IDs 507–510 are provisional and must be reserved and coexistence-tested before any public release with sharing enabled.
+
 ## Group tracking dependency
 
-The personal Overload and ULT trackers work without external libraries.
+The personal Overload, ULT and local Support Coverage features work without external libraries.
 
 Live group Ultimate sharing requires **LibGroupCombatStats**. That library in turn requires its own dependencies, including LibGroupBroadcast and the appropriate LibCombat package.
 
 If LibGroupCombatStats is unavailable, Group Ultimate Tracker stays offline without breaking the personal modules.
+
+Support Coverage optionally uses **LibFoodDrinkBuff** for verified food state and **LibGroupBroadcast** for controlled multi-client tests. Their absence leaves the relevant fields local or unknown without breaking the addon.
 
 ## Installation
 
@@ -91,6 +104,18 @@ Documents/Elder Scrolls Online/live/AddOns/AlphaSquadUI/AlphaSquadUI.txt
 
 Then restart ESO or use `/reloadui`.
 
+### Testing the `support-coverage` branch
+
+The current test candidate is `2.7.0-support-coverage-test.4`; stable `main` remains `2.6.0`.
+
+1. Open [Support Coverage branch tests](https://github.com/ALPHASQUADUI/Alpha-Squad-UI/actions/workflows/support-coverage.yml) and select the successful run for the commit you want to test.
+2. Download the `AlphaSquadUI-support-coverage-test` artifact. GitHub artifact downloads require a signed-in account.
+3. Close ESO and back up your existing addon folder and the three SavedVariables files listed below before replacing addon files. Do not delete your SavedVariables to upgrade.
+4. Extract the artifact, then extract the enclosed `AlphaSquadUI-2.7.0-support-coverage-test.4.zip`. Install only its `AlphaSquadUI` folder at the path above, not the repository or review-source archive.
+5. Follow the [in-game acceptance checklist](docs/SUPPORT_COVERAGE_TESTING.md), including personal ULT, Group ULT and Overload regressions.
+
+Keep experimental sharing disabled for initial local tests. Enable it only for a controlled multi-client test with matching versions. Automated checks do not certify ESO behavior, and no PR or merge to `main` is planned before the maintainer's in-game validation.
+
 ## Settings
 
 Open:
@@ -106,12 +131,15 @@ The shared settings shell contains:
 ├── Overload
 ├── ULT Tracker
 │   └── Group Ultimate Config
+├── Support Coverage
 └── Website & About
 ```
 
 `/asult` opens the shared ULT Tracker page.
 
 `/asoverload` opens the shared settings shell for Overload.
+
+`/assupport` opens Support Coverage; `/assupport matrix`, `/assupport history` and `/assupport report` open its focused views.
 
 ## SavedVariables
 
@@ -120,6 +148,7 @@ The suite preserves separate SavedVariables namespaces for compatibility:
 ```text
 AlphaSquadOverloadTrackerSavedVariables
 AlphaSquadULTTrackerSavedVariables
+AlphaSquadSupportCoverageSavedVariables
 ```
 
 ULT Group settings are stored inside the ULT Tracker SavedVariables and persist per account/server.
@@ -151,13 +180,32 @@ AlphaSquadUI/
 │   ├── Overload/
 │   │   ├── Overload.lua
 │   │   └── README.md
-│   └── ULTTracker/
-│       ├── ULTTracker.lua
-│       ├── ULTTrackerUI.lua
-│       ├── ULTTrackerSettings.lua
-│       ├── ULTGroup.lua
-│       ├── ULTGroupUI.lua
-│       ├── ULTGroupSettings.lua
+│   ├── ULTTracker/
+│   │   ├── ULTTracker.lua
+│   │   ├── ULTTrackerUI.lua
+│   │   ├── ULTTrackerSettings.lua
+│   │   ├── ULTGroup.lua
+│   │   ├── ULTGroupUI.lua
+│   │   ├── ULTGroupSettings.lua
+│   │   └── README.md
+│   └── SupportCoverage/
+│       ├── SupportCoverage.lua
+│       ├── SupportCoverageCatalog.lua
+│       ├── SupportCoverageAudit.lua
+│       ├── SupportCoverageScanner.lua
+│       ├── SupportCoverageBuild.lua
+│       ├── SupportCoverageHistory.lua
+│       ├── SupportCoverageShare.lua
+│       ├── SupportCoverageDetails.lua
+│       ├── SupportCoverageLiveShare.lua
+│       ├── SupportCoverageEngine.lua
+│       ├── SupportCoverageTracking.lua
+│       ├── SupportCoverageUI.lua
+│       ├── SupportCoveragePlanner.lua
+│       ├── SupportCoverageInspector.lua
+│       ├── SupportCoverageSettings.lua
+│       ├── SupportCoverageSources.lua
+│       ├── SupportCoverageIntegration.lua
 │       └── README.md
 └── Media/
 ```
@@ -166,16 +214,19 @@ See [Architecture](docs/ARCHITECTURE.md).
 
 ## Development / validation
 
-Pull requests targeting `main` run the repository validation workflow.
+Pushes to `support-coverage` run the branch validation workflow and generate a test ZIP without requiring a PR. Pull requests targeting `main` run the repository validation workflow.
 
 It checks:
 
 - Lua syntax
 - manifest file paths
 - required addon metadata
+- deterministic Support Coverage, ULT Tracker and Overload lifecycle tests on Lua 5.1 and 5.4
 - release ZIP packaging
 
 Syntax validation does not replace in-game ESO testing.
+
+See [test commands and acceptance criteria](docs/SUPPORT_COVERAGE_TESTING.md) and [build download details](releases/README.md).
 
 ## Author
 

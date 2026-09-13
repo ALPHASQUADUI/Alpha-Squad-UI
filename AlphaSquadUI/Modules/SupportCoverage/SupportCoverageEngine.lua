@@ -6,6 +6,12 @@ if not SC then return end
 local Catalog = SC.Catalog
 local EM = EVENT_MANAGER
 
+local function ScoreValue(value)
+    value=tonumber(value)
+    if not value or value~=value or value==math.huge or value==-math.huge then return 0 end
+    return math.max(0,math.min(31,value))
+end
+
 local function Normalize(value)
     if AlphaSquadUI.Utils and AlphaSquadUI.Utils.Normalize then
         return AlphaSquadUI.Utils.Normalize(value)
@@ -49,15 +55,14 @@ local function SnapshotView(source)
     local view = {}
     for key, value in pairs(source) do view[key] = value end
     view.capabilities = SC.Audit.Copy(source.capabilities or {})
-    if source.detailAt and SC.NowMs()-math.max(source.detailAt,source.detailAliveAt or 0)<=120000 then
-        for key,value in pairs(source.detailCapabilities or {}) do view.capabilities[key]=value end
-    end
     return view
 end
 
 function SC:BuildRoster()
     local roster, byKey = {}, {}
-    local groupSize = GetGroupSize and GetGroupSize() or 0
+    local groupSize = tonumber(GetGroupSize and GetGroupSize())
+    if not groupSize or groupSize~=groupSize or groupSize==math.huge or groupSize==-math.huge then groupSize=0 end
+    groupSize = math.max(0, math.min(12, math.floor(groupSize)))
 
     if groupSize <= 0 then
         local localData = SnapshotView(self.localSnapshot or (self.ScanLocalPlayer and self:ScanLocalPlayer()))
@@ -97,13 +102,13 @@ function SC:BuildRoster()
                 local peer = self.peerData[key]
                 entry = peer and SnapshotView(peer) or (self.ScanLimitedUnit and self:ScanLimitedUnit(unitTag))
                 if entry then
-                    if peer and self.NowMs() - (peer.scannedAt or 0) > 45000 then
+                    if peer and self.NowMs() - (peer.scannedAt or 0) > 75000 then
                         -- Keep fresh live/detail evidence but never keep old build capabilities green.
                         entry.capabilities, entry.equipment = {}, nil
-                        if peer.detailAt and self.NowMs()-math.max(peer.detailAt,peer.detailAliveAt or 0)<=120000 then entry.capabilities=self.Audit.Copy(peer.detailCapabilities or {}) end
                         entry.food, entry.potion = nil, nil
                         entry.buildVerified = false
-                        entry.dataQuality = peer.liveUpdatedAt and "ASUI LIVE" or "STALE"
+                        local liveFresh=peer.liveUpdatedAt and self.NowMs()-(peer.liveUpdatedAt or 0)<=5500
+                        entry.dataQuality = liveFresh and "ASUI LIVE" or "STALE"
                     end
                     entry.unitTag = unitTag
                     entry.connected = self:IsOnline(unitTag)
@@ -163,16 +168,16 @@ end
 function SC:GetCapabilityOwners(effectKey)
     local owners = {}
     for _, entry in ipairs(self.roster or {}) do
-        if entry.connected ~= false and entry.capabilities and entry.capabilities[effectKey] then
+        if entry.connected ~= false and entry.dead ~= true and entry.capabilities and entry.capabilities[effectKey] then
             owners[#owners + 1] = entry
         end
     end
 
     table.sort(owners, function(a, b)
-        local qa = a.dataQuality == "ASUI" and 100 or 0
-        local qb = b.dataQuality == "ASUI" and 100 or 0
-        local sa = qa + RoleScore(effectKey, a.role) + math.min(31, tonumber(a.supportScore) or 0)
-        local sb = qb + RoleScore(effectKey, b.role) + math.min(31, tonumber(b.supportScore) or 0)
+        local qa = (a.dataQuality == "ASUI" or a.buildVerified == true) and 100 or 0
+        local qb = (b.dataQuality == "ASUI" or b.buildVerified == true) and 100 or 0
+        local sa = qa + RoleScore(effectKey, a.role) + ScoreValue(a.supportScore)
+        local sb = qb + RoleScore(effectKey, b.role) + ScoreValue(b.supportScore)
         if sa ~= sb then return sa > sb end
         return tostring(a.displayName or "") < tostring(b.displayName or "")
     end)
@@ -186,7 +191,7 @@ function SC:GetAssignedOwner(effectKey, owners)
     if locked and not self.byKey[locked] then return nil, true, "LOCKED_MISSING" end
     if locked and self.byKey[locked] then
         local entry = self.byKey[locked]
-        if entry.connected ~= false and entry.capabilities and entry.capabilities[effectKey] then
+        if entry.connected ~= false and entry.dead ~= true and entry.capabilities and entry.capabilities[effectKey] then
             return entry, true
         end
         return entry, true, "LOCKED_MISSING"
@@ -232,27 +237,54 @@ function SC:EvaluateCoverage(reason)
         penetration = {target=Catalog.bossArmor, covered=0, remaining=Catalog.bossArmor},
         critical = {cap=Catalog.criticalDamageCap, groupBonus=0},
         foodMissing = {},
+        foodExpiring = {},
         glyphMissing = {},
+        readinessUnknownCount = 0,
         ready = true,
+        capabilityDataIncomplete = false,
     }
 
     for _, player in ipairs(self.roster or {}) do
-        if player.dataQuality == "ASUI" then
+        if player.connected ~= false and player.capabilitiesComplete ~= true then result.capabilityDataIncomplete = true end
+        local buildKnown = player.dataQuality == "ASUI" or player.buildVerified == true
+        if buildKnown then
             result.asuiPlayers = result.asuiPlayers + 1
-            local food = player.food
-            if self.sv.checkFoodPresence and food and food.verified == true and food.active == false then
-                result.foodMissing[#result.foodMissing + 1] = player.displayName
-            end
-            local missingGlyphs = player.equipment and player.equipment.glyphs
-                and tonumber(player.equipment.glyphs.armorMissing) or 0
-            if self.sv.checkMissingGlyphs and missingGlyphs > 0 then
-                result.glyphMissing[#result.glyphMissing + 1] = {
-                    player = player.displayName,
-                    count = missingGlyphs,
-                }
-            end
         else
             result.limitedPlayers = result.limitedPlayers + 1
+        end
+        if player.connected == false then
+            result.ready = false
+            result.issues[#result.issues + 1] = {severity="error", text=player.displayName .. " - offline"}
+        elseif player.dead == true then
+            result.ready = false
+            result.issues[#result.issues + 1] = {severity="warning", text=player.displayName .. " - dead"}
+        else
+            local food = player.food
+            if self.sv.checkFoodPresence then
+                if not food or food.verified ~= true then
+                    result.readinessUnknownCount = result.readinessUnknownCount + 1
+                    result.issues[#result.issues + 1] = {severity="unknown", text=player.displayName .. " - food unverified"}
+                elseif food.active == false then
+                    result.foodMissing[#result.foodMissing + 1] = player.displayName
+                elseif tonumber(food.timeEnds) and tonumber(food.timeEnds) > 0 and (self.sv.foodWarningSeconds or 0) > 0 then
+                    local remaining = tonumber(food.timeEnds) - self.NowMs()/1000
+                    if remaining > 0 and remaining <= self.sv.foodWarningSeconds then
+                        result.foodExpiring[#result.foodExpiring + 1] = {player=player.displayName, seconds=remaining}
+                    end
+                end
+            end
+            if self.sv.checkMissingGlyphs then
+                local glyphs = player.equipment and player.equipment.glyphs
+                if not glyphs or glyphs.verified ~= true then
+                    result.readinessUnknownCount = result.readinessUnknownCount + 1
+                    result.issues[#result.issues + 1] = {severity="unknown", text=player.displayName .. " - armor glyphs unverified"}
+                else
+                    local missingGlyphs = tonumber(glyphs.armorMissing) or 0
+                    if missingGlyphs > 0 then
+                        result.glyphMissing[#result.glyphMissing + 1] = {player=player.displayName, count=missingGlyphs}
+                    end
+                end
+            end
         end
     end
 
@@ -276,19 +308,18 @@ function SC:EvaluateCoverage(reason)
         local unsupportedPeer=false
         if effect.wireV1Unavailable then
             for _,player in ipairs(self.roster) do
-                if not self:IsSelf(player.unitTag) and (not player.detailAt or self.NowMs()-math.max(player.detailAt,player.detailAliveAt or 0)>120000) then unsupportedPeer=true end
+                if not self:IsSelf(player.unitTag) and (tonumber(player.protocolVersion) or 0)<2 then unsupportedPeer=true end
             end
         end
         local status
+        local unverified = result.capabilityDataIncomplete or result.limitedPlayers > 0 or unsupportedPeer
         if #owners > 0 then
             status = "covered"
             result.coveredCount = result.coveredCount + 1
-        elseif (result.limitedPlayers > 0 or unsupportedPeer) and self.sv.showUnknown then
-            status = "unknown"
-            result.unknownCount = result.unknownCount + 1
         else
             status = "missing"
             result.missingCount = result.missingCount + 1
+            if unverified then result.unknownCount = result.unknownCount + 1 end
             result.ready = false
         end
 
@@ -323,19 +354,15 @@ function SC:EvaluateCoverage(reason)
             assigned = assigned,
             locked = locked,
             duplicatePlayers = duplicatePlayers,
+            unverified = status == "missing" and unverified,
         }
 
         if status == "missing" then
             result.issues[#result.issues + 1] = {
-                severity = effect.priority == "core" and "error" or "warning",
-                text = effect.label .. " missing",
+                severity = unverified and "unknown" or (effect.priority == "core" and "error" or "warning"),
+                text = effect.label .. (unverified and " - no reported source (roster incomplete)" or " - no source"),
                 key = effectKey,
-            }
-        elseif status == "unknown" then
-            result.issues[#result.issues + 1] = {
-                severity = "unknown",
-                text = effect.label .. " unverified",
-                key = effectKey,
+                unverified = unverified,
             }
         end
 
@@ -343,7 +370,8 @@ function SC:EvaluateCoverage(reason)
             if effect.penetration then
                 result.penetration.covered = result.penetration.covered + effect.penetration
             end
-            if effect.critDamage then
+            -- Personal buffs may be useful build checks, but they are not group critical-damage coverage.
+            if effect.critDamage and not effect.personal then
                 result.critical.groupBonus = result.critical.groupBonus + effect.critDamage
             end
         end
@@ -368,8 +396,16 @@ function SC:EvaluateCoverage(reason)
         result.ready = false
     end
 
+    for _, food in ipairs(result.foodExpiring) do
+        result.issues[#result.issues + 1] = {
+            severity="warning",
+            text=string.format("%s food expires in %d minute%s", food.player,
+                math.max(1, math.ceil(food.seconds/60)), food.seconds > 60 and "s" or ""),
+        }
+    end
+
     -- UNKNOWN data never becomes a false hard failure; the raidlead sees LIMITED instead.
-    if result.unknownCount > 0 then result.ready = false end
+    if result.unknownCount > 0 or result.readinessUnknownCount > 0 then result.ready = false end
     -- Never overwrite errors from locked owners or REQUIRED build checks.
     for _, issue in ipairs(result.issues) do
         if issue.severity == "error" then result.ready = false end
@@ -385,9 +421,9 @@ function SC:EvaluateCoverage(reason)
     self.coverage = result
 
     if not self.inCombat and self.sv.showReadyBanner and self.ShowReadyBanner then
-        self:ShowReadyBanner(result.ready, result.coveredCount, result.requiredCount, result.limitedPlayers)
+        local limited=result.limitedPlayers+((result.unknownCount>0 or result.readinessUnknownCount>0) and 1 or 0)
+        self:ShowReadyBanner(result.ready, result.coveredCount, result.requiredCount, limited)
     end
 
     return result
 end
-

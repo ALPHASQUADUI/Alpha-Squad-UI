@@ -43,7 +43,11 @@ Catalog.effects = {
     elemental_catalyst = E("elemental_catalyst", "Elemental Catalyst", "critical", "unique", {priority="core", boss=true, critDamage=15}),
     zens_redress = E("zens_redress", "Z'en's Redress", "debuff", "unique", {priority="core", boss=true}),
     martial_knowledge = E("martial_knowledge", "Martial Knowledge", "debuff", "unique", {priority="core", boss=true}),
-    stagger = E("stagger", "Stagger", "debuff", "unique", {priority="core", boss=true, stacks=3}),
+    -- The stable key remains "stagger" for SavedVariables and wire compatibility.
+    -- Update 49 renamed the live debuff to Heat Shock when Stone Giant became Magma Fist.
+    stagger = E("stagger", "Heat Shock", "debuff", "unique", {
+        priority="core", boss=true, stacks=3, abilityIds={134340}, aliases={"Stagger"},
+    }),
     encratis = E("encratis", "Encratis", "debuff", "unique", {priority="situational", boss=true}),
     off_balance = E("off_balance", "Off Balance", "advanced", "status", {priority="situational", boss=true}),
 
@@ -53,7 +57,9 @@ Catalog.effects = {
     crusher = E("crusher", "Crusher Enchantment", "penetration", "unique", {priority="core", boss=true, penetration=1622}),
     alkosh = E("alkosh", "Roar of Alkosh", "penetration", "unique", {priority="core", boss=true, penetration=6000}),
     crimson_oath = E("crimson_oath", "Crimson Oath's Rive", "penetration", "unique", {priority="situational", boss=true}),
-    tremorscale = E("tremorscale", "Tremorscale", "penetration", "unique", {priority="situational", boss=true, penetration=880}),
+    -- Tremorscale scales from the triggering tank's higher resistance and is capped by the live set rule.
+    -- Presence is useful coverage information, but a static contribution would make the penetration budget lie.
+    tremorscale = E("tremorscale", "Tremorscale", "penetration", "unique", {priority="situational", boss=true}),
 
     -- Unique offensive / group utility sets
     powerful_assault = E("powerful_assault", "Powerful Assault", "offense", "unique", {priority="core", group=true, coverageLimit=6}),
@@ -112,65 +118,64 @@ Catalog.effects = {
     overcharged = E("overcharged", "Overcharged", "advanced", "status", {priority="advanced", boss=true}),
 }
 
--- Set-name fragments are capability hints; exact set IDs and per-bar counts are captured locally.
--- Normalized set-name fragments -> capabilities. Set IDs can be added later without engine changes.
+-- Native set IDs are authoritative and language-independent. Name fragments are retained only
+-- as readable metadata and as a fallback for clients that cannot expose a usable native ID.
 Catalog.setSources = {
-    {token="spell power cure", provides={"major_courage"}},
-    {token="vestments of olorime", provides={"major_courage"}},
-    {token="powerful assault", provides={"powerful_assault"}},
-    {token="pearlescent ward", provides={"pearlescent_ward"}},
-    {token="lucent echoes", provides={"lucent_echoes"}},
-    {token="elemental catalyst", provides={"elemental_catalyst"}},
-    {token="z'en's redress", provides={"zens_redress"}},
-    {token="zens redress", provides={"zens_redress"}},
-    {token="way of martial knowledge", provides={"martial_knowledge"}},
-    {token="martial knowledge", provides={"martial_knowledge"}},
-    {token="roar of alkosh", provides={"alkosh"}},
-    {token="crimson oath", provides={"crimson_oath"}},
-    {token="roaring opportunist", provides={"major_slayer"}},
-    {token="master architect", provides={"major_slayer"}},
-    {token="war machine", provides={"major_slayer"}},
-    {token="jorvuld", provides={"jorvulds_guidance"}},
-    {token="pillager", provides={"pillagers_profit"}},
-    {token="xoryn", provides={"xoryns_masterpiece"}},
-    {token="spaulder of ruin", requiredPieces=1, provides={"spaulder_of_ruin"}},
-    {token="ozezan", requiredPieces=2, provides={"ozezan","minor_vitality"}},
-    {token="nazaray", requiredPieces=2, provides={"nazaray"}},
-    {token="symphony of blades", requiredPieces=2, provides={"symphony"}},
-    {token="archdruid devyric", requiredPieces=2, provides={"major_vulnerability"}},
-    {token="encratis", requiredPieces=2, provides={"encratis"}},
-    {token="tremorscale", requiredPieces=2, provides={"tremorscale"}},
-    {token="yolnahkriin", provides={"yolnahkriin","minor_courage"}},
-    {token="saxhleel", provides={"major_force"}},
-    {token="serpent's disdain", provides={"serpents_disdain"}},
-    {token="serpents disdain", provides={"serpents_disdain"}},
-    {token="grand rejuvenation", requiredPieces=2, provides={"master_restoration"}},
-    {token="master's restoration", requiredPieces=2, provides={"master_restoration"}},
-    {token="masters restoration", requiredPieces=2, provides={"master_restoration"}},
+    -- Native set IDs are language-independent. Perfected variants resolve to
+    -- their base ID through GetItemSetUnperfectedSetId before matching here.
+    {setId=185, token="spell power cure", provides={"major_courage"}},
+    {setId=391, token="vestments of olorime", provides={"major_courage"}},
+    {setId=180, token="powerful assault", provides={"powerful_assault"}},
+    {setId=648, token="pearlescent ward", provides={"pearlescent_ward"}},
+    {setId=768, token="lucent echoes", provides={"lucent_echoes"}},
+    {setId=516, token="elemental catalyst", provides={"elemental_catalyst"}},
+    {setId=455, token="z'en's redress", provides={"zens_redress"}},
+    {setId=455, token="zens redress", provides={"zens_redress"}},
+    {setId=147, token="way of martial knowledge", provides={"martial_knowledge"}},
+    {setId=147, token="martial knowledge", provides={"martial_knowledge"}},
+    {setId=232, token="roar of alkosh", provides={"alkosh"}},
+    {setId=602, token="crimson oath", provides={"crimson_oath"}},
+    {setId=496, token="roaring opportunist", provides={"major_slayer"}},
+    {setId=332, token="master architect", provides={"major_slayer"}},
+    {setId=331, token="war machine", provides={"major_slayer"}},
+    {setId=346, token="jorvuld", provides={"jorvulds_guidance"}},
+    {setId=649, token="pillager", provides={"pillagers_profit"}},
+    {setId=769, token="xoryn", provides={"xoryns_masterpiece"}},
+    {setId=627, token="spaulder of ruin", requiredPieces=1, provides={"spaulder_of_ruin"}},
+    {setId=687, token="ozezan", requiredPieces=2, provides={"ozezan","minor_vitality"}},
+    {setId=633, token="nazaray", requiredPieces=2, provides={"nazaray"}},
+    {setId=436, token="symphony of blades", requiredPieces=2, provides={"symphony"}},
+    {setId=666, token="archdruid devyric", requiredPieces=2, provides={"major_vulnerability"}},
+    {setId=577, token="encratis", requiredPieces=2, provides={"encratis"}},
+    {setId=276, token="tremorscale", requiredPieces=2, provides={"tremorscale"}},
+    {setId=446, token="yolnahkriin", provides={"yolnahkriin","minor_courage"}},
+    {setId=585, token="saxhleel", provides={"major_force"}},
+    {setId=641, token="serpent's disdain", provides={"serpents_disdain"}},
+    {setId=641, token="serpents disdain", provides={"serpents_disdain"}},
+    {setId=318, token="grand rejuvenation", requiredPieces=2, provides={"master_restoration"}},
+    {setId=318, token="master's restoration", requiredPieces=2, provides={"master_restoration"}},
+    {setId=318, token="masters restoration", requiredPieces=2, provides={"master_restoration"}},
 }
 
--- Skill / mastery name fragments. These are capability hints, not proof of uptime.
+-- Native slot IDs are authoritative and language-independent. Localized names are derived once
+-- from these IDs at runtime; English fragments are a final compatibility fallback only. A listed
+-- skill is a capability hint, never proof that its effect is active.
 Catalog.skillSources = {
-    {token="aggressive horn", provides={"major_force"}},
-    {token="ferocious roar", provides={"major_courage"}},
-    {token="combat prayer", provides={"minor_berserk","minor_resolve"}},
-    {token="elemental drain", provides={"major_breach","minor_magickasteal"}},
-    {token="weakness to elements", provides={"major_breach"}},
-    {token="elemental susceptibility", provides={"major_breach"}},
-    {token="razor caltrops", provides={"major_breach"}},
-    {token="stone giant", provides={"stagger"}},
-    {token="stagger", provides={"stagger"}},
-    {token="igneous weapons", provides={"major_brutality_sorcery"}},
-    {token="molten armaments", provides={"major_brutality_sorcery"}},
-    {token="frost cloak", provides={"major_resolve"}},
-    {token="expansive frost cloak", provides={"major_resolve"}},
-    {token="lotus flower", provides={"major_savagery_prophecy"}},
-    {token="fetcher infection", provides={"minor_vulnerability"}},
-    {token="swarm", provides={"minor_vulnerability"}},
-    {token="altar", provides={"minor_lifesteal"}},
-    {token="blood altar", provides={"minor_lifesteal"}},
-    {token="overflowing altar", provides={"minor_lifesteal"}},
-    {token="ring of preservation", provides={"minor_protection"}},
+    {abilityIds={40223}, tokens={"aggressive horn"}, provides={"major_force"}},
+    {abilityIds={39113}, tokens={"ferocious roar"}, provides={"major_courage"}},
+    {abilityIds={40094}, tokens={"combat prayer"}, provides={"minor_berserk","minor_resolve"}},
+    {abilityIds={39095}, tokens={"elemental drain"}, provides={"major_breach","minor_magickasteal"}},
+    {abilityIds={29173}, tokens={"weakness to elements"}, provides={"major_breach"}},
+    {abilityIds={39089}, tokens={"elemental susceptibility"}, provides={"major_breach"}},
+    {abilityIds={40242}, tokens={"razor caltrops"}, provides={"major_breach"}},
+    {abilityIds={31816}, tokens={"magma fist","stone giant"}, provides={"stagger"}},
+    {abilityIds={31874}, tokens={"igneous weapons"}, provides={"major_brutality_sorcery"}},
+    {abilityIds={31888}, tokens={"molten armaments"}, provides={"major_brutality_sorcery"}},
+    {abilityIds={86122,86126,86130}, tokens={"frost cloak","expansive frost cloak","ice fortress"}, provides={"major_resolve"}},
+    {abilityIds={85539,85854,85855}, tokens={"lotus flower","green lotus","lotus blossom"}, provides={"major_savagery_prophecy"}},
+    {abilityIds={86023,86027,86031}, tokens={"swarm","fetcher infection","growing swarm"}, provides={"minor_vulnerability"}},
+    {abilityIds={39489,41958,41967}, tokens={"blood altar","overflowing altar","sanguine altar"}, provides={"minor_lifesteal"}},
+    {abilityIds={40169}, tokens={"ring of preservation"}, provides={"minor_protection"}},
 }
 
 Catalog.enchantSources = {
@@ -310,15 +315,71 @@ function Catalog:MatchSetName(setName)
     return found
 end
 
-function Catalog:MatchSkillName(skillName)
-    local value = Normalize(skillName)
-    local found = {}
+local function AddProvided(target, source)
+    for index, value in pairs(source or {}) do
+        local key = type(index) == "number" and value or (value == true and index or nil)
+        if key then target[key] = true end
+    end
+end
+
+function Catalog:BuildSkillIndexes()
+    self.skillIdIndex, self.localizedSkillNameIndex = {}, {}
+    local nameGetter = type(GetAbilityName) == "function" and GetAbilityName or nil
+    self.skillIndexNameGetter = nameGetter
+
     for _, source in ipairs(self.skillSources) do
-        if value:find(Normalize(source.token), 1, true) then
-            for _, key in ipairs(source.provides) do found[key] = true end
+        for _, rawId in ipairs(source.abilityIds or {}) do
+            local id = tonumber(rawId)
+            if id and id == id and id ~= math.huge and id ~= -math.huge
+                and id > 0 and id <= 2147483647 and id % 1 == 0 then
+                self.skillIdIndex[id] = self.skillIdIndex[id] or {}
+                AddProvided(self.skillIdIndex[id], source.provides)
+
+                if nameGetter then
+                    local ok, localizedName = pcall(nameGetter, id)
+                    localizedName = ok and Normalize(localizedName) or ""
+                    if localizedName ~= "" then
+                        self.localizedSkillNameIndex[localizedName] = self.localizedSkillNameIndex[localizedName] or {}
+                        AddProvided(self.localizedSkillNameIndex[localizedName], source.provides)
+                    end
+                end
+            end
+        end
+    end
+end
+
+function Catalog:MatchSkill(abilityId, skillName)
+    local currentNameGetter = type(GetAbilityName) == "function" and GetAbilityName or nil
+    if not self.skillIdIndex or self.skillIndexNameGetter ~= currentNameGetter then self:BuildSkillIndexes() end
+
+    local found = {}
+    abilityId = tonumber(abilityId)
+    if abilityId and abilityId == abilityId and abilityId ~= math.huge and abilityId ~= -math.huge
+        and abilityId > 0 and abilityId <= 2147483647 and abilityId % 1 == 0 then
+        AddProvided(found, self.skillIdIndex[abilityId])
+    end
+
+    local value = Normalize(skillName)
+    if value ~= "" then AddProvided(found, self.localizedSkillNameIndex[value]) end
+
+    -- Old clients and unusual hotbar overrides may expose neither a canonical ID nor a localized
+    -- name for the seed ID. Preserve the previous English fragment matching as a last resort.
+    if next(found) == nil and value ~= "" then
+        for _, source in ipairs(self.skillSources) do
+            local tokens = source.tokens or (source.token and {source.token}) or {}
+            for _, token in ipairs(tokens) do
+                if value:find(Normalize(token), 1, true) then
+                    AddProvided(found, source.provides)
+                    break
+                end
+            end
         end
     end
     return found
+end
+
+function Catalog:MatchSkillName(skillName)
+    return self:MatchSkill(nil, skillName)
 end
 
 function Catalog:GetAllEffectKeys()
@@ -418,16 +479,38 @@ Catalog.effects.bright_harbinger = E("bright_harbinger","Bright Harbinger","offe
 Catalog.effects.calculated_defense = E("calculated_defense","Calculated Defense","offense","unique",{priority="situational",group=true,wireV1Unavailable=true})
 Catalog.effects.sphere_of_influence = E("sphere_of_influence","Sphere of Influence","sustain","unique",{priority="situational",group=true,wireV1Unavailable=true})
 Catalog.effects.share_the_spoils = E("share_the_spoils","Share the Spoils","sustain","unique",{priority="situational",group=true,wireV1Unavailable=true})
-Catalog.effects.evasive_trance = E("evasive_trance","Evasive Trance","debuff","unique",{priority="situational",boss=true,wireV1Unavailable=true})
+-- Keep the original internal key for SavedVariables/wire compatibility. The
+-- mastery shipped as Cutthroat's Focus; Evasive Trance was its pre-release name.
+Catalog.effects.evasive_trance = E("evasive_trance","Cutthroat's Focus","debuff","unique",{priority="situational",boss=true,wireV1Unavailable=true})
 Catalog.masterySources = {
-    {name="Tundra's Maw",provides={"major_brittle"}},
-    {name="Nature's Bounty",requires="Nature's Gift",rank=2,provides={"major_heroism"}},
-    {name="Bright Harbinger",requires="Illuminate",rank=2,provides={"bright_harbinger"}},
-    {name="Calculated Defense",provides={"calculated_defense"}},
-    {name="Sphere of Influence",provides={"sphere_of_influence"}},
-    {name="Share the Spoils",requires="Transfer",rank=2,provides={"share_the_spoils"}},
-    {name="Evasive Trance",provides={"evasive_trance"}},
-    {name="Lead From the Front",requires="The Storm Voice",rank=2,provides={"major_berserk","major_protection"}},
-    {name="Erudite's Rigor",requires="Fatewoven Armor",rank=1,provides={"minor_cowardice","major_vitality"}},
-    {name="Ink-Scribe's Verve",provides={"major_force"}},
+    {abilityId=263519,name="Tundra's Maw",provides={"major_brittle"}},
+    {abilityId=263523,name="Bountiful Harvest",aliases={"Nature's Bounty"},requires="Nature's Gift",
+        requiresIds={85879},rank=2,provides={"major_heroism"}},
+    {abilityId=263587,name="Bright Harbinger",requires="Illuminate",requiresIds={45215},rank=2,
+        provides={"bright_harbinger"}},
+    {abilityId=263873,name="Calculated Defense",provides={"calculated_defense"}},
+    {abilityId=263874,name="Sphere of Influence",provides={"sphere_of_influence"}},
+    {abilityId=263607,name="Share the Spoils",requires="Transfer",requiresIds={45145},rank=2,
+        provides={"share_the_spoils"}},
+    {abilityId=263606,name="Cutthroat's Focus",aliases={"Evasive Trance"},provides={"evasive_trance"}},
+    {abilityId=238232,name="Lead From the Front",requires="The Storm Voice",requiresIds={44951},rank=2,
+        provides={"major_berserk","major_protection"}},
+    {abilityId=263412,name="Erudite's Rigor",requires="Fatewoven Armor",
+        requiresIds={183648,185908,186477},rank=1,provides={"minor_cowardice","major_vitality"}},
+    {abilityId=263416,name="Ink-Scribe's Verve",provides={"major_force"}},
 }
+
+-- Protocol v2 only appends keys. The frozen v1 indices above remain compatible
+-- with older test clients while the five U50 mastery capabilities become shareable.
+-- Keep this list at 81 entries: cap4 bits 9-23 carry the detail fingerprint.
+Catalog.wireV2Keys = {}
+for index, key in ipairs(Catalog.wireV1Keys) do Catalog.wireV2Keys[index] = key end
+for _, key in ipairs({
+    "bright_harbinger",
+    "calculated_defense",
+    "sphere_of_influence",
+    "share_the_spoils",
+    "evasive_trance",
+}) do
+    Catalog.wireV2Keys[#Catalog.wireV2Keys + 1] = key
+end

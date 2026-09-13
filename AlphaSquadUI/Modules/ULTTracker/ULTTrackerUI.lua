@@ -256,6 +256,7 @@ function ULT:ApplyVisibility()
         or (self.sv.hideInMenus and self.uiObscured)
 
     self.window:SetHidden(hidden)
+    if self.SetSafetyUpdateActive then self:SetSafetyUpdateActive(not hidden) end
 
     if hidden then
         self:SetFlashUpdate(false)

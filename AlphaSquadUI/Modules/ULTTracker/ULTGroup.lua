@@ -29,6 +29,32 @@ Group.recentlyUsedUntil = Group.recentlyUsedUntil or {}
 Group.initialized = false
 
 local EM = EVENT_MANAGER
+local MAX_TRACKED_ABILITIES = 24
+local MAX_ABILITY_ID = 2147483647
+local MAX_ULTIMATE_VALUE = 1000000
+
+local function IsAbilityId(value)
+    value = tonumber(value)
+    return value and value > 0 and value <= MAX_ABILITY_ID and value % 1 == 0 and value or nil
+end
+
+local function FiniteOr(value, fallback)
+    value = tonumber(value)
+    if not value or value ~= value or value == math.huge or value == -math.huge then return fallback end
+    return value
+end
+
+local function BoundedSharedNumber(value)
+    value = FiniteOr(value, nil)
+    if not value or value < 0 or value > MAX_ULTIMATE_VALUE then return nil end
+    return value
+end
+
+local function SharedAbilityId(value)
+    value = FiniteOr(value, nil)
+    if value == 0 then return 0 end
+    return IsAbilityId(value)
+end
 
 local function NowMs()
     if GetGameTimeMilliseconds then return GetGameTimeMilliseconds() end
@@ -37,8 +63,27 @@ end
 
 local function UnitExists(unitTag)
     if not unitTag or unitTag == "" then return false end
-    if DoesUnitExist then return DoesUnitExist(unitTag) end
+    if DoesUnitExist then
+        local ok, exists = pcall(DoesUnitExist, unitTag)
+        if ok then return exists == true end
+    end
     return true
+end
+
+local function UnitOnline(unitTag)
+    if IsUnitOnline then
+        local ok, online = pcall(IsUnitOnline, unitTag)
+        if ok then return online == true end
+    end
+    return true
+end
+
+local function UnitDead(unitTag)
+    if IsUnitDead then
+        local ok, dead = pcall(IsUnitDead, unitTag)
+        if ok then return dead == true end
+    end
+    return false
 end
 
 local function GetCharacterName(unitTag)
@@ -87,7 +132,7 @@ function Group:EnsureSavedVariables()
 
     local defaults = self:GetDefaults()
     for key, value in pairs(defaults) do
-        if ULT.sv.group[key] == nil then
+        if ULT.sv.group[key] == nil or (type(value) == "boolean" and type(ULT.sv.group[key]) ~= "boolean") then
             ULT.sv.group[key] = value
         end
     end
@@ -99,12 +144,27 @@ function Group:EnsureSavedVariables()
     if type(ULT.sv.group.trackedAbilities) ~= "table" then
         ULT.sv.group.trackedAbilities = {}
     end
+    local tracked, seen = {}, {}
+    for abilityId, enabled in pairs(ULT.sv.group.trackedAbilities) do
+        local numericId = IsAbilityId(abilityId)
+        if enabled == true and numericId and not seen[numericId] then
+            tracked[#tracked + 1] = numericId
+            seen[numericId] = true
+        end
+    end
+    table.sort(tracked)
+    ULT.sv.group.trackedAbilities = {}
+    for index = 1, math.min(MAX_TRACKED_ABILITIES, #tracked) do
+        ULT.sv.group.trackedAbilities[tostring(tracked[index])] = true
+    end
 
     -- Persistent per-account HUD geometry. Existing users keep their saved values.
-    ULT.sv.group.scale = ULT.Clamp(ULT.sv.group.scale or 100, 60, 180)
-    ULT.sv.group.hudWidth = ULT.Clamp(ULT.sv.group.hudWidth or 312, 240, 520)
-    ULT.sv.group.rowHeight = ULT.Clamp(ULT.sv.group.rowHeight or 36, 28, 56)
-    ULT.sv.group.opacity = ULT.Clamp(ULT.sv.group.opacity or 92, 30, 100)
+    ULT.sv.group.scale = ULT.Clamp(FiniteOr(ULT.sv.group.scale, defaults.scale), 60, 180)
+    ULT.sv.group.hudWidth = ULT.Clamp(FiniteOr(ULT.sv.group.hudWidth, defaults.hudWidth), 240, 520)
+    ULT.sv.group.rowHeight = ULT.Clamp(FiniteOr(ULT.sv.group.rowHeight, defaults.rowHeight), 28, 56)
+    ULT.sv.group.opacity = ULT.Clamp(FiniteOr(ULT.sv.group.opacity, defaults.opacity), 30, 100)
+    ULT.sv.group.x = ULT.Clamp(FiniteOr(ULT.sv.group.x, defaults.x), -100000, 100000)
+    ULT.sv.group.y = ULT.Clamp(FiniteOr(ULT.sv.group.y, defaults.y), -100000, 100000)
     self.sv = ULT.sv.group
 end
 
@@ -116,21 +176,31 @@ end
 
 function Group:SetAbilityTracked(abilityId, tracked)
     if not self.sv then return end
-    abilityId = tonumber(abilityId) or 0
-    if abilityId <= 0 then return end
+    abilityId = IsAbilityId(abilityId)
+    if not abilityId then return false end
 
     local key = tostring(abilityId)
     if tracked then
+        if not self.sv.trackedAbilities[key] and self:GetTrackedAbilityCount() >= MAX_TRACKED_ABILITIES then return false end
         self.sv.trackedAbilities[key] = true
     else
         self.sv.trackedAbilities[key] = nil
     end
 
     self:Refresh("tracked ability changed")
+    return true
 end
 
 function Group:GetAvailableAbilities()
     local abilitiesById = {}
+
+    for abilityId, enabled in pairs(self.sv and self.sv.trackedAbilities or {}) do
+        abilityId = tonumber(abilityId) or 0
+        if enabled == true and abilityId > 0 then
+            local name, icon = self:GetAbilityMeta(abilityId)
+            abilitiesById[abilityId] = {id=abilityId, name=name, icon=icon, users=0, tracked=true}
+        end
+    end
 
     for _, entry in ipairs(self.roster or {}) do
         if entry.shared then
@@ -143,6 +213,7 @@ function Group:GetAvailableAbilities()
                         name = name,
                         icon = icon,
                         users = 0,
+                        tracked = self:IsAbilityTracked(abilityId),
                     }
                 end
             end
@@ -168,6 +239,7 @@ function Group:GetAvailableAbilities()
     end
 
     table.sort(result, function(a, b)
+        if a.tracked ~= b.tracked then return a.tracked == true end
         local an = string.lower(a.name or "")
         local bn = string.lower(b.name or "")
         if an == bn then return (a.id or 0) < (b.id or 0) end
@@ -241,7 +313,7 @@ function Group:GetUltForUnit(unitTag)
         return self.lgcs:GetUnitULT(unitTag)
     end)
 
-    if ok then return ult end
+    if ok and type(ult) == "table" then return ult end
     return nil
 end
 
@@ -260,12 +332,16 @@ function Group:BuildRoster()
     local roster = {}
     local byKey = {}
     local byUnitTag = {}
-    local groupSize = GetGroupSize and GetGroupSize() or 0
+    local groupSize = FiniteOr(GetGroupSize and GetGroupSize(), 0)
+    groupSize = math.max(0, math.min(12, math.floor(groupSize)))
 
     if groupSize <= 0 then
         self.roster = roster
         self.byKey = byKey
         self.byUnitTag = byUnitTag
+        self.previousUltValues = {}
+        self.recentlyUsedUntil = {}
+        self.readyState = {}
         return roster
     end
 
@@ -279,6 +355,11 @@ function Group:BuildRoster()
             if stableKey == "" then stableKey = unitTag end
 
             local ult = self:GetUltForUnit(unitTag)
+            local ultValue = ult and BoundedSharedNumber(ult.ultValue) or nil
+            local ult1ID = ult and SharedAbilityId(ult.ult1ID) or nil
+            local ult2ID = ult and SharedAbilityId(ult.ult2ID) or nil
+            local ult1Cost = ult and BoundedSharedNumber(ult.ult1Cost) or nil
+            local ult2Cost = ult and BoundedSharedNumber(ult.ult2Cost) or nil
 
             local isPlayer = unitTag == "player"
             if AreUnitsEqual then
@@ -293,13 +374,15 @@ function Group:BuildRoster()
                 displayName = displayName,
                 characterName = characterName,
                 isPlayer = isPlayer,
-                shared = ult ~= nil and ult.ultValue ~= nil,
-                ultValue = ult and tonumber(ult.ultValue) or 0,
-                ult1ID = ult and tonumber(ult.ult1ID) or 0,
-                ult2ID = ult and tonumber(ult.ult2ID) or 0,
-                ult1Cost = ult and tonumber(ult.ult1Cost) or 0,
-                ult2Cost = ult and tonumber(ult.ult2Cost) or 0,
-                lastUpdated = ult and ult._lastUpdated or nil,
+                shared = ultValue ~= nil,
+                ultValue = ultValue or 0,
+                ult1ID = ult1ID or 0,
+                ult2ID = ult2ID or 0,
+                ult1Cost = ult1Cost or 0,
+                ult2Cost = ult2Cost or 0,
+                lastUpdated = ult and FiniteOr(ult._lastUpdated, nil) or nil,
+                connected = UnitOnline(unitTag),
+                dead = UnitDead(unitTag),
             }
 
             table.insert(roster, entry)
@@ -315,11 +398,32 @@ function Group:BuildRoster()
     self.roster = roster
     self.byKey = byKey
     self.byUnitTag = byUnitTag
+    for key in pairs(self.previousUltValues) do
+        if not byKey[key] or byKey[key].shared ~= true then self.previousUltValues[key] = nil end
+    end
+    for key in pairs(self.recentlyUsedUntil) do
+        if not byKey[key] or byKey[key].shared ~= true then self.recentlyUsedUntil[key] = nil end
+    end
     return roster
 end
 
 function Group:UpdateEntryFromUltData(unitTag, data)
-    if not unitTag or not data then return false end
+    if not unitTag or type(data) ~= "table" then return false end
+
+    local ultValue = BoundedSharedNumber(data.ultValue)
+    if not ultValue then return false end
+
+    local ult1ID = data.ult1ID ~= nil and SharedAbilityId(data.ult1ID) or nil
+    local ult2ID = data.ult2ID ~= nil and SharedAbilityId(data.ult2ID) or nil
+    local ult1Cost = data.ult1Cost ~= nil and BoundedSharedNumber(data.ult1Cost) or nil
+    local ult2Cost = data.ult2Cost ~= nil and BoundedSharedNumber(data.ult2Cost) or nil
+    if (data.ult1ID ~= nil and ult1ID == nil)
+        or (data.ult2ID ~= nil and ult2ID == nil)
+        or (data.ult1Cost ~= nil and ult1Cost == nil)
+        or (data.ult2Cost ~= nil and ult2Cost == nil)
+    then
+        return false
+    end
 
     local entry = self.byUnitTag and self.byUnitTag[unitTag] or nil
     if not entry and AreUnitsEqual then
@@ -334,13 +438,21 @@ function Group:UpdateEntryFromUltData(unitTag, data)
 
     if not entry then return false end
 
-    entry.shared = data.ultValue ~= nil
-    entry.ultValue = tonumber(data.ultValue) or entry.ultValue or 0
-    entry.ult1ID = tonumber(data.ult1ID) or entry.ult1ID or 0
-    entry.ult2ID = tonumber(data.ult2ID) or entry.ult2ID or 0
-    entry.ult1Cost = tonumber(data.ult1Cost) or entry.ult1Cost or 0
-    entry.ult2Cost = tonumber(data.ult2Cost) or entry.ult2Cost or 0
-    entry.lastUpdated = data._lastUpdated or entry.lastUpdated
+    entry.shared = true
+    entry.ultValue = ultValue
+    entry.ult1ID = ult1ID ~= nil and ult1ID or entry.ult1ID or 0
+    entry.ult2ID = ult2ID ~= nil and ult2ID or entry.ult2ID or 0
+    entry.ult1Cost = ult1Cost ~= nil and ult1Cost or entry.ult1Cost or 0
+    entry.ult2Cost = ult2Cost ~= nil and ult2Cost or entry.ult2Cost or 0
+    entry.lastUpdated = FiniteOr(data._lastUpdated, entry.lastUpdated)
+    if IsUnitOnline then
+        local ok,online=pcall(IsUnitOnline,unitTag)
+        if ok then entry.connected=online==true end
+    end
+    if IsUnitDead then
+        local ok,dead=pcall(IsUnitDead,unitTag)
+        if ok then entry.dead=dead==true end
+    end
 
     return true
 end
@@ -349,9 +461,9 @@ function Group:BuildUltimate(entry, slot)
     if not entry then return nil end
 
     local isMain = slot == "main"
-    local id = tonumber(isMain and entry.ult1ID or entry.ult2ID) or 0
-    local cost = tonumber(isMain and entry.ult1Cost or entry.ult2Cost) or 0
-    local value = tonumber(entry.ultValue) or 0
+    local id = SharedAbilityId(isMain and entry.ult1ID or entry.ult2ID) or 0
+    local cost = BoundedSharedNumber(isMain and entry.ult1Cost or entry.ult2Cost) or 0
+    local value = BoundedSharedNumber(entry.ultValue) or 0
     local name, icon = self:GetAbilityMeta(id)
 
     return {
@@ -423,12 +535,13 @@ function Group:GetTrackedEntries()
         end
 
         if include and entry.shared then
+            entry.unavailable = entry.connected == false or entry.dead == true
             entry.matchingUltimates = self:GetMatchingUltimates(entry)
 
             if #entry.matchingUltimates > 0 then
                 entry.anyReady = false
                 for _, ultimate in ipairs(entry.matchingUltimates) do
-                    if ultimate.ready then
+                    if ultimate.ready and not entry.unavailable then
                         entry.anyReady = true
                         break
                     end
@@ -444,6 +557,10 @@ function Group:GetTrackedEntries()
     table.sort(result, function(a, b)
         -- READY always at the top for raidlead visibility.
         if a.anyReady ~= b.anyReady then return a.anyReady == true end
+
+        -- Dead or disconnected players remain visible for context, but cannot be
+        -- treated as actionable readiness.
+        if a.unavailable ~= b.unavailable then return a.unavailable == false end
 
         -- Recently spent Ultimates are deliberately pushed to the bottom.
         if a.recentlyUsed ~= b.recentlyUsed then return a.recentlyUsed == false end
@@ -468,7 +585,7 @@ function Group:GetSharingCount()
 end
 
 function Group:PlayReadySound()
-    if not self.sv or not self.sv.readySound or not PlaySound or not SOUNDS then return end
+    if not ULT.sv or not ULT.sv.enabled or not self.sv or not self.sv.enabled or not self.sv.readySound or not PlaySound or not SOUNDS then return end
     if ULT.uiObscured then return end
 
     local now = NowMs()
@@ -484,7 +601,7 @@ function Group:PlayReadySound()
 end
 
 function Group:CheckReadyTransitions()
-    if not self.sv or not self.sv.enabled then return end
+    if not ULT.sv or not ULT.sv.enabled or not self.sv or not self.sv.enabled then return end
 
     local activeKeys = {}
     local now = NowMs()
@@ -493,8 +610,9 @@ function Group:CheckReadyTransitions()
         if entry.shared then
             local value = tonumber(entry.ultValue) or 0
             local previousValue = self.previousUltValues[entry.key]
+            local usable = entry.connected ~= false and entry.dead ~= true
 
-            if previousValue ~= nil and value < previousValue then
+            if usable and previousValue ~= nil and value < previousValue then
                 local matches = self:GetMatchingUltimates(entry)
                 local wasReadyForTracked = false
 
@@ -520,11 +638,11 @@ function Group:CheckReadyTransitions()
                 local readyNow = ultimate.ready == true
                 local previousReady = self.readyState[stateKey] == true
 
-                if readyNow and not previousReady then
+                if usable and readyNow and not previousReady then
                     self:PlayReadySound()
                 end
 
-                self.readyState[stateKey] = readyNow
+                self.readyState[stateKey] = usable and readyNow
             end
         end
     end
@@ -550,7 +668,7 @@ function Group:ScheduleRefresh(rebuildRoster)
     local settings = AlphaSquadUI and AlphaSquadUI.Settings
     local mainSettingsVisible = settings and settings.mainWindow and not settings.mainWindow:IsHidden() or false
 
-    if not self.sv.enabled and not configVisible and not mainSettingsVisible then
+    if (not self.sv.enabled or not ULT.sv or not ULT.sv.enabled) and not configVisible and not mainSettingsVisible then
         return
     end
 
@@ -576,7 +694,7 @@ function Group:Refresh(reason, rebuildRoster)
         self:BuildRoster()
     end
 
-    if self.sv.enabled then
+    if self.sv.enabled and ULT.sv and ULT.sv.enabled then
         self:CheckReadyTransitions()
         self:RefreshHUD()
     elseif self.ApplyVisibility then
@@ -600,9 +718,7 @@ function Group:RegisterRosterEvents()
     local prefix = "AlphaSquadUI_ULTGroup"
 
     local function RosterChanged()
-        zo_callLater(function()
-            if Group then Group:Refresh("group roster", true) end
-        end, 100)
+        if Group then Group:ScheduleRefresh(true) end
     end
 
     if EVENT_GROUP_MEMBER_JOINED then
@@ -618,22 +734,30 @@ function Group:RegisterRosterEvents()
         EM:RegisterForEvent(prefix .. "_Connected", EVENT_GROUP_MEMBER_CONNECTED_STATUS, RosterChanged)
     end
 
-    -- Low-frequency fallback only while the feature is enabled.
-    EM:RegisterForUpdate(prefix .. "_Safety", 2000, function()
-        if Group
-            and Group.initialized
-            and Group.sv
-            and Group.sv.enabled
-            and not ULT.uiObscured
-        then
-            Group:Refresh("group safety", true)
-        end
-    end)
+    -- The low-frequency fallback is registered dynamically by SetSafetyUpdateActive.
+end
+
+function Group:SetSafetyUpdateActive(enabled)
+    enabled = enabled == true
+    if self.safetyUpdateActive == enabled then return end
+    self.safetyUpdateActive = enabled
+    local name = "AlphaSquadUI_ULTGroup_Safety"
+    if enabled then
+        EM:RegisterForUpdate(name, 2000, function()
+            if Group and Group.initialized and ULT.sv and ULT.sv.enabled
+                and Group.sv and Group.sv.enabled and not ULT.uiObscured then
+                Group:Refresh("group safety", true)
+            end
+        end)
+    else
+        EM:UnregisterForUpdate(name)
+    end
 end
 
 function Group:SetEnabled(enabled)
     if not self.sv then return end
     self.sv.enabled = enabled == true
+    self:SetSafetyUpdateActive(self.sv.enabled and ULT.sv and ULT.sv.enabled and not ULT.uiObscured)
     self:Refresh("enabled", true)
     self:ApplyVisibility()
 end
@@ -642,6 +766,7 @@ function Group:SetVisible(visible)
     if not self.sv then return end
     self.sv.visible = visible == true
     self:ApplyVisibility()
+    if self.sv.enabled and self.sv.visible and ULT.sv and ULT.sv.enabled then self:Refresh("visibility changed", true) end
     self:RefreshIntegratedSettings()
 end
 
@@ -665,6 +790,7 @@ function Group:Initialize()
 
     self:RegisterRosterEvents()
     self.initialized = true
+    self:SetSafetyUpdateActive(self.sv.enabled and ULT.sv and ULT.sv.enabled and not ULT.uiObscured)
 
     zo_callLater(function()
         if Group then Group:Refresh("initial", true) end

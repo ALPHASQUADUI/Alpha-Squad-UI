@@ -1,11 +1,16 @@
 -- Final integration of optional audits, evidence-aware sharing and bounded UI.
--- This adapter isolates changes from the existing Overload and ULT Tracker modules.
+-- This adapter keeps Support Coverage cross-component rules in one final load step.
 local SC=AlphaSquadUI.Modules.SupportCoverage
 local Catalog=SC.Catalog
 local Try=SC.Try
 local Copy=SC.Audit.Copy
-local wireKeys=Catalog.wireV1Keys
+local wireKeys=Catalog.wireV2Keys or Catalog.wireV1Keys
+local wireV1Count=#(Catalog.wireV1Keys or {})
 local wireIndex={};for i,key in ipairs(wireKeys) do wireIndex[key]=i-1 end
+-- wire v2 uses 81 capability bits. The remaining 15 high bits in cap4 carry a
+-- non-zero fingerprint of the signature frame, without changing the LGB schema.
+local DETAIL_FINGERPRINT_SCALE=512
+local DETAIL_FINGERPRINT_MODULUS=SC.Details and SC.Details.FINGERPRINT_MODULUS or 32767
 local roles={"UNKNOWN","MT","OT","HEAL","DD PARSE","DD SUPPORT","MT/OT","H1","H2"}
 local roleId={};for index,role in ipairs(roles) do roleId[role]=index-1 end
 local profiles={"full","progression","damage","trash","boss","custom"}
@@ -19,23 +24,40 @@ local function SafeMasks(data)
 end
 local function Decode(data)
     local capabilities={}
-    for index,key in ipairs(wireKeys) do
+    local count=data.version==1 and wireV1Count or #wireKeys
+    for index=1,count do
+        local key=wireKeys[index]
         local zero=index-1
         local value=data["cap"..(math.floor(zero/24)+1)]
-        if math.floor(value/2^(zero%24))%2==1 then capabilities[key]={sources={["ASUI v1 capability"]=true},evidence="PEER_CAPABILITY_HINT"} end
+        if math.floor(value/2^(zero%24))%2==1 then capabilities[key]={sources={["ASUI v"..tostring(data.version).." capability"]=true},evidence="PEER_CAPABILITY_HINT"} end
     end
     return capabilities
 end
+local function SignatureFingerprint(snapshot)
+    if not SC.Details or not SC.Details.Encode or not SC.Details.Checksum then return nil end
+    local body=SC.Details.Encode(snapshot)
+    if not body then return nil end
+    return SC.Details.Checksum(body)%DETAIL_FINGERPRINT_MODULUS+1
+end
+local function AdvertisedFingerprint(data)
+    if type(data)~="table" or data.version~=2 then return nil end
+    local value=math.floor((tonumber(data.cap4) or 0)/DETAIL_FINGERPRINT_SCALE)
+    if value<1 or value>DETAIL_FINGERPRINT_MODULUS then return nil end
+    return value
+end
 function SC:IsCurrentGroupMember(tag)
     if not tag or not self:IsGrouped() then return false end
-    for index=1,math.min(12,Try(GetGroupSize) or 0) do
+    local size=tonumber(Try(GetGroupSize)) or 0
+    if size~=size or size==math.huge or size==-math.huge then return false end
+    for index=1,math.min(12,math.max(0,math.floor(size))) do
         local other=Try(GetGroupUnitTagByIndex,index) or ("group"..index)
         if other==tag or Try(AreUnitsEqual,other,tag)==true then return true end
     end
     return self:IsSelf(tag)
 end
 local function MayReceive(sc,tag)
-    return sc.sv and sc.sv.enabled and sc.sv.experimentalSharing and sc:IsCurrentGroupMember(tag) and not sc:IsSelf(tag)
+    return sc.sv and sc.sv.enabled and sc.sv.shareData and sc.sv.experimentalSharing
+        and sc:IsCurrentGroupMember(tag) and not sc:IsSelf(tag)
 end
 
 local buildPayload=SC.BuildSharePayload
@@ -50,34 +72,37 @@ function SC:BuildSharePayload()
             payload[field]=payload[field]+2^(index%24)
         end
     end
+    local fingerprint=SignatureFingerprint(self.localSnapshot)
+    if fingerprint then payload.cap4=payload.cap4+fingerprint*DETAIL_FINGERPRINT_SCALE end
     return payload
 end
 local receiveBuild=SC.OnPeerShareData
 function SC:OnPeerShareData(tag,data)
-    if not MayReceive(self,tag) or type(data)~="table" or data.version~=1 or not SafeMasks(data) then return end
+    if not MayReceive(self,tag) or type(data)~="table" or (data.version~=1 and data.version~=2) or not SafeMasks(data) then return end
     local key=self:GetPlayerKey(tag)
     local previous=self.peerData[key] or {}
-    receiveBuild(self,tag,data)
+    local advertisedFingerprint=AdvertisedFingerprint(data)
+    if receiveBuild(self,tag,data)~=true then return end
     local peer=self.peerData[key]
     if not peer then return end
     peer.capabilities=Decode(data)
-    for _,field in ipairs({"liveCapabilities","liveKnownKeys","liveUpdatedAt","verifiedLiveUpdatedAt",
-        "auditValues","detailCapabilities","detailChecksum","detailAt","detailAliveAt","detailRevision","detailsEvidence","potionEvidence"}) do
+    for _,field in ipairs({"liveCapabilities","liveKnownKeys","liveUpdatedAt","verifiedLiveUpdatedAt","potionEvidence"}) do
         peer[field]=previous[field]
     end
+    if advertisedFingerprint and previous.detailBuildFingerprint==advertisedFingerprint then
+        for _,field in ipairs({"auditHashes","detailChecksum","detailAt","detailAliveAt","detailRevision",
+            "detailsEvidence","detailBuildFingerprint"}) do peer[field]=previous[field] end
+    end
+    peer.buildDetailFingerprint=advertisedFingerprint
     peer.connected=self:IsOnline(tag)
-    -- v1 did not carry equipped counts. Never invent five-piece sets from presence bits.
+    -- Build protocols do not carry equipped counts. Never invent five-piece sets
+    -- from presence bits.
     for _,set in ipairs(peer.equipment and peer.equipment.setList or {}) do set.equipped=nil end
 end
+local receiveLive=SC.OnPeerLiveData
 function SC:OnPeerLiveData(tag,data)
-    if not MayReceive(self,tag) or type(data)~="table" or not SafeMasks(data) then return end
-    local key=self:GetPlayerKey(tag)
-    local peer=self.peerData[key] or self:ScanLimitedUnit(tag)
-    self.peerData[key]=peer
-    if peer.verifiedLiveUpdatedAt and self.NowMs()-peer.verifiedLiveUpdatedAt<=5500 then return end
-    peer.liveCapabilities=Decode(data);peer.liveKnownKeys=nil;peer.liveUpdatedAt=self.NowMs()
-    peer.asui=true;peer.unitTag=tag
-    peer.dataQuality=peer.buildVerified and "ASUI" or "ASUI LIVE"
+    if not MayReceive(self,tag) then return end
+    return receiveLive(self,tag,data)
 end
 function SC:GetLocalLiveCapabilities()
     local effects,complete=self:ObserveEffectsOnUnit("player")
@@ -91,25 +116,50 @@ function SC:InitializeSharing()
         self.share.error="Experimental sharing is OFF. Unreserved IDs 507-510 are for controlled tests only."
         return
     end
-    if self.share.handler then self.share.available=self.share.detailProtocol~=nil;return end
+    if self.share.handler then
+        self.share.available=self.share.protocol~=nil and self.share.liveProtocol~=nil and self.share.planProtocol~=nil
+        if not self.share.detailProtocol and self.InitializeDetailSharing then
+            self:InitializeDetailSharing(rawget(_G,"LibGroupBroadcast"),self.share.handler)
+        end
+        return
+    end
     if self.share.registrationAttempted then return end
     self.share.registrationAttempted=true
+    local library=rawget(_G,"LibGroupBroadcast")
     initializeSharing(self)
     if self.share.handler and self.InitializeDetailSharing then
-        self:InitializeDetailSharing(rawget(_G,"LibGroupBroadcast"),self.share.handler)
+        self:InitializeDetailSharing(library,self.share.handler)
+    end
+    -- A library may become ready after our first initialization callback. Keep
+    -- explicit enable/toggle actions retryable only when the library itself was
+    -- unavailable. A partial handler/protocol failure may already have reserved
+    -- names inside LGB and must not be retried as a duplicate registration.
+    if not self.share.handler and (not library or type(library.RegisterHandler)~="function") then
+        self.share.registrationAttempted=false
     end
 end
 local shareBuild=SC.ShareLocalSnapshot
+local shareLive=SC.ShareLiveSnapshot
 function SC:ShareLocalSnapshot(reason)
     if not self.sv.enabled or not self.sv.shareData or not self.sv.experimentalSharing or self.inCombat then return false end
-    -- Full named snapshots replace legacy presence-only broadcasts on matching new clients.
-    if self.share.detailProtocol then self:QueueBuildDetails(false);return true end
-    return shareBuild(self,reason)
+    local fingerprint=SignatureFingerprint(self.localSnapshot)
+    local previousFingerprint=self.share.lastBuildFingerprint
+    local sent=shareBuild(self,reason)
+    if sent then
+        self.share.lastBuildFingerprint=fingerprint
+        if self.share.detailProtocol then
+            local detailSent=self:QueueBuildDetails(self.detailSharePending==true or previousFingerprint~=fingerprint)
+            if detailSent then self.detailSharePending=false end
+        end
+    end
+    return sent
 end
-function SC:ShareLiveSnapshot() return false end -- The timestamped/schema-checked transport is the sole live sender.
+function SC:ShareLiveSnapshot()
+    return shareLive(self)
+end
 function SC:GetSharingStatus()
     if not self.sv.experimentalSharing or not self.sv.shareData then return "LOCAL", "Experimental sharing is disabled" end
-    if self.share and self.share.detailProtocol then return "TEST LGB", self.share.detailError end
+    if self.share and self.share.available then return "TEST LGB", self.share.detailError end
     return "LOCAL", self.share and self.share.error or "LibGroupBroadcast unavailable"
 end
 
@@ -126,7 +176,8 @@ function SC:OnDetailData(tag,data)
     local entry=self.byKey and self.byKey[self:GetPlayerKey(tag)]
     if entry then
         for _,field in ipairs({"liveCapabilities","liveKnownKeys","liveUpdatedAt","verifiedLiveUpdatedAt",
-            "auditValues","detailAt","detailAliveAt","detailCapabilities","detailChecksum"}) do entry[field]=peer[field] end
+            "auditHashes","detailAt","detailAliveAt","detailChecksum","buildDetailFingerprint",
+            "detailBuildFingerprint"}) do entry[field]=peer[field] end
     end
 end
 
@@ -135,6 +186,7 @@ function SC:BroadcastPlan()
         or not self:IsGrouped() or not self:IsRaidLead() then return false end
     local protocol=self.share and self.share.planProtocol
     if not protocol or (protocol.IsEnabled and not protocol:IsEnabled()) then return false end
+    self.share.lastPlanAttemptAt=self.NowMs()
     self.share.planRevision=((self.share.planRevision or 0)%250)+1
     local revision=self.share.planRevision
     local success=true
@@ -154,20 +206,35 @@ function SC:BroadcastPlan()
     for key,role in pairs(self.sv.roleOverrides) do
         if self.byKey[key] and roleId[role] then Send(2,roleId[role],Hash(key)) end
     end
-    if success then self.lastPlanSignature=self:GetPlanSignature() end
+    if success then
+        self.lastPlanSignature=self:GetPlanSignature()
+        self.share.lastPlanSentAt=self.NowMs()
+    end
     return success
 end
 function SC:MaybeBroadcastPlan()
-    if self.sv.enabled and self.sv.shareData and self.sv.experimentalSharing and not self.inCombat and self:IsGrouped() and self:IsRaidLead() and self:GetPlanSignature()~=self.lastPlanSignature then self:SchedulePlanBroadcast() end
+    local now=self.NowMs()
+    local changed=self:GetPlanSignature()~=self.lastPlanSignature
+    local heartbeatDue=now-(self.share.lastPlanSentAt or -300000)>=300000
+    if self.sv.enabled and self.sv.shareData and self.sv.experimentalSharing and not self.inCombat
+        and self:IsGrouped() and self:IsRaidLead() and (changed or heartbeatDue)
+        and now-(self.share.lastPlanAttemptAt or 0)>=5000 then self:SchedulePlanBroadcast() end
 end
 function SC:OnPlanData(tag,data)
     if not MayReceive(self,tag) or Try(IsUnitGroupLeader,tag)~=true or type(data)~="table" then return end
     local revision,kind,key,hash=tonumber(data.revision),tonumber(data.kind),tonumber(data.key),tonumber(data.ownerHash)
-    if not revision or revision<1 or revision>250 or revision%1~=0 or not key or key%1~=0 or not hash then return end
+    if not revision or revision<1 or revision>250 or revision%1~=0 or not kind or kind<0 or kind>2 or kind%1~=0
+        or not key or key<0 or key>127 or key%1~=0 or not hash or hash<0 or hash>16777215 or hash%1~=0 then return end
     local sender=self:GetPlayerKey(tag)
     if kind==0 then
         if not profiles[key] then return end
-        self.remotePlan={revision=revision,sender=sender,profile=profiles[key],assignments={},receivedAt=self.NowMs()}
+        if self.remotePlan and self.remotePlan.sender==sender and self.remotePlan.revision==revision then
+            -- A repeated marker is a transport duplicate, not the start of a new
+            -- plan. Resetting here could erase assignments already received.
+            self.remotePlan.receivedAt=self.NowMs()
+        else
+            self.remotePlan={revision=revision,sender=sender,profile=profiles[key],assignments={},receivedAt=self.NowMs()}
+        end
     elseif self.remotePlan and self.remotePlan.sender==sender and self.remotePlan.revision==revision then
         if kind==1 and wireKeys[key+1] then self.remotePlan.assignments[wireKeys[key+1]]=hash
         elseif kind==2 and hash==self:GetMyHash() and roles[key+1] then self.remotePlan.myRole=roles[key+1] end
@@ -182,18 +249,16 @@ end
 local auditValue=SC.Audit.Value
 function SC.Audit.Value(snapshot,key)
     if not snapshot then return end
-    if snapshot.auditValues and snapshot.detailAt then
-        local ttl=(key=="food" or key=="potion") and 10000 or 120000
-        if SC.NowMs()-math.max(snapshot.detailAt,snapshot.detailAliveAt or 0)<=ttl then return snapshot.auditValues[key] end
-        return nil
-    end
     if snapshot.asui and not snapshot.skills and key~="food" then return nil end
     return auditValue(snapshot,key)
 end
 local captureBuild=SC.CaptureExpectedBuild
 function SC:CaptureExpectedBuild(role,snapshot,playerKey)
     snapshot=snapshot or self.localSnapshot
-    if not snapshot or role=="UNKNOWN" or role=="HEAL" or role=="MT/OT" then return false,"Assign a specific role before capturing its expected build." end
+    if not snapshot or (role~="MT" and role~="OT" and role~="H1" and role~="H2"
+        and role~="DD PARSE" and role~="DD SUPPORT") then
+        return false,"Assign a specific role before capturing its expected build."
+    end
     local champion=self.Audit.Value(snapshot,"champion")
     if champion then
         local counts={}
@@ -202,10 +267,27 @@ function SC:CaptureExpectedBuild(role,snapshot,playerKey)
         local complete=scope~="ALL" and counts[scope]==4 or scope=="ALL" and counts.COMBAT==4 and counts.CONDITIONING==4 and counts.WORLD==4
         if not complete then
             -- Capture other verified fields; omit an incomplete CP target rather than validating it.
+            local reference=playerKey and self:GetTemplateKey(role)..":"..playerKey or self:GetTemplateKey(role)
+            local previousTemplate=self.sv.buildTemplates[reference]
+            local scopedPlayerKey=playerKey and tostring(self.sv.activeProfile)..":"..playerKey
+            local previousPlayerTemplate=scopedPlayerKey and self.sv.playerTemplates[scopedPlayerKey]
             local ok,message=captureBuild(self,role,snapshot,playerKey)
             if ok then
-                local reference=playerKey and self:GetTemplateKey(role)..":"..playerKey or self:GetTemplateKey(role)
-                self.sv.buildTemplates[reference].values.champion=nil
+                local template=self.sv.buildTemplates[reference]
+                template.values.champion=nil
+                if template.hashes then
+                    for _,discipline in ipairs({"all","combat","conditioning","world"}) do
+                        template.hashes["champion_"..discipline]=nil
+                    end
+                end
+                local retained=0
+                for _ in pairs(template.values or {}) do retained=retained+1 end
+                for _ in pairs(template.hashes or {}) do retained=retained+1 end
+                if retained==0 then
+                    self.sv.buildTemplates[reference]=previousTemplate
+                    if scopedPlayerKey then self.sv.playerTemplates[scopedPlayerKey]=previousPlayerTemplate end
+                    return false,"Champion target omitted, but no other verified build fields were available to save."
+                end
             end
             return ok,message.." Champion target omitted: four verified slottables are required per selected discipline."
         end
@@ -233,20 +315,7 @@ end
 
 local evaluate=SC.EvaluateCoverage
 function SC:EvaluateCoverage(reason)
-    local result=evaluate(self,reason)
-    -- Once capability identification is incomplete, no owner is not proof of absence.
-    for _,row in ipairs(result.entries) do
-        if row.status=="missing" then
-            row.status="unknown";result.missingCount=math.max(0,result.missingCount-1);result.unknownCount=result.unknownCount+1
-            for _,issue in ipairs(result.issues) do
-                if issue.key==row.key and issue.text==row.effect.label.." missing" then
-                    issue.severity="unknown";issue.text=row.effect.label.." - no verified source"
-                end
-            end
-        end
-    end
-    result.ready=result.ready and result.unknownCount==0
-    return result
+    return evaluate(self,reason)
 end
 
 function SC:GetEffectiveScale()
@@ -284,7 +353,13 @@ local visibility=SC.ApplyVisibility
 function SC:ApplyVisibility()
     visibility(self)
     if not self.window then return end
-    if self.inspectorWindow and not self.inspectorWindow:IsHidden() then self.window:SetHidden(true) end
+    local overlayVisible = self.inspectorWindow and not self.inspectorWindow:IsHidden()
+        or self.reportWindow and not self.reportWindow:IsHidden()
+        or self.matrixWindow and not self.matrixWindow:IsHidden()
+    if overlayVisible then self.window:SetHidden(true) end
+    if self.SetSafetyUpdateActive then
+        self:SetSafetyUpdateActive(self.sv.enabled and (not self.window:IsHidden() or self.settingsPageVisible or overlayVisible))
+    end
     if self.window:IsHidden() or self.inCombat then
         if self.banner then self.banner:SetHidden(true) end
         if self.assignmentBanner then self.assignmentBanner:SetHidden(true) end
@@ -327,17 +402,22 @@ function SC:RefreshHUD()
         for _,row in ipairs(self.coverage.entries or {}) do
             if not row.liveKnown then unknown=unknown+1 elseif row.live==false then problems=problems+1 end
         end
-        if problems==0 and unknown>0 then self.window.status:SetText("UNVERIFIED") end
+        if problems==0 and unknown>0 then
+            self.window.status:SetText("UNVERIFIED")
+            self.window.status:SetColor(0.97,0.78,0.30,1)
+        end
     end
 end
 local readyBanner=SC.ShowReadyBanner
 function SC:ShowReadyBanner(...)
-    if not self.sv or not self.sv.enabled or not self.sv.visible or self.uiObscured or self.inCombat then return end
+    if not self.sv or not self.sv.enabled or not self.sv.visible or self.uiObscured or self.inCombat
+        or self.settingsPageVisible or self.window and self.window:IsHidden() then return end
     return readyBanner(self,...)
 end
 local assignmentBanner=SC.ShowPersonalAssignmentBanner
 function SC:ShowPersonalAssignmentBanner()
-    if not self.sv or not self.sv.enabled or not self.sv.visible or self.uiObscured or self.inCombat then return end
+    if not self.sv or not self.sv.enabled or not self.sv.visible or self.uiObscured or self.inCombat
+        or self.settingsPageVisible or self.window and self.window:IsHidden() then return end
     return assignmentBanner(self)
 end
 
@@ -386,10 +466,11 @@ function SC:RefreshMatrix()
     for index,row in ipairs(self.matrixWindow.playerRows) do
         local player=self.roster[index]
         if player then
-            row.quality:SetText(player.asui and "ASUI" or "LIMITED")
+            row.quality:SetText(player.dataQuality or (player.asui and "ASUI" or "LIMITED"))
             local food=self.Audit.Value(player,"food")
             row.food:SetText(food==nil and "FOOD ?" or food=="NONE" and "NO FOOD" or "FOOD OK")
-            if not player.equipment or not player.equipment.complete then row.glyph:SetText("GLYPH ?") end
+            local glyphs=player.equipment and player.equipment.glyphs
+            if not glyphs or glyphs.verified~=true then row.glyph:SetText("GLYPH ?") end
         end
     end
 end

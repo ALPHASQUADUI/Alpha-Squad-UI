@@ -10,17 +10,16 @@ concurrency:
   cancel-in-progress: true
 jobs:
   validate:
-    if: github.ref == 'refs/heads/support-coverage'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Install Lua validators
-        run: sudo apt-get update && sudo apt-get install -y lua5.1 lua5.4 zip
+        run: sudo apt-get update && sudo apt-get install -y lua5.1 lua5.4 zip unzip
       - name: Validate Lua syntax
         run: |
           set -euo pipefail
-          find AlphaSquadUI -name '*.lua' -print0 | xargs -0 -n1 luac5.1 -p
-          find AlphaSquadUI -name '*.lua' -print0 | xargs -0 -n1 luac5.4 -p
+          find AlphaSquadUI -name '*.lua' -print0 | sort -z | xargs -0 -n1 luac5.1 -p
+          find AlphaSquadUI -name '*.lua' -print0 | sort -z | xargs -0 -n1 luac5.4 -p
       - name: Validate manifest
         run: |
           python3 - <<'PY'
@@ -35,15 +34,25 @@ jobs:
           assert re.search(r'^## AddOnVersion: [0-9]+$',text,re.M)
           print('Manifest and version checks passed')
           PY
-      - name: Run Support Coverage regression tests
+      - name: Run deterministic regression tests
         run: |
           lua5.1 tests/support_coverage.lua
           lua5.4 tests/support_coverage.lua
+          lua5.1 tests/ult_tracker.lua
+          lua5.4 tests/ult_tracker.lua
+          lua5.1 tests/overload.lua
+          lua5.4 tests/overload.lua
       - name: Package source for independent review
         if: always()
         run: zip -r SupportCoverage-review-source.zip AlphaSquadUI docs .github tests -x '*/.gitkeep' || test -f SupportCoverage-review-source.zip
       - name: Package installable test addon
-        run: zip -r AlphaSquadUI-support-coverage-test.zip AlphaSquadUI -x '*/.gitkeep'
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^## Version: //p' AlphaSquadUI/AlphaSquadUI.txt)"
+          archive="AlphaSquadUI-${version}.zip"
+          zip -r "$archive" AlphaSquadUI -x '*/.gitkeep'
+          unzip -t "$archive"
+          test "$(zipinfo -1 "$archive" | head -n 1)" = "AlphaSquadUI/"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -52,4 +61,5 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: AlphaSquadUI-support-coverage-test
-          path: AlphaSquadUI-support-coverage-test.zip
+          path: AlphaSquadUI-*.zip
+          if-no-files-found: error

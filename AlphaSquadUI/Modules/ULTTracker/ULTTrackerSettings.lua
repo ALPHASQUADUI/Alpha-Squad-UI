@@ -27,7 +27,8 @@ end
 
 function ULT:RefreshSettings()
     local settings = AlphaSquadUI and AlphaSquadUI.Settings
-    if settings and settings.RefreshMain then
+    local mainWindow = settings and settings.mainWindow
+    if mainWindow and not mainWindow:IsHidden() and settings.RefreshMain then
         settings.RefreshMain()
     end
 end
@@ -94,6 +95,7 @@ function ULT:BuildIntegratedSettingsPage(page, ui)
 
     CreateButton(general, "AlphaSquadULTIntegratedMove", "UNLOCK & MOVE", 164, 188, 144, 30, function()
         if not ULT.sv then return end
+        ULT:SetEnabled(true)
         ULT:SetVisible(true)
         ULT:SetLocked(false)
         local mainSettings = AlphaSquadUI and AlphaSquadUI.Settings and AlphaSquadUI.Settings.mainWindow

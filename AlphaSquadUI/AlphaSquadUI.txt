@@ -1,7 +1,7 @@
 ## Title: |cE66A19Ąlpha Şquad UI|r
 ## APIVersion: 101050 101051
-## Version: 2.7.0-support-coverage-test.2
-## AddOnVersion: 20702
+## Version: 2.7.0-support-coverage-test.4
+## AddOnVersion: 20704
 ## Author: SeRuM1
 ## Description: Modular Alpha Squad UI with optional support readiness, build checks and bounded pull history.
 ## SavedVariables: AlphaSquadOverloadTrackerSavedVariables AlphaSquadULTTrackerSavedVariables AlphaSquadSupportCoverageSavedVariables

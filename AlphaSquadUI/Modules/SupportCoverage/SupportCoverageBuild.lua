@@ -22,7 +22,7 @@ function SC:IsOnline(unitTag)
 end
 
 function SC:ScanClassMasteries()
-    local result = {known=false, eligible=nil, selected={}, learned={}, capabilities={}, nativeLines=0, foreignLines=0}
+    local result = {known=false, eligible=nil, selected={}, learned={}, learnedIds={}, capabilities={}, nativeLines=0, foreignLines=0}
     local manager = SKILLS_DATA_MANAGER
     if not manager or not manager.GetSkillTypeData or not SKILL_TYPE_CLASS then return result end
     local classType = Try(manager.GetSkillTypeData, manager, SKILL_TYPE_CLASS)
@@ -41,8 +41,9 @@ function SC:ScanClassMasteries()
                         if skill:IsPurchased() then
                             local progression = skill:GetCurrentProgressionData()
                             if progression then
-                                local id,name=progression:GetAbilityId(),progression:GetName()
-                                if type(id)=="number" and id>0 and type(name)=="string" then
+                                local id,name=Try(progression.GetAbilityId,progression),Try(progression.GetName,progression)
+                                if type(id)=="number" and id==id and id>0 and id<math.huge and id%1==0
+                                    and type(name)=="string" and name~="" then
                                     result.selected[#result.selected + 1] = {
                                         id=id, name=name, rank=skill.GetCurrentRank and skill:GetCurrentRank() or 1,
                                     }
@@ -56,7 +57,20 @@ function SC:ScanClassMasteries()
                     if skill:IsPurchased() then
                         local progression=skill:GetCurrentProgressionData()
                         if progression then
-                            result.learned[MasteryName(progression:GetName())]=skill.GetCurrentRank and skill:GetCurrentRank() or 1
+                            local learnedRank=skill.GetCurrentRank and skill:GetCurrentRank() or 1
+                            local learnedId=Try(progression.GetAbilityId,progression)
+                            local learnedName=Try(progression.GetName,progression)
+                            if type(learnedName)=="string" and learnedName~="" then
+                                result.learned[MasteryName(learnedName)]=learnedRank
+                            else
+                                complete=false
+                            end
+                            if type(learnedId)=="number" and learnedId==learnedId and learnedId>0
+                                and learnedId<math.huge and learnedId%1==0 then
+                                result.learnedIds[learnedId]=learnedRank
+                            else
+                                complete=false
+                            end
                         end
                     end
                 end
@@ -70,16 +84,41 @@ function SC:ScanClassMasteries()
         end
     end)
     result.known = ok and complete
-    if result.known then result.eligible = result.nativeLines == 3 and result.foreignLines == 0 and mastered == 3 end
-    if not ok then result.selected = {}; result.learned={} end
+    if result.known then
+        local allMaxed = Try(HasMaxRankInAllClassSkillLines)
+        local activePlayerLines = Try(manager.GetNumPlayerClassActiveSkillLines, manager)
+        local activeClassLines = Try(manager.GetNumActiveClassSkillLines, manager)
+        if allMaxed ~= nil and activePlayerLines ~= nil and activeClassLines ~= nil then
+            result.eligible = allMaxed == true and activePlayerLines == activeClassLines
+            result.eligibilityEvidence = "NATIVE_CLASS_MASTERY_API"
+        else
+            result.eligible = result.nativeLines == 3 and result.foreignLines == 0 and mastered == 3
+            result.eligibilityEvidence = "SKILL_LINE_FALLBACK"
+        end
+    end
+    if not ok then result.selected = {}; result.learned={}; result.learnedIds={} end
     if result.known and result.eligible then
         for _,selected in ipairs(result.selected) do
-            if MasteryName(selected.name)=="above and beyond" then result.criticalDamageCap=155 end
             for _,source in ipairs(self.Catalog.masterySources or {}) do
-                if MasteryName(selected.name)==MasteryName(source.name)
-                    and (not source.requires or (result.learned[MasteryName(source.requires)] or 0)>=(source.rank or 1)) then
+                local matchedById=selected.id==source.abilityId
+                local selectedMatch=matchedById or MasteryName(selected.name)==MasteryName(source.name)
+                if not selectedMatch then
+                    for _,alias in ipairs(source.aliases or {}) do
+                        if MasteryName(selected.name)==MasteryName(alias) then selectedMatch=true;break end
+                    end
+                end
+                local requiredRank=source.rank or 1
+                local prerequisiteMatch=not source.requires
+                for _,abilityId in ipairs(source.requiresIds or {}) do
+                    if (result.learnedIds[abilityId] or 0)>=requiredRank then prerequisiteMatch=true;break end
+                end
+                if not prerequisiteMatch and source.requires then
+                    prerequisiteMatch=(result.learned[MasteryName(source.requires)] or 0)>=requiredRank
+                end
+                if selectedMatch and prerequisiteMatch then
                     for _,key in ipairs(source.provides) do
-                        result.capabilities[key]={sources={[source.name]=true},evidence="SELECTED_MASTERY_NAME",conditional=true}
+                        result.capabilities[key]={sources={[source.name]=true},
+                            evidence=matchedById and "SELECTED_MASTERY_ID" or "SELECTED_MASTERY_NAME",conditional=true}
                     end
                 end
             end
@@ -113,33 +152,24 @@ function SC:ScanPoisons()
     return result
 end
 
-function SC:ScanMundus()
-    local result = {known=false, ids={}}
-    local count = Try(GetNumBuffs, "player")
-    if count == nil or not GetUnitBuffInfo then return result end
-    -- The client does not expose a portable Mundus getter. Exact configured IDs are
-    -- preferred; English names are display hints only and do not verify absence.
-    local configured = self.sv and self.sv.mundusAbilityIds or {}
-    local countConfigured,complete = 0,true
-    for _ in pairs(configured) do countConfigured = countConfigured + 1 end
-    for index = 1, count do
-        local ok, name, _, _, _, _, _, _, _, _, _, id = pcall(GetUnitBuffInfo, "player", index)
-        if not ok then complete=false end
-        if ok and id and configured[tostring(id)] then result.ids[#result.ids + 1] = id end
-        if ok and name and name:find("Boon:", 1, true) then result.hint = name end
-    end
-    result.known = #result.ids > 0 and complete
-    -- A partial ID registry cannot prove that a different Mundus is absent.
-    return result
-end
-
 function SC:RefreshReadinessFacts()
-    if not self.localSnapshot then return end
+    if not self.localSnapshot then return false end
     self.localSnapshot.food = self:ScanFood("player")
     self.localSnapshot.potion = self:ScanPotion()
+    self.localSnapshot.mundus = self:ScanMundus()
     self.localSnapshot.dead = Try(IsUnitDead, "player") == true
     self.localSnapshot.connected = self:IsOnline("player")
     self.localSnapshot.readinessAt = self.NowMs()
+    local food=self.localSnapshot.food or {};local potion=self.localSnapshot.potion or {}
+    local mundus=self.localSnapshot.mundus or {}
+    local potionSignature="UNKNOWN"
+    if potion.known then potionSignature=potion.link or tostring(potion.itemId or 0)
+    elseif potion.selectionKnown then potionSignature="NONE" end
+    local signature=table.concat({food.verified and "1" or "0",food.active and "1" or "0",tostring(food.abilityId or 0),
+        potionSignature,table.concat(mundus.ids or {},",")},"|")
+    local changed=self.lastReadinessSignature~=nil and self.lastReadinessSignature~=signature
+    self.lastReadinessSignature=signature
+    return changed
 end
 
 function SC:SamplePotionEvidence()

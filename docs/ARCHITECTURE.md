@@ -17,13 +17,32 @@ AlphaSquadUI/
 │   ├── Overload/
 │   │   ├── Overload.lua
 │   │   └── README.md
-│   └── ULTTracker/
-│       ├── ULTTracker.lua
-│       ├── ULTTrackerUI.lua
-│       ├── ULTTrackerSettings.lua
-│       ├── ULTGroup.lua
-│       ├── ULTGroupUI.lua
-│       ├── ULTGroupSettings.lua
+│   ├── ULTTracker/
+│   │   ├── ULTTracker.lua
+│   │   ├── ULTTrackerUI.lua
+│   │   ├── ULTTrackerSettings.lua
+│   │   ├── ULTGroup.lua
+│   │   ├── ULTGroupUI.lua
+│   │   ├── ULTGroupSettings.lua
+│   │   └── README.md
+│   └── SupportCoverage/
+│       ├── SupportCoverage.lua
+│       ├── SupportCoverageCatalog.lua
+│       ├── SupportCoverageAudit.lua
+│       ├── SupportCoverageScanner.lua
+│       ├── SupportCoverageBuild.lua
+│       ├── SupportCoverageHistory.lua
+│       ├── SupportCoverageShare.lua
+│       ├── SupportCoverageDetails.lua
+│       ├── SupportCoverageLiveShare.lua
+│       ├── SupportCoverageEngine.lua
+│       ├── SupportCoverageTracking.lua
+│       ├── SupportCoverageUI.lua
+│       ├── SupportCoveragePlanner.lua
+│       ├── SupportCoverageInspector.lua
+│       ├── SupportCoverageSettings.lua
+│       ├── SupportCoverageSources.lua
+│       ├── SupportCoverageIntegration.lua
 │       └── README.md
 └── Media/
 ```
@@ -70,6 +89,12 @@ Lives under ULT Tracker and owns optional group Ultimate sharing, ability filter
 
 The current workflow is **ability-driven**, not player-assignment driven. SavedVariables store tracked ability IDs, not persistent player assignments.
 
+### Support Coverage
+
+Owns local capability scanning, expected-build audits, evidence-aware group coverage, live observations, whole-loadout planning, reports and bounded raid-session history.
+
+The base files define conservative behavior. `SupportCoverageSources.lua` contains native API adapters and `SupportCoverageIntegration.lua` applies final cross-component validation and compatibility rules after every other Support Coverage file has loaded. Experimental network messages contain masks or signatures, not raw item links or arbitrary build text. A fingerprint embedded in the build summary binds audit signatures to the currently advertised loadout and invalidates stale details immediately.
+
 ## SavedVariables
 
 Existing namespaces are preserved:
@@ -77,9 +102,12 @@ Existing namespaces are preserved:
 ```text
 AlphaSquadOverloadTrackerSavedVariables
 AlphaSquadULTTrackerSavedVariables
+AlphaSquadSupportCoverageSavedVariables
 ```
 
 Group tracker preferences live inside the ULT Tracker SavedVariables.
+
+Support Coverage preferences, expected templates and optionally recoverable bounded history use their existing Support Coverage namespace and schema version. Encounter contexts snapshot only the active profile's bounded expected templates and merge that profile back without replacing templates belonging to other profiles.
 
 ## Group data flow
 
@@ -94,6 +122,16 @@ refresh compact raidlead HUD
 ```
 
 A full roster rebuild is reserved for roster changes, initialization and the low-frequency safety sync.
+
+## Support Coverage data flow
+
+```text
+ESO build/effect events → local evidence snapshot → coverage evaluation → HUD / inspector
+Optional validated peer data → bounded peer cache ────────────────┘
+Combat observations → bounded per-subject metrics → pull summary/history
+```
+
+Unverified absence is represented as unknown. Public sharing remains blocked until protocol IDs 507–510 are formally reserved.
 
 ## Design rules
 

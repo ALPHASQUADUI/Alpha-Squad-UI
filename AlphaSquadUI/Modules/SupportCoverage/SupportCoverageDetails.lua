@@ -1,167 +1,184 @@
--- Optional bounded detail transport for the controlled test build. ID 507 is UNRESERVED.
--- No code execution, arbitrary table deserialization, DPS, chat messages, or item links beyond build facts.
+-- Compact, signature-only build transport for the controlled test build. ID 507 is UNRESERVED.
+-- Exact equipment links and arbitrary text never leave the client.
 local SC = AlphaSquadUI.Modules.SupportCoverage
-local Details = {ID=507, VERSION=1, MAX_BYTES=4096, CHUNK_BYTES=120, MAX_PARTS=35}
+local Details = {ID=507, VERSION=2, MAX_BYTES=64, MAX_HASH=16777214, FINGERPRINT_MODULUS=32767}
 SC.Details = Details
-local allowed = {capabilities=true}
-for _, key in ipairs(SC.Audit.order) do allowed[key] = true end
 
-local function Escape(text)
-    return tostring(text):gsub("([%%\r\n])", function(c) return string.format("%%%02X", string.byte(c)) end)
+local function Integer(value, minimum, maximum)
+    value=tonumber(value)
+    if not value or value~=value or value==math.huge or value==-math.huge
+        or value%1~=0 or value<minimum or value>maximum then return nil end
+    return value
 end
-local function Unescape(text)
-    if text:gsub("%%[%x][%x]", ""):find("%%") then return nil end
-    return text:gsub("%%(%x%x)", function(hex) return string.char(tonumber(hex, 16)) end)
+
+Details.hashOrder = {
+    "sets", "weapons", "traits", "enchants", "armor",
+    "champion_all", "champion_combat", "champion_conditioning", "champion_world",
+    "masteries", "skills", "food", "potion", "poisons", "mundus",
+}
+
+function Details.Hash(value)
+    if value == nil then return nil end
+    value = tostring(value)
+    local hash = 17
+    for index=1,#value do hash = (hash * 31 + value:byte(index)) % 16777215 end
+    return hash
 end
-function Details.Checksum(text)
-    local sum = 17
-    for index=1,#text do sum = (sum * 31 + text:byte(index)) % 16777215 end
-    return sum
+
+Details.Checksum = Details.Hash
+
+local function Pack24(value)
+    value=tonumber(value)
+    if not value or value~=value or value==math.huge or value==-math.huge then value=0 end
+    value = math.max(0, math.min(Details.MAX_HASH, math.floor(value)))
+    return string.char(math.floor(value/65536), math.floor(value/256)%256, value%256)
 end
-function Details.Encode(snapshot)
-    local lines = {}
-    for _, key in ipairs(SC.Audit.order) do
-        local value = SC.Audit.Value(snapshot, key)
-        if value ~= nil then lines[#lines + 1] = key .. "=" .. Escape(value) end
+
+local function Unpack24(text, offset)
+    local a,b,c = text:byte(offset, offset+2)
+    if not a or not b or not c then return nil end
+    return a*65536+b*256+c
+end
+
+local function AuditValue(snapshot, key)
+    local scope = key:match("^champion_(.+)$")
+    if scope then
+        local value = SC.Audit.Value(snapshot, "champion")
+        return SC.Audit.CompareValue("champion", value, string.upper(scope))
     end
-    local caps={}
-    for key in pairs(snapshot and snapshot.capabilities or {}) do
-        if SC.Catalog.effects[key] then caps[#caps+1]=key end
-    end
-    table.sort(caps)
-    lines[#lines+1]="capabilities="..Escape(table.concat(caps,","))
-    local text = table.concat(lines, "\n")
-    if #text > Details.MAX_BYTES then return nil end
-    return text
+    return SC.Audit.Value(snapshot, key)
 end
-function Details.Decode(text)
-    if type(text) ~= "string" or #text > Details.MAX_BYTES then return nil end
-    local values, count = {}, 0
-    for line in (text .. "\n"):gmatch("([^\n]*)\n") do
-        if line ~= "" then
-            local key, value = line:match("^([a-z]+)=(.*)$")
-            if not key or not allowed[key] or values[key] ~= nil then return nil end
-            value = Unescape(value)
-            if value == nil then return nil end
-            values[key] = value
-            count = count + 1
+
+function Details.BuildHashes(snapshot)
+    local hashes, known = {}, 0
+    for index,key in ipairs(Details.hashOrder) do
+        local value = AuditValue(snapshot, key)
+        if value ~= nil then
+            hashes[key] = Details.Hash(value)
+            known = known + 2^(index-1)
         end
     end
-    return values, count
+    return hashes, known
+end
+
+function Details.Encode(snapshot)
+    local hashes, known = Details.BuildHashes(snapshot)
+    local schema = Details.Hash(table.concat(Details.hashOrder, "|"))
+    local parts = {
+        string.char(Details.VERSION), Pack24(schema),
+        string.char(math.floor(known/256)%256, known%256),
+    }
+    for _,key in ipairs(Details.hashOrder) do parts[#parts+1] = Pack24(hashes[key] or 0) end
+    local body = table.concat(parts)
+    if #body > Details.MAX_BYTES then return nil end
+    return body
+end
+
+function Details.Decode(body)
+    local expectedLength = 6 + #Details.hashOrder*3
+    if type(body) ~= "string" or #body ~= expectedLength or body:byte(1) ~= Details.VERSION then return nil end
+    local schema = Unpack24(body, 2)
+    if schema ~= Details.Hash(table.concat(Details.hashOrder, "|")) then return nil end
+    local high,low = body:byte(5,6)
+    local known = high*256+low
+    if known >= 2^#Details.hashOrder then return nil end
+    local hashes = {}
+    for index,key in ipairs(Details.hashOrder) do
+        local hash = Unpack24(body, 7+(index-1)*3)
+        local isKnown = math.floor(known/2^(index-1))%2 == 1
+        if not hash or (not isKnown and hash ~= 0) then return nil end
+        if isKnown then hashes[key] = hash end
+    end
+    return hashes, known
 end
 
 function SC:QueueBuildDetails(force)
-    if not self.share or not self.share.detailProtocol or self.inCombat or not self.localSnapshot then return end
-    if not self.sv.enabled or not self.sv.shareData or not self.sv.experimentalSharing or not self:IsGrouped() then return end
-    local text = Details.Encode(self.localSnapshot)
-    if not text then self.share.detailError = "Build detail exceeds the transport limit; fields remain unknown."; return end
-    if self.share.detailTransfer and self.share.detailTransfer.text==text then return end
-    if not force and text == self.share.lastDetailText and self.NowMs()-(self.share.lastDetailAt or 0)<60000 then return end
+    if not self.share or not self.share.detailProtocol or self.inCombat or not self.localSnapshot then return false end
+    if not self.sv.enabled or not self.sv.shareData or not self.sv.experimentalSharing or not self:IsGrouped() then return false end
+    local body = Details.Encode(self.localSnapshot)
+    if not body then self.share.detailError = "Build signatures exceed the transport limit; fields remain unknown."; return false end
+    local fingerprint=Details.Checksum(body)%Details.FINGERPRINT_MODULUS+1
+    -- A detail frame is meaningful only after its matching summary was accepted
+    -- by the transport queue. Otherwise a peer still advertising the previous
+    -- fingerprint would reject it and wait for a much later detail heartbeat.
+    if self.share.lastBuildFingerprint~=fingerprint then return false end
+    if not force and body == self.share.lastDetailText and self.NowMs()-(self.share.lastDetailAt or 0)<90000 then return false end
+    local protocol = self.share.detailProtocol
+    if protocol.IsEnabled and not protocol:IsEnabled() then return false end
     local revision = ((self.share.detailRevision or 0) % 65534) + 1
-    self.share.detailRevision = revision
-    local transfer = {text=text, revision=revision, index=1, total=math.max(1, math.ceil(#text/Details.CHUNK_BYTES)), checksum=Details.Checksum(text)}
-    self.share.detailTransfer = transfer
-    local function SendNext()
-        if not SC.share or SC.share.detailTransfer ~= transfer then return end
-        if not SC.sv.enabled or not SC.sv.shareData or not SC.sv.experimentalSharing or not SC:IsGrouped() then SC.share.detailTransfer=nil; return end
-        if SC.inCombat then SC.share.detailTransfer=nil; SC.share.lastDetailText=nil; return end
-        local protocol = SC.share.detailProtocol
-        if protocol.IsEnabled and not protocol:IsEnabled() then SC.share.detailTransfer=nil; return end
-        local first = (transfer.index - 1) * Details.CHUNK_BYTES + 1
-        local ok, sent = pcall(protocol.Send, protocol, {version=Details.VERSION, kind=1, revision=revision,
-            index=transfer.index, total=transfer.total, checksum=transfer.checksum,
-            body=text:sub(first, first + Details.CHUNK_BYTES - 1)}, {isRelevantInCombat=false, replaceQueuedMessages=false})
-        if not ok or not sent then SC.share.detailTransfer=nil; return end
-        transfer.index = transfer.index + 1
-        if transfer.index <= transfer.total then zo_callLater(SendNext, 3500)
-        else SC.share.lastDetailText=text; SC.share.lastDetailAt=SC.NowMs(); SC.share.detailTransfer=nil end
-    end
-    zo_callLater(SendNext, 300 + (self.NowMs() % 900))
+    local ok, sent = pcall(protocol.Send, protocol, {
+        version=Details.VERSION, kind=1, revision=revision, checksum=Details.Checksum(body), body=body,
+    }, {isRelevantInCombat=false, replaceQueuedMessages=false})
+    if not ok or sent ~= true then return false end
+    self.share.detailRevision, self.share.lastDetailText = revision, body
+    self.share.lastDetailAt, self.share.detailError = self.NowMs(), nil
+    return true
 end
 
 function SC:OnDetailData(unitTag, data)
-    if not self.sv.enabled or not self.sv.experimentalSharing or not self:IsCurrentGroupMember(unitTag) or self:IsSelf(unitTag) then return end
-    if type(data) ~= "table" or data.version ~= Details.VERSION or type(data.body) ~= "string" or #data.body > Details.CHUNK_BYTES then return end
-    if data.kind==3 then if self.OnVerifiedLive then self:OnVerifiedLive(unitTag,data) end; return end
-    if data.kind==0 then if self.OnPullIdentity then self:OnPullIdentity(unitTag,data) end; return end
+    if not self.sv.enabled or not self.sv.shareData or not self.sv.experimentalSharing
+        or not self:IsCurrentGroupMember(unitTag) or self:IsSelf(unitTag) then return end
+    if type(data) ~= "table" or data.version ~= Details.VERSION or type(data.body) ~= "string"
+        or #data.body > Details.MAX_BYTES or type(data.checksum) ~= "number"
+        or data.checksum < 0 or data.checksum > Details.MAX_HASH or data.checksum%1 ~= 0
+        or data.checksum ~= Details.Checksum(data.body) then return end
+    local kind=Integer(data.kind,0,2)
+    if not kind then return end
+    if kind==0 then if self.OnPullIdentity then self:OnPullIdentity(unitTag,data) end; return end
     local key, now = self:GetPlayerKey(unitTag), self.NowMs()
     local peer = self.peerData[key]
     if not peer then peer = self:ScanLimitedUnit(unitTag); self.peerData[key] = peer end
-    if data.kind == 2 then
-        if data.checksum~=Details.Checksum(data.body) then return end
-        -- Counts are self-reported session evidence, not proof of the exact potion item.
+    if kind == 2 then
         local uses, inferred, fightStarted, category, cooldown = data.body:match("^(%d+),(%d+),(%d+),([01]),([01])$")
-        uses, inferred, fightStarted = tonumber(uses), tonumber(inferred), tonumber(fightStarted)
-        if not uses or uses > 1000 or not inferred or inferred > 1000 then return end
-        peer.potionEvidence = {count=uses, inferredCount=inferred, evidence="ASUI_SELF_REPORT", receivedAt=now, token=fightStarted, exactItemVerified=false, categoryMonitoring=category=="1", cooldownMonitoring=cooldown=="1"}
-        if self.pull and self.pull.groupToken and fightStarted and self.pull.groupToken==fightStarted then self.pull.potions[key] = SC.Audit.Copy(peer.potionEvidence) end
+        uses, inferred = Integer(uses,0,1000), Integer(inferred,0,1000)
+        fightStarted = Integer(fightStarted,0,4294967295)
+        if not uses or not inferred or not fightStarted then return end
+        if not self.pull or not self.pull.groupToken or self.pull.groupToken~=fightStarted then return end
+        peer.potionEvidence = {count=uses, inferredCount=inferred, evidence="ASUI_SELF_REPORT", receivedAt=now,
+            token=fightStarted, exactItemVerified=false, categoryMonitoring=category=="1", cooldownMonitoring=cooldown=="1"}
+        self.pull.potions[key] = SC.Audit.Copy(peer.potionEvidence)
         return
     end
-    if data.kind ~= 1 or type(data.total) ~= "number" or data.total < 1 or data.total > Details.MAX_PARTS
-        or type(data.index) ~= "number" or data.index < 1 or data.index > data.total or data.index % 1 ~= 0
-        or data.total % 1 ~= 0 or type(data.revision) ~= "number" or data.revision < 1 or data.revision > 65535 or data.revision % 1 ~= 0
-        or type(data.checksum) ~= "number" or data.checksum < 0 or data.checksum > 16777214 or data.checksum % 1 ~= 0 then return end
-    -- Ignore duplicate completed revisions while current. A sender may restart after a UI reload.
-    if peer.detailRevision == data.revision and peer.detailAt and now-peer.detailAt < 60000 then return end
-    self.detailReceivers = self.detailReceivers or {}
-    local transfer = self.detailReceivers[key]
-    if transfer and now - transfer.at > 180000 then transfer=nil; self.detailReceivers[key]=nil end
-    if not transfer or transfer.revision ~= data.revision then
-        if transfer and data.index ~= 1 then return end
-        transfer = {revision=data.revision, total=data.total, checksum=data.checksum, parts={}, at=now, bytes=0}
-        self.detailReceivers[key] = transfer
-        peer.auditValues = nil
-    end
-    if transfer.total ~= data.total or transfer.checksum ~= data.checksum then return end
-    if transfer.parts[data.index] then return end
-    transfer.parts[data.index] = data.body
-    transfer.bytes = transfer.bytes + #data.body
-    if transfer.bytes > Details.MAX_BYTES then self.detailReceivers[key]=nil; return end
-    for index=1,transfer.total do if not transfer.parts[index] then return end end
-    local text = table.concat(transfer.parts)
-    self.detailReceivers[key] = nil
-    if Details.Checksum(text) ~= transfer.checksum then return end
-    local values = Details.Decode(text)
-    if not values then return end
-    peer.auditValues, peer.detailAt, peer.detailsEvidence = values, now, "ASUI_SHARED_FACTS"
-    peer.detailRevision = data.revision
-    peer.detailChecksum = transfer.checksum
-    peer.detailAliveAt = now
-    peer.detailCapabilities={}
-    for key in tostring(values.capabilities or ""):gmatch("[^,]+") do
-        if SC.Catalog.effects[key] then peer.detailCapabilities[key]={sources={["ASUI detail"]=true},evidence="ASUI_SHARED_FACTS"} end
-    end
-    peer.asui = true
-    if not peer.buildVerified then peer.dataQuality = "ASUI DETAILS" end
-    self:ScheduleRefresh("build details", 100)
+    local revision = tonumber(data.revision)
+    if kind ~= 1 or not revision or revision<1 or revision>65535 or revision%1~=0 then return end
+    if peer.detailRevision == revision and peer.detailAt and now-peer.detailAt < 90000 then return end
+    local hashes = Details.Decode(data.body)
+    if not hashes then return end
+    local fingerprint=data.checksum%32767+1
+    if peer.buildDetailFingerprint and peer.buildDetailFingerprint~=fingerprint then return end
+    peer.auditHashes, peer.detailAt, peer.detailAliveAt = hashes, now, now
+    peer.detailRevision, peer.detailChecksum = revision, data.checksum
+    peer.detailBuildFingerprint=fingerprint
+    peer.buildDetailFingerprint=peer.buildDetailFingerprint or fingerprint
+    peer.detailsEvidence, peer.asui, peer.dataQuality = "ASUI_SHARED_SIGNATURES", true, "ASUI DETAILS"
+    self:ScheduleRefresh("build signatures", 100)
 end
 
 function SC:SharePotionEvidence()
     if not self.pull or not self.pull.groupToken or not self.share or not self.share.detailProtocol then return end
     if not self.sv.enabled or not self.sv.shareData or not self.sv.experimentalSharing or not self:IsGrouped() then return end
     local now = self.NowMs()
-    if now - (self.share.lastPotionAt or 0) < 5000 then return end
     local entry = self.pull.potions[self:GetPlayerKey("player")]
     if not entry then return end
-    local protocol = self.share.detailProtocol
-    if protocol.IsEnabled and not protocol:IsEnabled() then return end
-    local body = string.format("%d,%d,%d,%d,%d", entry.count or 0, entry.inferredCount or 0, self.pull.groupToken or 0, entry.categoryMonitoring and 1 or 0, entry.cooldownMonitoring and 1 or 0)
-    local ok, sent = pcall(protocol.Send, protocol, {version=Details.VERSION, kind=2, revision=1, index=1, total=1,
-        checksum=Details.Checksum(body), body=body}, {isRelevantInCombat=true, replaceQueuedMessages=false})
-    if ok and sent then self.share.lastPotionAt=now end
+    local body = string.format("%d,%d,%d,%d,%d", entry.count or 0, entry.inferredCount or 0,
+        self.pull.groupToken or 0, entry.categoryMonitoring and 1 or 0, entry.cooldownMonitoring and 1 or 0)
+    if body==self.share.lastPotionText and now-(self.share.lastPotionAt or 0)<30000 then return end
+    if self:SendDetailFrame(2, body) then
+        self.share.lastPotionAt, self.share.lastPotionText=now,body
+    end
 end
 
 function SC:InitializeDetailSharing(LGB, handler)
-    if not LGB.CreateStringField then self.share.detailError="LibGroupBroadcast string fields unavailable"; return end
+    if self.share.detailProtocol or self.share.detailRegistrationAttempted then return end
+    if not LGB or not LGB.CreateStringField then self.share.detailError="LibGroupBroadcast string fields unavailable"; return end
+    self.share.detailRegistrationAttempted=true
     local ok, protocol = pcall(function()
         local p = handler:DeclareProtocol(Details.ID, "AlphaSquadSupportDetailsTest")
         p:AddField(LGB.CreateNumericField("version", {minValue=0,maxValue=7}))
         p:AddField(LGB.CreateNumericField("kind", {minValue=0,maxValue=3}))
         p:AddField(LGB.CreateNumericField("revision", {minValue=0,maxValue=65535}))
-        p:AddField(LGB.CreateNumericField("index", {minValue=0,maxValue=63}))
-        p:AddField(LGB.CreateNumericField("total", {minValue=0,maxValue=63}))
         p:AddField(LGB.CreateNumericField("checksum", {minValue=0,maxValue=16777215}))
-        p:AddField(LGB.CreateStringField("body", {maxLength=Details.CHUNK_BYTES}))
+        p:AddField(LGB.CreateStringField("body", {maxLength=Details.MAX_BYTES}))
         p:OnData(function(tag, data) SC:OnDetailData(tag, data) end)
         assert(p:Finalize({isRelevantInCombat=false, replaceQueuedMessages=false}), "detail protocol validation failed")
         return p
