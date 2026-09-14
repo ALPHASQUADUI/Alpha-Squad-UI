@@ -1,4 +1,4 @@
--- Preparation settings and pooled, scrollable coverage lists.
+-- Preparation settings and a pooled, single-page coverage grid.
 local SC=AlphaSquadUI and AlphaSquadUI.Modules and AlphaSquadUI.Modules.SupportCoverage
 if not SC then return end
 local UI,Catalog=SC.UI,SC.Catalog
@@ -34,21 +34,16 @@ function SC:BuildIntegratedSettingsPage(page,ui)
     Toggle("HideMenus","Hide HUD in menus",200,function() return SC.sv.hideInMenus end,function(v) SC.sv.hideInMenus=v; SC:ApplyVisibility() end,
         "Hide the preparation HUD while inventory, Champion Points and other ESO menus are open.")
     local appearance=ui.CreateCard(page,"AlphaSquadSupportAppearance",344,218,322,354,"HUD APPEARANCE",C.gold)
-    ui.AddToggleRow(appearance,"AlphaSquadSupportLock","Lock position",40,function() return SC.sv.locked end,function(v) SC.sv.locked=v; SC:UpdateLockState() end)
     local function Step(id,label,y,key,step,min,max,suffix)
         ui.AddStepperRow(appearance,"AlphaSquadSupport"..id,label,y,function() return SC.sv[key] end,function(v)
             SC.sv[key]=v; SC:ApplyAppearance(); SC:RefreshHUD(); SC:ClampToScreen(true)
         end,step,min,max,suffix,C.gold)
     end
-    Step("Scale","Scale",80,"scale",5,60,180,"%")
-    Step("Width","Width",120,"width",10,300,680,"")
-    Step("RowHeight","Row height",160,"rowHeight",2,24,48,"")
-    Step("Opacity","Background",200,"opacity",5,30,100,"%")
+    Step("Scale","Scale",40,"scale",5,60,180,"%")
+    Step("Width","Width",80,"width",10,300,680,"")
+    Step("RowHeight","Row height",120,"rowHeight",2,24,48,"")
+    Step("Opacity","Background",160,"opacity",5,30,100,"%")
     ui.CreateButton(appearance,"AlphaSquadSupportResetPosition","RESET POSITION",14,256,140,32,function() SC:ResetPosition() end)
-    ui.CreateButton(appearance,"AlphaSquadSupportMove","UNLOCK & MOVE",164,256,144,32,function()
-        SC:SetEnabled(true); SC:SetVisible(true); SC.sv.locked=false; SC:UpdateLockState()
-        AlphaSquadUI.Settings.CloseMain()
-    end)
     local saved=ui.CreateLabel(appearance,"AlphaSquadSupportSaved","ZoFontGameSmall","Changes are saved automatically.",C.muted)
     saved:SetAnchor(TOPLEFT,appearance,TOPLEFT,14,304); saved:SetDimensions(292,28)
     ui.RegisterRefresher(function()
@@ -69,44 +64,94 @@ function SC:OpenMatrix()
     UI.ShowWindow("supportCoverage",self.matrixWindow)
     self:RefreshMatrix(); return true
 end
+local categoryIndex={buffs=1,debuffs=2,sets=3,mythics=4}
+local categoryNames={"BUFFS","DEBUFFS","GROUP SETS","GROUP MYTHICS"}
+-- A single logical page: dense categories receive additional lanes, not a scrollbar.
+function SC:GetCoverageGridLayout(counts)
+    local width=math.max(1248,math.min(1600,GuiRoot:GetWidth()-24))
+    local height=math.max(720,math.min(840,GuiRoot:GetHeight()-24))
+    local layout={width=width,height=height,lanes={},rows={},starts={}}
+    local lanes,maxRows=0,1
+    for index=1,4 do
+        layout.lanes[index]=math.max(1,math.ceil((counts[index] or 0)/30))
+        layout.rows[index]=math.max(1,math.ceil((counts[index] or 0)/layout.lanes[index]))
+        maxRows=math.max(maxRows,layout.rows[index]);lanes=lanes+layout.lanes[index]
+    end
+    layout.height=math.max(height,maxRows*18+198)
+    layout.pitch=math.max(18,math.min(24,math.floor((layout.height-198)/maxRows)))
+    layout.laneWidth=(width-36-18*3-5*(lanes-4))/lanes
+    local x=0
+    for index=1,4 do
+        layout.starts[index]=x
+        x=x+layout.lanes[index]*layout.laneWidth+(layout.lanes[index]-1)*5+18
+    end
+    return layout
+end
+local function ContributorTooltip(data)
+    if not data then return "No group information is available." end
+    local owners=data.owners or {}
+    local lines={data.effect and data.effect.label or Catalog.effects[data.key].label}
+    local status=UI.Status(data)
+    lines[#lines+1]=status.." • "..#owners.." known contributor"..(#owners==1 and "" or "s")
+    -- Every contributor remains visible on hover even when twelve players duplicate a source.
+    for _,player in ipairs(owners) do
+        local capability=player.capabilities and player.capabilities[data.key]
+        local sources={}
+        for name,active in pairs(capability and capability.sources or {}) do
+            if active and type(name)=="string" and name~="Shared build" and name~="ASUI peer" then sources[#sources+1]=name end
+        end
+        table.sort(sources)
+        local bars=capability and (capability.mainBar and capability.backBar and " • both bars" or capability.mainBar and " • front bar" or capability.backBar and " • back bar" or "") or ""
+        lines[#lines+1]=tostring(player.displayName or "Unknown player")..bars.."\n"..(#sources>0 and table.concat(sources,", ") or "Detailed sources unavailable • inspect build")
+    end
+    if #owners==0 then lines[#lines+1]="No verified source in the current group. Unknown builds may contain a source." end
+    if #owners>0 then lines[#lines+1]="Click to inspect "..tostring(owners[1].displayName or "this player")..". Select any group member in Builds." end
+    return table.concat(lines,"\n\n")
+end
+function SC:GetCoverageContributorTooltip(data)return ContributorTooltip(data)end
 function SC:CreateMatrixWindow()
     local win=UI.Window("AlphaSquadSupportCoverageMatrix","Ąlpha Şquad UI  •  Coverage",function() SC:CloseMatrix() end)
     self.matrixWindow=win;UI.RegisterWindow("supportCoverage",win,function() SC:CloseMatrix() end)
-    win.trial=UI.Button(win,"AlphaSquadSupportTrial","TRIAL",90,30,function() SC:SetActiveProfile("trial") end)
-    win.trial:SetAnchor(TOPLEFT,win,TOPLEFT,18,94)
-    win.dungeon=UI.Button(win,"AlphaSquadSupportDungeon","DUNGEON",104,30,function() SC:SetActiveProfile("dungeon") end)
-    win.dungeon:SetAnchor(TOPLEFT,win,TOPLEFT,116,94)
+    win.trial=UI.Button(win,"AlphaSquadSupportTrial","TRIAL",90,28,function() SC:SetActiveProfile("trial") end)
+    win.trial:SetAnchor(TOPLEFT,win,TOPLEFT,18,82)
+    win.dungeon=UI.Button(win,"AlphaSquadSupportDungeon","DUNGEON",104,28,function() SC:SetActiveProfile("dungeon") end)
+    win.dungeon:SetAnchor(TOPLEFT,win,TOPLEFT,116,82)
     win.filterButtons={}
     for index,filter in ipairs({"ALL","MISSING","DUPLICATES"}) do
         local key=filter
-        local b=UI.Button(win,"AlphaSquadSupportFilter"..key,key,116,30,function() SC.matrixFilter=key;SC:RefreshMatrix() end)
-        b:SetAnchor(TOPLEFT,win,TOPLEFT,246+(index-1)*124,94);win.filterButtons[key]=b
+        local b=UI.Button(win,"AlphaSquadSupportFilter"..key,key,116,28,function() SC.matrixFilter=key;SC:RefreshMatrix() end)
+        b:SetAnchor(TOPLEFT,win,TOPLEFT,246+(index-1)*124,82);win.filterButtons[key]=b
     end
-    win.builds=UI.Button(win,"AlphaSquadMatrixBuilds","BUILDS",106,30,function() SC:OpenInspector("BUILD") end)
-    win.builds:SetAnchor(TOPRIGHT,win,TOPRIGHT,-18,94)
+    win.builds=UI.Button(win,"AlphaSquadMatrixBuilds","BUILDS",106,28,function() SC:OpenInspector("BUILD") end)
+    win.builds:SetAnchor(TOPRIGHT,win,TOPRIGHT,-18,82)
     win.columns={}
-    for index,label in ipairs({"BUFFS","DEBUFFS","GROUP SETS","GROUP MYTHICS"}) do
+    for index,label in ipairs(categoryNames) do
         win.columns[index]=UI.Label(win,"AlphaSquadCoverageColumn"..index,label,"ZoFontGameBold",C.orange)
     end
-    win.list=UI.Scroll(win,"AlphaSquadSupportCoverageList")
-    win.list:SetAnchor(TOPLEFT,win,TOPLEFT,18,166);win.list:SetAnchor(BOTTOMRIGHT,win,BOTTOMRIGHT,-14,-58)
-    win.footer:SetText("Hover an effect for sources and conditions. Hover a player for their contribution; click to inspect. Coverage checks build availability, not active effects.")
+    win.list=WINDOW_MANAGER:CreateControl("AlphaSquadSupportCoverageGrid",win,CT_CONTROL)
+    win.list:SetAnchor(TOPLEFT,win,TOPLEFT,18,144);win.list.rows={}
+    win.footer:SetText("Green: covered • Red: missing • Gold: unknown / duplicate • Grey: optional. Hover names for sources; hover counts for all contributors. Click a count to open Builds.")
 end
-local categoryIndex={buffs=1,debuffs=2,sets=3,mythics=4}
 function SC:RefreshMatrix()
     local win=self.matrixWindow;if not win or win:IsHidden() then return end
-    win:SetDimensions(1350,720);win:SetScale(math.max(0.1,math.min(1,(GuiRoot:GetWidth()-24)/1350,(GuiRoot:GetHeight()-24)/720)))
-    local contentWidth=1284;local columnWidth=(contentWidth-30)/4
+    local keys=Catalog:GetAllEffectKeys();local counts={0,0,0,0}
+    for _,key in ipairs(keys) do local i=categoryIndex[Catalog:GetDisplayCategory(key)] or 1;counts[i]=counts[i]+1 end
+    local layout=self:GetCoverageGridLayout(counts);win.gridLayout=layout
+    win:SetDimensions(layout.width,layout.height);win:SetScale(math.max(0.1,math.min(1,(GuiRoot:GetWidth()-24)/layout.width,(GuiRoot:GetHeight()-24)/layout.height)))
+    win.list:SetDimensions(layout.width-36,layout.height-198)
     local coverage=self.coverage or {}
     win.subtitle:SetText(string.format("%s  •  %d / %d covered  •  %d missing  •  %d players with limited data",coverage.profileLabel or "Group preparation",coverage.coveredCount or 0,coverage.requiredCount or 0,coverage.missingCount or 0,coverage.limitedPlayers or 0))
     UI.Color(win.trial.label,self.sv.activeProfile=="trial" and C.orange or C.muted)
     UI.Color(win.dungeon.label,self.sv.activeProfile=="dungeon" and C.orange or C.muted)
     for key,b in pairs(win.filterButtons) do UI.Color(b.label,(self.matrixFilter or "ALL")==key and C.orange or C.muted) end
-    for index,label in ipairs(win.columns) do label:ClearAnchors();label:SetAnchor(TOPLEFT,win,TOPLEFT,18+(index-1)*(columnWidth+10),136);label:SetDimensions(columnWidth,24) end
+    for index,label in ipairs(win.columns) do
+        label:ClearAnchors();label:SetAnchor(TOPLEFT,win,TOPLEFT,18+layout.starts[index],116)
+        label:SetDimensions(layout.lanes[index]*layout.laneWidth+(layout.lanes[index]-1)*5,24)
+    end
     local byKey={};for _,row in ipairs(coverage.entries or {}) do byKey[row.key]=row end
     local selected={};for _,key in ipairs(Catalog:GetRequirements(self.sv.activeProfile,self.sv)) do selected[key]=true end
-    local offsets={0,0,0,0};local count=0
-    for _,key in ipairs(Catalog:GetAllEffectKeys()) do
+    local positions={0,0,0,0};local count=0
+    for _,key in ipairs(keys) do
         local effect=Catalog.effects[key];local tracked=selected[key]==true;local data=byKey[key]
         if not data then
             local owners=self:GetCapabilityOwners(key)
@@ -118,60 +163,55 @@ function SC:RefreshMatrix()
             count=count+1;local row=win.list.rows[count]
             if not row then
                 local name="AlphaSquadSupportCoverageEntry"..count
-                row=WINDOW_MANAGER:CreateControl(name,win.list.content,CT_CONTROL)
+                row=WINDOW_MANAGER:CreateControl(name,win.list,CT_CONTROL)
                 row.bg=UI.Solid(row,name.."BG",C.panel)
+                row.marker=WINDOW_MANAGER:CreateControl(name.."Marker",row,CT_TEXTURE)
+                row.marker:SetAnchor(TOPLEFT,row,TOPLEFT,0,0)
                 row.icon=WINDOW_MANAGER:CreateControl(name.."Icon",row,CT_TEXTURE)
-                row.icon:SetAnchor(TOPLEFT,row,TOPLEFT,9,10);row.icon:SetDimensions(30,30)
-                row.name=UI.Label(row,name.."Name","","ZoFontGameBold")
-                row.name:SetAnchor(TOPLEFT,row,TOPLEFT,47,6);row.name:SetDimensions(columnWidth-59,43)
+                row.icon:SetAnchor(TOPLEFT,row,TOPLEFT,5,1);row.icon:SetDimensions(18,18)
+                row.name=UI.Label(row,name.."Name","","ZoFontGameSmall")
+                row.name:SetAnchor(TOPLEFT,row,TOPLEFT,27,0)
+                if row.name.SetWrapMode then row.name:SetWrapMode(TEXT_WRAP_MODE_ELLIPSIS) end
                 UI.Hover(row.name,function() return row.data and Catalog:GetEffectTooltip(row.data.key) end)
-                row.toggle=UI.Button(row,name.."Toggle","",46,24,function()
+                row.toggle=UI.Button(row,name.."Toggle","",31,20,function()
                     if row.data then SC:SetEffectTracking(row.data.key,not SC:IsEffectTracked(row.data.key));SC:RefreshMatrix() end
                 end)
-                row.toggle:SetAnchor(TOPRIGHT,row,TOPRIGHT,-9,51)
-                row.status=UI.Label(row,name.."Status","","ZoFontGameSmall")
-                row.status:SetAnchor(TOPLEFT,row,TOPLEFT,10,51);row.status:SetDimensions(columnWidth-72,24)
-                UI.Hover(row.status,function() return row.data and Catalog:GetEffectTooltip(row.data.key) end)
+                row.toggle.label:SetFont("ZoFontGameSmall")
+                row.toggle:SetAnchor(TOPRIGHT,row,TOPRIGHT,0,0)
+                UI.Hover(row.toggle,function()return row.data and (SC:IsEffectTracked(row.data.key) and "Tracking is on. Click to make this effect optional for " or "Tracking is off. Click to require this effect for ")..SC.sv.activeProfile.."." end)
+                row.contributors=UI.Button(row,name.."Contributors","",26,20,function()
+                    local player=row.data and (row.data.owners or {})[1]
+                    if player then SC.inspectorPlayerKey=player.key or player.displayName;SC:OpenInspector("BUILD") end
+                end)
+                row.contributors.label:SetFont("ZoFontGameSmall")
+                row.contributors:SetAnchor(TOPRIGHT,row.toggle,TOPLEFT,-1,0)
+                UI.Hover(row.contributors,function()return ContributorTooltip(row.data) end)
                 UI.Hover(row.icon,function() return row.data and Catalog:GetEffectTooltip(row.data.key) end)
-                row.owners={};win.list.rows[count]=row
+                win.list.rows[count]=row
             end
             row.data=data;row:SetHidden(false)
             local visual=Catalog:GetEffectVisual(key)
             row.icon:SetTexture(visual and visual.icon or "");row.icon:SetHidden(not visual or not visual.icon or visual.icon=="")
-            -- Sets open the native reference tooltip; source/trigger help stays on the title.
-            if visual and visual.reference then
-                row.icon:SetHandler("OnMouseEnter",function() UI.ItemTooltip(row.icon,visual,true) end)
+            if visual and visual.reference then row.icon:SetHandler("OnMouseEnter",function() UI.ItemTooltip(row.icon,visual,true) end)
             else row.icon:SetHandler("OnMouseEnter",function() UI.Tooltip(row.icon,Catalog:GetEffectTooltip(row.data.key)) end) end
             row.name:SetText(UI.Text(effect.label));UI.Color(row.name,tracked and C.white or C.muted)
             row.toggle.label:SetText(tracked and "ON" or "OFF");UI.Color(row.toggle.label,tracked and C.green or C.muted)
             local status,color=UI.Status(data)
             if not tracked then status="OPTIONAL";color=C.muted elseif duplicate then status="DUPLICATE";color=C.gold end
-            row.status:SetText(status);UI.Color(row.status,color)
-            for index,player in ipairs(data.owners) do
-                local control=row.owners[index]
-                if not control then
-                    control=UI.Button(row,"AlphaSquadSupportCoverageEntry"..count.."Owner"..index,"",142,23,function(button)
-                        SC.inspectorPlayerKey=button.player.key or button.player.displayName;SC:OpenInspector("BUILD")
-                    end)
-                    control.label:SetFont("ZoFontGameSmall")
-                    if control.label.SetWrapMode then control.label:SetWrapMode(TEXT_WRAP_MODE_ELLIPSIS) end
-                    UI.Hover(control,function() return control.player and row.data and UI.PlayerSources(control.player,row.data.key) end)
-                    row.owners[index]=control
-                end
-                control.player=player;control:SetHidden(false);control:ClearAnchors()
-                local ownerWidth=(columnWidth-26)/2
-                control:SetWidth(ownerWidth);control:SetAnchor(TOPLEFT,row,TOPLEFT,9+((index-1)%2)*(ownerWidth+8),81+math.floor((index-1)/2)*25)
-                control.label:SetText(AlphaSquadUI.Theme.PlayerName and AlphaSquadUI.Theme.PlayerName(player.displayName) or UI.Text(player.displayName));UI.Color(control.label,duplicate and C.gold or C.green)
-            end
-            for index=#data.owners+1,#row.owners do row.owners[index]:SetHidden(true);row.owners[index].player=nil end
-            local column=categoryIndex[Catalog:GetDisplayCategory(key)] or 1
-            local height=81+math.ceil(#data.owners/2)*25
-            row:ClearAnchors();row:SetAnchor(TOPLEFT,win.list.content,TOPLEFT,(column-1)*(columnWidth+10),offsets[column]);row:SetDimensions(columnWidth,height)
-            offsets[column]=offsets[column]+height+8
+            row.status=status;UI.Color(row.marker,color)
+            row.contributors.label:SetText(#(data.owners or {})>0 and (duplicate and "×" or "")..#data.owners or "—")
+            UI.Color(row.contributors.label,color)
+            local category=categoryIndex[Catalog:GetDisplayCategory(key)] or 1
+            local index=positions[category];positions[category]=index+1
+            local lane=math.floor(index/layout.rows[category]);local y=(index%layout.rows[category])*layout.pitch
+            row:ClearAnchors();row:SetAnchor(TOPLEFT,win.list,TOPLEFT,layout.starts[category]+lane*(layout.laneWidth+5),y)
+            row:SetDimensions(layout.laneWidth,layout.pitch-1)
+            row.marker:SetDimensions(2,layout.pitch-1)
+            row.name:SetDimensions(layout.laneWidth-87,layout.pitch-1)
+            row.toggle:SetHeight(layout.pitch-1);row.contributors:SetHeight(layout.pitch-1)
         end
     end
     for index=count+1,#win.list.rows do win.list.rows[index]:SetHidden(true);win.list.rows[index].data=nil end
-    UI.FinishScroll(win.list,math.max(offsets[1],offsets[2],offsets[3],offsets[4]),contentWidth)
 end
 if AlphaSquadUI.Settings and AlphaSquadUI.Settings.RegisterPage then
     AlphaSquadUI.Settings.RegisterPage("supportcoverage",function(page,ui) SC:BuildIntegratedSettingsPage(page,ui) end)

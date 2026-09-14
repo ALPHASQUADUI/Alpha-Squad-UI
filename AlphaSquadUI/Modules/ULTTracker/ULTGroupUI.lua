@@ -310,17 +310,18 @@ function Group:ApplyVisibility()
     end
     local configVisible = self.configWindow and not self.configWindow:IsHidden() or false
 
+    local moving = AlphaSquadUI.Layout and AlphaSquadUI.Layout.IsMoving(self)
     local hidden =
         ULT.loading == true
         or not ULT.sv.enabled
         or not self.sv.enabled
-        or not self.sv.visible
+        or (not self.sv.visible and not moving)
         or sharedSettingsVisible
         or configVisible
-        or (self.sv.hideInMenus and ULT.uiObscured)
+        or (self.sv.hideInMenus and ULT.uiObscured and not moving)
 
     self.window:SetHidden(hidden)
-    if self.SetSafetyUpdateActive then self:SetSafetyUpdateActive(not hidden) end
+    if self.SetSafetyUpdateActive then self:SetSafetyUpdateActive(not hidden and not moving) end
 
     if hidden then
         self:SetReadyPulseActive(false)
@@ -332,7 +333,7 @@ function Group:ApplyVisibility()
                 break
             end
         end
-        self:SetReadyPulseActive(anyReady)
+        self:SetReadyPulseActive(anyReady and not moving)
     end
 end
 
@@ -410,7 +411,7 @@ function Group:RefreshRow(row, entry)
 end
 
 function Group:SetReadyPulseActive(enabled)
-    enabled = enabled == true
+    enabled = enabled == true and not (AlphaSquadUI.Layout and AlphaSquadUI.Layout.IsMoving(self))
     if self.readyPulseActive == enabled then return end
     self.readyPulseActive = enabled
 
@@ -517,6 +518,7 @@ function Group:CreateHUD()
     win:SetDrawTier(DT_HIGH)
     win:SetDrawLayer(DL_OVERLAY)
     win:SetDrawLevel(88)
+    if AlphaSquadUI.Settings and AlphaSquadUI.Settings.ApplyWindowLayer then AlphaSquadUI.Settings.ApplyWindowLayer(win, true) end
 
     win.bg = Solid(win, "AlphaSquadULTGroupBG", COLORS.bg)
 

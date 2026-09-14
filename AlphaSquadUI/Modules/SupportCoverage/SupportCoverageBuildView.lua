@@ -88,10 +88,10 @@ local function Bind(tile,kind,value,tooltip,empty,color,badge)
     tile.badge:SetText(badge or "");UI.Color(tile.frame,color or (value and C.gold or C.muted))
 end
 local EQUIPMENT={
-    {"HEAD","Head",101,32},
-    {"SHOULDERS","Shoulders",18,101},{"CHEST","Chest",184,101},
-    {"HAND","Hands",18,165},{"WAIST","Waist",184,165},
-    {"LEGS","Legs",18,229},{"FEET","Feet",184,229},
+    {"HEAD","Head",111,30},
+    {"SHOULDERS","Shoulders",12,96},{"CHEST","Chest",210,116},
+    {"HAND","Hands",12,161},{"WAIST","Waist",210,181},
+    {"LEGS","Legs",12,215},{"FEET","Feet",210,228},
     {"NECK","Necklace",34,326},{"RING1","Ring 1",101,326},{"RING2","Ring 2",168,326},
     {"MAIN_HAND","Main hand",18,421},{"OFF_HAND","Off hand",76,421},
     {"BACKUP_MAIN","Main hand",145,421},{"BACKUP_OFF","Off hand",203,421},
@@ -143,6 +143,40 @@ function View.ChampionMap(stars)
     end
     return map,true
 end
+-- Native bonus requirements, cached per set; never assume that an unknown set is a five-piece set.
+local requirementCache={}
+local requirementCount=0
+function View.SetRequirement(set,item)
+    local id=Number(set.id or set.setId)
+    local key=id and id>0 and id or item and item.link
+    if key and requirementCache[key] then return requirementCache[key] end
+    local bonusCount,bonusGetter,bonusContext
+    if item and type(item.link)=="string" and item.link~="" and type(GetItemLinkSetInfo)=="function" and type(GetItemLinkSetBonusInfo)=="function" then
+        local ok,hasSet,_,count=pcall(GetItemLinkSetInfo,item.link,false)
+        if ok and hasSet==true then
+            bonusCount=count;bonusContext=item.link
+            bonusGetter=function(link,index)return GetItemLinkSetBonusInfo(link,false,index)end
+        end
+    elseif id and id>0 and type(GetItemSetInfo)=="function" and type(GetItemSetBonusInfo)=="function" then
+        local ok,hasSet,_,count=pcall(GetItemSetInfo,id)
+        if ok and hasSet==true then bonusCount=count;bonusContext=id;bonusGetter=GetItemSetBonusInfo end
+    end
+    local maximum=0
+    if Number(bonusCount) and bonusCount%1==0 and bonusCount>0 and bonusCount<=16 then
+        for index=1,bonusCount do
+            local required=Try(bonusGetter,bonusContext,index)
+            if not Number(required) or required%1~=0 or required<1 or required>12 then return nil end
+            maximum=math.max(maximum,required)
+        end
+    end
+    if maximum>0 then
+        if key then
+            if requirementCount>=256 then requirementCache={};requirementCount=0 end
+            requirementCache[key]=maximum;requirementCount=requirementCount+1
+        end
+        return maximum
+    end
+end
 function View.SetRows(equipment,external)
     local rows={}
     for _,set in ipairs(equipment and equipment.setList or external and external.setList or {}) do
@@ -151,20 +185,31 @@ function View.SetRows(equipment,external)
         local front=mainKnown and Number(set.mainCount) or nil
         local back=backKnown and Number(set.backCount) or nil
         local physical=not external and set.physicalCountKnown==true and Number(set.physicalCount) or nil
+        local effective=(front or back) and math.max(front or 0,back or 0) or nil
         local name=Text(set.name,"Set name unavailable")
-        local count=physical and (tostring(physical).."× ") or ""
-        local tooltip=name.."\n\n"..(physical and (physical.." equipped item"..(physical==1 and "" or "s").." across body, jewelry and both weapon bars.\n") or "Exact equipment slots and item count were not shared.\n")
-            .."Front bar: "..(front and tostring(front) or "unknown").." set pieces\nBack bar: "..(back and tostring(back) or "unknown").." set pieces\n\nTwo-handed weapons are one item and contribute two set pieces. Counts are evaluated separately on each bar; a proc is not guaranteed active."
+        local count=effective and ((front and back and "" or "≥")..tostring(effective).."× ") or ""
+        local tooltip=name.."\n\nFront bar: "..(front and tostring(front) or "unknown").." set pieces\nBack bar: "..(back and tostring(back) or "unknown").." set pieces\n\nThe headline shows the highest known bar total. Body and jewelry count on both bars; only the weapons on that bar count. A two-handed weapon contributes two set pieces. A proc is not guaranteed active."
+        if physical then tooltip=tooltip.."\n\n"..physical.." physical item"..(physical==1 and "" or "s").." equipped across both bars." end
         if external then tooltip=tooltip.."\n\nLibSetDetection • "..SourceAge(external.updatedAt)..". This report is retained for the current uninterrupted group session. The player may withhold sets." end
         local item
         for _,candidate in ipairs(equipment and equipment.items or {}) do
             if ((set.id or set.setId) and (set.id or set.setId)>0 and (candidate.setId==set.id or candidate.setId==set.setId)) or candidate.setName==set.name then item=candidate;break end
         end
         if not item and SC.Catalog and SC.Catalog.GetSetPreview then item=SC.Catalog:GetSetPreview(set.id or set.setId) end
-        rows[#rows+1]={name=count..name,front=front,back=back,tooltip=tooltip,physical=physical,item=item}
+        local required=View.SetRequirement(set,item)
+        local frontExtra=front and required and math.max(0,front-required) or 0
+        local backExtra=back and required and math.max(0,back-required) or 0
+        local extra=math.max(frontExtra,backExtra)
+        local warning
+        if extra>0 then
+            local bar=frontExtra>0 and backExtra>0 and "both bars" or frontExtra>0 and "front bar" or "back bar"
+            warning=extra.." extra piece"..(extra==1 and "" or "s").." • "..bar
+            tooltip=tooltip.."\n\n"..warning..". This set's last native bonus requires "..required.." pieces; additional pieces on that bar add no further set bonus. Check whether the extra piece is intentional."
+        end
+        rows[#rows+1]={name=count..name,front=front,back=back,tooltip=tooltip,physical=physical,effective=effective,item=item,warning=warning,required=required}
     end
     table.sort(rows,function(a,b)
-        local ac,bc=math.max(a.front or 0,a.back or 0),math.max(b.front or 0,b.back or 0)
+        local ac,bc=a.effective or 0,b.effective or 0
         if ac~=bc then return ac>bc end
         return a.name<b.name
     end)
@@ -176,7 +221,7 @@ function View.Create(parent)
     canvas.equipment=Panel(canvas,"AlphaSquadBuildEquipment",0,0,266,HEIGHT,"EQUIPPED")
     local gear=canvas.equipment
     gear.silhouette=WINDOW_MANAGER:CreateControl("AlphaSquadBuildSilhouette",gear,CT_TEXTURE)
-    At(gear.silhouette,gear,99,99,72,195);gear.silhouette:SetColor(0.65,0.61,0.47,0.68)
+    At(gear.silhouette,gear,81,56,104,264);gear.silhouette:SetColor(0.76,0.72,0.57,0.88)
     gear.slots={}
     for index,def in ipairs(EQUIPMENT) do
         local caption=index>10 and (index%2==1 and "Main" or "Off") or def[2]
@@ -195,6 +240,9 @@ function View.Create(parent)
         local row=WINDOW_MANAGER:CreateControl("AlphaSquadBuildSetRow"..i,canvas.sets,CT_CONTROL)
         At(row,canvas.sets,12,27+(i-1)*22,526,22)
         row.name=Label(row,"AlphaSquadBuildSetName"..i,"",0,0,374,22)
+        row.warning=Label(row,"AlphaSquadBuildSetWarning"..i,"",24,19,350,18,"ZoFontGameSmall",C.gold)
+        UI.Hover(row.name,function()return row.tooltip end)
+        UI.Hover(row.warning,function()return row.tooltip end)
         row.front=Label(row,"AlphaSquadBuildSetFront"..i,"",386,0,60,22,"ZoFontGameBold",C.gold)
         row.back=Label(row,"AlphaSquadBuildSetBack"..i,"",466,0,60,22,"ZoFontGameBold",C.gold)
         row.icon=WINDOW_MANAGER:CreateControl("AlphaSquadBuildSetIcon"..i,row,CT_TEXTURE)
@@ -297,18 +345,24 @@ function View.Bind(canvas,player,details,status)
     local external=not details and player and player.connected~=false and player.externalSets
     if not (external and external.sessionValid and external.fresh) then external=nil end
     local rows=View.SetRows(equipment,external)
-    canvas.sets.title:SetText(external and "SETS • LAST REPORTED" or "SETS • EQUIPPED ITEMS")
+    canvas.sets.title:SetText(external and "SETS • LAST REPORTED" or "SETS • EQUIPPED")
     local columns=#rows>6 and 2 or 1
     local rowCount=math.max(3,math.ceil(#rows/columns))
-    local setHeight=32+rowCount*22
+    local columnHeights={0,0}
+    for i,data in ipairs(rows) do
+        local column=math.floor((i-1)/rowCount)+1
+        data.y=columnHeights[column];data.height=data.warning and 42 or 22
+        columnHeights[column]=columnHeights[column]+data.height
+    end
+    local setHeight=32+math.max(66,columnHeights[1],columnHeights[2])
     canvas.sets:SetHeight(setHeight)
     canvas.sets.front:SetHidden(columns==2);canvas.sets.back:SetHidden(columns==2)
     for i,row in ipairs(canvas.sets.rows) do
         local data=rows[i];row:SetHidden(not data);row.item=data and data.item;row.tooltip=data and data.tooltip
         if data then
-            local col=math.floor((i-1)/rowCount);local y=(i-1)%rowCount
+            local col=math.floor((i-1)/rowCount)
             local width=columns==2 and 258 or 526
-            At(row,canvas.sets,12+col*270,29+y*22,width,22)
+            At(row,canvas.sets,12+col*270,29+data.y,width,data.height)
             At(row.icon,row,0,1,20,20)
             local icon=data.item and (data.item.icon or Try(GetItemLinkIcon,data.item.link))
             row.icon:SetTexture(icon or "");row.icon:SetHidden(not icon or icon=="")
@@ -316,6 +370,10 @@ function View.Bind(canvas,player,details,status)
             At(row.front,row,width-(columns==2 and 92 or 140),0,columns==2 and 46 or 60,22)
             At(row.back,row,width-(columns==2 and 46 or 60),0,columns==2 and 46 or 60,22)
             row.name:SetText(UI.Text(data.name))
+            row.warning:SetHidden(not data.warning);row.warning:SetText(data.warning or "")
+            At(row.warning,row,24,21,width-26,18)
+            UI.Color(row.front,data.required and data.front and data.front>data.required and C.orange or C.gold)
+            UI.Color(row.back,data.required and data.back and data.back>data.required and C.orange or C.gold)
             row.front:SetText((columns==2 and "F " or "")..(data.front and tostring(data.front).."×" or "?"))
             row.back:SetText((columns==2 and "B " or "")..(data.back and tostring(data.back).."×" or "?"))
         end

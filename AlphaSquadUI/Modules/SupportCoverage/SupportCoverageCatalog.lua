@@ -299,7 +299,8 @@ function Catalog:GetRequirements(profileKey, saved)
     local overrides=saved and saved.profileOverrides and saved.profileOverrides[profileKey]
     for index=#result,1,-1 do
         local key=result[index]
-        local explicit=type(overrides)=="table" and overrides[key]
+        local explicit
+        if type(overrides)=="table" then explicit=overrides[key] end
         local rule=saved and type(saved.effectRules)=="table" and saved.effectRules[key]
         if explicit==false or (explicit~=true and type(rule)=="table" and rule.enabled==false) then
             table.remove(result,index)
@@ -826,12 +827,16 @@ Catalog.profiles.dungeon={label="DUNGEON",groupSize=4,requirements={
     "minor_brittle","crusher","resource_synergy",
 }}
 
+-- Champion node IDs, not the abilities emitted when the star procs.
+-- Verified against the author's native client dump and DynamicCP's node mapping:
+-- https://github.com/uberswe/eso-data/blob/3b37ba3960d7c2c6fc591a94a7ea082e4d565f7d/ChampionDumper.lua
+-- https://github.com/Kyzderp/DynamicCP/blob/c86bfd2d4d749f3c7c37db510ead3cdb62534205/data/convertDataIndices.lua
 Catalog.championSources={
-    {name="Enlivening Overflow",championIds={},provides={"enlivening_overflow"},conditions="Slot the Champion star and overheal allies; values scale with Max Magicka."},
-    {name="Hope Infusion",championIds={},provides={"minor_heroism"},conditions="Slot the Champion star and heal an ally below 50% Health."},
-    {name="From the Brink",championIds={},provides={"from_the_brink","group_shield"},conditions="Slot the Champion star and heal an ally below 25% Health."},
-    {name="Cleansing Revival",championIds={},provides={"cleansing_revival","group_cleanse"},conditions="Slot the Champion star and heal an ally below 25% Health; only eligible effects can be removed."},
-    {name="Salve of Renewal",championIds={},provides={"salve_of_renewal"},conditions="Slot the Champion star and remove a negative effect from an ally."},
+    {name="Enlivening Overflow",championIds={263},provides={"enlivening_overflow"},conditions="Invest enough points to activate the slotted Champion star and overheal allies; values scale with Max Magicka."},
+    {name="Hope Infusion",championIds={261},provides={"minor_heroism"},conditions="Invest enough points to activate the slotted Champion star and heal an ally below 50% Health."},
+    {name="From the Brink",championIds={262},provides={"from_the_brink","group_shield"},conditions="Invest enough points to activate the slotted Champion star and heal an ally below 25% Health."},
+    {name="Cleansing Revival",championIds={29},provides={"cleansing_revival","group_cleanse"},conditions="Invest enough points to activate the slotted Champion star and heal an ally below 25% Health; only eligible effects can be removed."},
+    {name="Salve of Renewal",championIds={260},provides={"salve_of_renewal"},conditions="Invest enough points to activate the slotted Champion star and remove a negative effect from an ally."},
 }
 Catalog.masterySources[#Catalog.masterySources+1]={name="Veil's Forfeit",provides={"veils_forfeit"},
     conditions="Select the mastery and bring a source of Major Vulnerability; only this Necromancer's applications are extended."}

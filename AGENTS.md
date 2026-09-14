@@ -13,7 +13,8 @@ Read the existing implementation and the maintainer's current request before edi
 - Native group membership is not permission or an API for arbitrary remote inventory inspection. Missing or stale data remains Unknown.
 - Item links and effective morph IDs are authoritative. Never substitute another item's trait/enchant or the viewer's build for a peer.
 - Class identity alone does not prove learned passives, eligible masteries or slotted abilities.
-- Count front/back set pieces separately. Two-handed weapons contribute two pieces but remain one physical item.
+- Count front/back set pieces separately. Two-handed weapons contribute two pieces but remain one physical item. Set headlines use the highest known bar count; only native bonus thresholds may produce an excess warning.
+- Keep HUD placement centralized. Preserve disabled modules and normal visibility choices; save/lock on completion and stop placement during combat/loading.
 - Champion visuals use native discipline stars; descriptions use the inspected player's allocated points.
 - Keep native tooltips in front of addon windows and restore their original draw state afterward.
 - Group readiness is a precombat availability check. Do not reintroduce uptime, pull history or a combat-log sampler.
@@ -26,9 +27,9 @@ Use Core event scopes to suspend module subscriptions. Preserve activation event
 
 Preserve the existing SavedVariables namespaces. Cross-sync defaults to existing account/server settings. Character profiles must be deep copies, retain the current layout on a switch and keep Group ULT's settings reference current. Sharing preferences remain account-wide. Remote snapshots are transient, bounded data, never persistent history.
 
-Use optional libraries defensively. Verify both handler ownership and protocol identity before changing matching library settings. Never modify unrelated protocols, force-enable installed addon files or unregister another library's shared callbacks. A missing/incompatible library must degrade safely without a retry storm.
+Use optional libraries defensively. Verify the native option section and protocol identity before changing matching library settings; reject ambiguous duplicate sections or controls. Never modify unrelated protocols, force-enable installed addon files or unregister another library's shared callbacks. A missing/incompatible library must degrade safely without a retry storm.
 
-Active build transport IDs **507/510** are provisional. Keep build exchange opt-in and do not publish stable public sharing with these IDs until formally reserved and coexistence-validated. Legacy **508/509** are retired.
+Active build transport IDs **507/510** are provisional. Initialize supported sharing ON once for a fresh installation; preserve existing OFF choices, show actual native library state and mark missing/incompatible controls unavailable. Do not publish stable public sharing with these IDs until formally reserved and coexistence-validated. Legacy **508/509** are retired.
 
 ## Validation and delivery
 

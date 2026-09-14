@@ -34,12 +34,15 @@ local function Control(name, parent)
         "SetTextureCoords","SetMaxLineCount","SetWrapMode","SetTexture"}) do
         c[method]=function() end
     end
+    function c:SetDrawTier(value) self.drawTier=value end
+    function c:SetDrawLayer(value) self.drawLayer=value end
+    function c:SetDrawLevel(value) self.drawLevel=value end
     controls[name]=c
     return c
 end
 local constantNames={"CT_CONTROL","CT_TEXTURE","CT_LABEL","CT_SCROLL","CT_SLIDER","TOPLEFT","TOPRIGHT","BOTTOMLEFT",
     "BOTTOMRIGHT","LEFT","RIGHT","CENTER","TEXT_ALIGN_CENTER","TEXT_ALIGN_LEFT","TEXT_ALIGN_RIGHT","TEXT_ALIGN_TOP",
-    "ORIENTATION_VERTICAL","DT_HIGH","DL_OVERLAY","MOUSE_BUTTON_INDEX_LEFT","MOUSE_BUTTON_INDEX_RIGHT",
+    "ORIENTATION_VERTICAL","DT_HIGH","DL_OVERLAY","DT_MEDIUM","DL_CONTROLS","MOUSE_BUTTON_INDEX_LEFT","MOUSE_BUTTON_INDEX_RIGHT",
     "EVENT_ADD_ON_LOADED","EVENT_SCREEN_RESIZED"}
 for index,name in ipairs(constantNames) do _G[name]=index end
 GuiRoot=Control("GuiRoot");GuiRoot:SetDimensions(1280,720)
@@ -95,8 +98,29 @@ GuiRoot:SetDimensions(1280,720);AOT:ApplySettingsGeometry()
 check(controls.AlphaSquadSettingsClose==nil,"Parent settings has no close cross")
 check(AOT.settingsPages.dashboard~=nil,"Dashboard is available independently of modules")
 check(controls.AlphaSquadLibraryStatus1.text=="MISSING","Missing transport is clearly identified")
+check(controls.AlphaSquadLibraryShare1Button.label.text=="N/A","Missing sharing controls cannot be mistaken for a confirmed OFF setting")
+check(controls.AlphaSquadLibraryNativeSettings==nil,"Sharing never offers a button that navigates to another addon panel")
 LibGroupBroadcast={};Settings.RefreshMain()
 check(controls.AlphaSquadLibraryStatus1.text=="INSTALLED","Installed library state refreshes when settings are shown")
+local sharingOn=true
+AlphaSquadUI.Sharing={IsEnabled=function() return sharingOn end,
+    GetStatus=function() return sharingOn,nil,true end,
+    SetEnabled=function(_,value) sharingOn=value;return true end}
+Settings.RefreshMain()
+check(controls.AlphaSquadLibraryShare2Button.label.text=="ON","Libraries reflects an enabled native sharing setting")
+controls.AlphaSquadLibraryShare2Button.handlers.OnMouseUp(nil,MOUSE_BUTTON_INDEX_LEFT,true)
+check(not sharingOn and controls.AlphaSquadLibraryShare2Button.label.text=="OFF" and not AOT.settingsWindow:IsHidden(),
+    "Sharing toggles and refreshes in place without leaving the Alpha Squad window")
+check(AOT.settingsWindow.drawTier==DT_MEDIUM and AOT.settingsWindow.drawLevel<20,
+    "Addon settings remain below the native medium-tier URL confirmation")
+local requested={};local confirmationCount=0
+RequestOpenUnsafeURL=function(url) requested[#requested+1]=url end
+ConfirmOpenURL=function() confirmationCount=confirmationCount+1 end
+check(Settings.OpenLink("https://minion.mmoui.com/") and #requested==1 and not AOT.settingsWindow:IsHidden(),
+    "A link requests the native confirmation without closing the addon or redirecting settings")
+check(not Settings.OpenLink("javascript:alert(1)") and not Settings.OpenLink("https://example.org/\npath") and #requested==1,
+    "Unsupported schemes and control characters never reach the external URL request")
+check(confirmationCount==0,"The addon never confirms an external URL on the player's behalf")
 local refreshCount=0
 AOT.settingsRefreshers[#AOT.settingsRefreshers+1]=function() refreshCount=refreshCount+1 end
 AOT:CloseSettingsWindow();AOT:RefreshSettingsWindow()

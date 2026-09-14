@@ -12,7 +12,7 @@ AlphaSquadUI.Modules.SupportCoverage = SC
 
 SC.name = "SupportCoverage"
 SC.displayName = "Support Coverage"
-SC.version = (AlphaSquadUI and AlphaSquadUI.version) or "2.8.0"
+SC.version = (AlphaSquadUI and AlphaSquadUI.version) or "2.9.0"
 SC.savedVarsName = "AlphaSquadSupportCoverageSavedVariables"
 SC.catalogPatch = "U50"
 SC.initialized = false
@@ -70,10 +70,11 @@ function SC:GetDefaults()
     return {
         enabled = true,
         visible = true,
-        locked = false,
+        locked = true,
         hideInMenus = true,
         problemsOnly = true,
         shareData = true,
+        experimentalSharing = true,
         scale = 100,
         opacity = 94,
         width = 410,
@@ -353,6 +354,7 @@ end
 
 function SC:CheckGroupSession()
     local grouped = self:IsGrouped()
+    if grouped and self.PrunePeerSharingData then self:PrunePeerSharingData() end
     if self.wasGrouped == true and not grouped then
         self:ResetSharingState("Group disbanded")
         if self.ResetExternalSources then self:ResetExternalSources() end
@@ -569,13 +571,9 @@ function SC:RegisterSlashCommands()
         elseif lower == "hide" then
             SC:SetVisible(false)
         elseif lower == "lock" then
-            SC:SetLocked(true)
-        elseif lower == "unlock" then
-            SC:SetLocked(false)
-        elseif lower == "move" then
-            SC:SetEnabled(true)
-            SC:SetVisible(true)
-            SC:SetLocked(false)
+            if AlphaSquadUI.Layout then AlphaSquadUI.Layout.Finish() else SC:SetLocked(true) end
+        elseif lower == "unlock" or lower == "move" then
+            if AlphaSquadUI.Layout then AlphaSquadUI.Layout.Start() else SC:SetLocked(false) end
         elseif lower == "enable" or lower == "on" then
             SC:SetEnabled(true)
         elseif lower == "disable" or lower == "off" then
@@ -600,7 +598,7 @@ function SC:RegisterSlashCommands()
         elseif lower == "trial" or lower == "dungeon" then
             SC:SetActiveProfile(lower)
         else
-            d("|cE66A19[ĄS SUPPORT]|r /assupport • builds • matrix • trial/dungeon • show/hide • lock/unlock • scan • status • reset")
+            d("|cE66A19[ĄS SUPPORT]|r /assupport • builds • matrix • trial/dungeon • show/hide • move • scan • status • reset")
         end
     end
 end
@@ -608,6 +606,7 @@ end
 function SC:Initialize()
     if self.initialized then return end
     self:EnsureSavedVariables()
+    self.sv.locked=true
     self.initialized = true
     self.inCombat = self.Try and self.Try(IsUnitInCombat, "player") == true or false
 
@@ -619,6 +618,7 @@ function SC:Initialize()
     self:RegisterEvents()
     self:UpdateRuntime()
     self:RefreshUIObscured()
+    if AlphaSquadUI.Sharing and AlphaSquadUI.Sharing.Initialize then AlphaSquadUI.Sharing.Initialize() end
 
     zo_callLater(function()
         if SC then

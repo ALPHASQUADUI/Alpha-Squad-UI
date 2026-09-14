@@ -19,16 +19,26 @@ Theme.colors = Theme.colors or {
 
 -- UTF-8 aware, static color markup: no animation and no frame callbacks.
 function Theme.Gradient(text,first,last)
-    local chars={};for char in tostring(text):gmatch("[%z\1-\127\194-\244][\128-\191]*") do chars[#chars+1]=char end
+    -- Do not use byte ranges in Lua patterns: the client's Unicode-aware
+    -- matcher can discard extended Latin letters such as Ą and Ş.
+    text=tostring(text)
+    local chars={};local position=1
+    while position<=#text do
+        local lead=string.byte(text,position)
+        local length=lead>=240 and lead<=244 and 4 or lead>=224 and lead<=239 and 3 or lead>=194 and lead<=223 and 2 or 1
+        local lastByte=math.min(#text,position+length-1)
+        chars[#chars+1]=string.char(string.byte(text,position,lastByte))
+        position=lastByte+1
+    end
     local out={}
     for i,char in ipairs(chars) do
         local t=(i-1)/math.max(1,#chars-1)
         local r=math.floor(first[1]+(last[1]-first[1])*t+0.5)
         local g=math.floor(first[2]+(last[2]-first[2])*t+0.5)
         local b=math.floor(first[3]+(last[3]-first[3])*t+0.5)
-        out[#out+1]=string.format("|c%02X%02X%02X%s",r,g,b,char)
+        out[#out+1]=string.format("|c%02X%02X%02X%s|r",r,g,b,char)
     end
-    return table.concat(out).."|r"
+    return table.concat(out)
 end
 Theme.brandText=Theme.Gradient("Ąlpha Şquad",{255,111,12},{255,184,62}).." |cFFFFFFUI|r"
 Theme.authorText=Theme.Gradient("@SeRuM1",{78,158,255},{102,222,255})

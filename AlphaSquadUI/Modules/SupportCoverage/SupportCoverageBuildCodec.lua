@@ -122,6 +122,64 @@ local function ReadSkills(r,version)
     return bar
 end
 
+-- A transport checksum proves delivery, not that the sender's section flags and
+-- totals agree with its items. Only complete native slot records can establish
+-- set coverage. Keep partial items inspectable, but never promote their claims.
+local function ValidateEquipment(equipment)
+    local descriptors=SC.EquipmentSlotDetails or {}
+    local expected,expectedCount={},0
+    for _,slot in ipairs(SC.EquipmentSlotOrder or {}) do
+        if descriptors[slot] and not expected[slot] then expected[slot]=true;expectedCount=expectedCount+1 end
+    end
+    local complete=equipment.complete==true and expectedCount>0
+    local actual,counts={},{}
+    local bodyWeight,frontWeight,backWeight=0,0,0
+    local function SetId(id)
+        if type(id)~="number" or id<1 or id>2147483647 or id%1~=0 then return nil end
+        local base=Call(GetItemSetUnperfectedSetId,id)
+        if type(base)=="number" and base>=1 and base<=2147483647 and base%1==0 then return base end
+        return id
+    end
+    for _,slot in ipairs(equipment.slots) do
+        local descriptor=descriptors[slot.slot]
+        if not expected[slot.slot] or slot.known~=true then complete=false end
+        actual[slot.slot]=true
+        local item=slot.item
+        if item then
+            local bar=descriptor and descriptor.bar
+            local weapon=bar=="PRIMARY" or bar=="BACKUP"
+            if not descriptor or (bar~="BOTH" and not weapon) or item.setVerified~=true
+                or type(item.hasSet)~="boolean" or weapon and type(item.twoHanded)~="boolean" then complete=false end
+            local weight=weapon and item.twoHanded==true and 2 or 1
+            if bar=="PRIMARY" then frontWeight=frontWeight+weight
+            elseif bar=="BACKUP" then backWeight=backWeight+weight
+            elseif bar=="BOTH" then bodyWeight=bodyWeight+1 end
+            if item.hasSet==true then
+                local id=SetId(item.setId)
+                if not id then complete=false
+                else
+                    local count=counts[id] or {main=0,back=0};counts[id]=count
+                    if bar=="PRIMARY" or bar=="BOTH" then count.main=count.main+weight end
+                    if bar=="BACKUP" or bar=="BOTH" then count.back=count.back+weight end
+                end
+            end
+        end
+    end
+    for slot in pairs(expected) do if not actual[slot] then complete=false end end
+    -- Both weapon bars are mutually exclusive, and each has only two hands.
+    if bodyWeight>10 or frontWeight>2 or backWeight>2 then complete=false end
+    local reported={}
+    for _,set in ipairs(equipment.setList) do
+        local id=SetId(set.id)
+        local count=id and counts[id]
+        if not id or reported[id] or not count or set.mainCount~=count.main or set.backCount~=count.back then complete=false end
+        if id then reported[id]=true end
+    end
+    for id in pairs(counts) do if not reported[id] then complete=false end end
+    equipment.complete=complete
+    equipment.countsVerified=complete
+end
+
 function Codec.Encode(snapshot)
     local ok,body=pcall(function()
         local w=Writer()
@@ -304,6 +362,7 @@ function Codec.Decode(body)
                     mainBar=math.floor(flags/2)%2==1,backBar=math.floor(flags/4)%2==1,conditional=flags>=8}
             end
         end
+        ValidateEquipment(equipment)
         if SC.RefreshEquipmentPhysicalCounts then SC:RefreshEquipmentPhysicalCounts(equipment) end
         result.catalogCompatible=matches
         if version>=2 then

@@ -1,68 +1,62 @@
 # Support Coverage
 
-Precombat group support checks for **Ąlpha Şquad UI**, version **2.8.0** (`20800`).
+Precombat group preparation and visual build inspection for **Ąlpha Şquad UI 2.9.0** (`20900`).
 
-## Workflow
+## Prepare your group
 
-1. Group with the players you want to check.
-2. Open Support Coverage and choose **Trial** or **Dungeon**.
-3. Turn the relevant effects **ON/OFF**. Filter the list by **ALL**, **MISSING** or **DUPLICATES**. Hover an effect's information icon for its description, known sources and conditions.
-4. Review known providers, missing coverage and duplicates. Hover `@UserID` to inspect the identified skill/set/mastery source.
-5. Open **Builds** and choose a player. The compact character view shows armor at its body position, jewelry, both weapon bars, skill/Ultimate icons and Champion stars. Hover an icon for details. Use **REFRESH BUILD** to request a new snapshot.
-6. Review food and selected potions in **Builds**.
+1. Join the group, open **Coverage** and choose **Trial** or **Dungeon**.
+2. Turn the effects you need ON. The two contexts retain separate choices.
+3. Use **All**, **Missing** or **Duplicates** to focus the single-page grid.
+4. Hover an effect name for its full description and conditions. Hover its contributor count for every known provider, the reported skill/set/mastery sources and their bar availability.
+5. Click a contributor count to inspect the named player, or open **Builds** and select any group member. Food and selected potions are part of that character sheet.
 
-A source counted on one weapon bar can cover its catalog entry even if it is absent from the other bar. Thresholds still apply: two-handed weapons count as two pieces, and one item from a five-piece set is insufficient.
+**Buffs**, **Debuffs**, **Group Sets** and **Group Mythics** remain distinct. Dense categories receive extra columns; the Coverage page has no scrollbar or pagination. Native effect and item icons are used where the client provides them. Long labels remain readable on hover.
 
-## Reading a build
+Green means covered, red missing, gold unknown or duplicate, and grey optional. A duplicate count includes **×**. Multiple providers can be intentional: target caps and conditions may require more than one source.
 
-The selected account stays visible while you inspect the snapshot. Equipment icons are arranged by body slot around a silhouette, with accessories and the two weapon bars in their own groups. The silhouette identifies slots; it is not a remote 3D character preview.
+## Read a build
 
-Set summaries show the physical item count beside each readable set name, with separate bonus-piece counts for the front and back bars. A two-handed weapon occupies one equipped-item slot but contributes two bonus pieces. The view does not add the two bars together to manufacture an active five-piece bonus.
+Armor icons follow body locations around a larger native silhouette. Jewelry and the two weapon pairs have their own fixed groups. The silhouette is an equipment guide, not a remote 3D character model.
 
-Each normal weapon bar shows five skills and its Ultimate, with a separate Werewolf row when available. Skill icons and tooltips use the identified ability, including its morph. Champion icons preserve four slotted-star positions per discipline. Supported food, potion, Mundus, curse, passive and mastery details remain available without opening a separate report.
+The number beside each set name is the **highest known weapon-bar total**. FRONT and BACK show each bar separately. Shared body/jewelry pieces count on both bars; only that bar's weapons count. Two-handed weapons contribute two pieces while occupying one physical item slot.
 
-Hover an equipment icon for the corresponding item, trait and enchantment. Native item-link descriptions keep the trait and glyph associated with the same item. Their built-in set counters use the viewing player's equipment; the inspected player's own totals are in the **FRONT / BACK** set summary. Skill descriptions come from the identified ability; the receiving client's tooltip cannot certify a remote player's stat-scaled damage or healing values. All these tooltips appear above addon windows.
+For example, three body pieces with a front sword/shield and a back staff from the same set show **5×**, FRONT **5×**, BACK **5×**. The physical six items are not combined into a six-piece active bonus. An actual sixth piece on a bar remains **6×**. When the native set bonuses establish its final threshold, **1 extra piece • front bar** identifies the excess; it is a review hint, not an automatic equipment change. Unknown thresholds never become guessed five-piece rules. A **≥** headline means only a lower bound is known because the other bar is unavailable.
 
-An empty slot and an unavailable slot are different states. Missing or stale remote evidence does not become a made-up icon, trait, enchantment or successful readiness check. Werewolf/Vampire information is shown only where the snapshot establishes it; an unavailable transformed bar does not replace the normal front/back bars. Vampire stage remains unspecified when no verified stage information is available.
+Hover a body or weapon icon for that exact item's trait, enchantment and native description. Native item-tooltip set counters are based on the viewing character; use the inspected build's FRONT/BACK summary for its actual totals. Set-summary icons show an equipped piece when available, otherwise a clearly identified native collection reference. A reference does not establish the sender's trait or enchantment.
 
-## Meaning of coverage
+Both weapon bars retain five skills and their actual Ultimate morph. A reported Werewolf bar appears separately. Twelve Champion slots preserve their native discipline artwork and the sender's verified invested points. Hover a star for the corresponding bonus; no unrelated ability picture is substituted. Class Masteries, passives, food, potion, Mundus and supported curse information complete the view.
 
-`COVERED` describes available build evidence, not live effect application. It does not guarantee an effect is active, that its proc condition will be met, that a target is in range or that all twelve players can receive it. Source tooltips explain these limits where known.
+An empty slot and an unavailable slot are different states. Incomplete snapshots cannot certify equipment totals. Missing transformation or Vampire-stage information stays unknown. Native shared-skill descriptions can use the viewer's stat-dependent values and do not certify the sender's damage or healing.
 
-A duplicate means multiple identified providers, not automatically a bad build. Two limited-target sources may be intentional. Sources contributing the same named Major/Minor effect do not imply that effect stacks. A known equipped group set is distinct from an observed active buff.
+## Understand coverage
 
-Unverified, unsupported, stale and incomplete fields remain `UNKNOWN`. Class identity alone does not prove purchased passives, selected masteries or slotted abilities. Selected potion details do not prove the potion was consumed. No role-specific loadout is forced.
+`COVERED` means a qualifying build source is available before combat. A set can qualify on either weapon bar; it need not reach its threshold on both. Casts, range, target caps, synergies and proc conditions still apply. Availability does not prove that an effect is active or reaches every group member.
 
-## Build evidence
+Class identity alone does not prove purchased passives, selected masteries or slotted skills. A named Major/Minor effect does not stack just because another player supplies it. A selected potion is preparation evidence, not proof of consumption. No role-specific loadout is forced.
 
-The local scanner reads equipment links/sets, separate front/back bars, Champion slottables, committed Class Masteries and prerequisites, glyph information, food, selected potion and other available local readiness fields.
+There is no pull-report, uptime-history or recorded-build planner workflow. Builds integrates food and potion readiness; there is no separate Food Check menu.
 
-Peer details require a compatible sender. Native grouping alone does not provide remote gear, full skill bars, CP or mastery selections. LibGroupCombatStats supplies compatible Ultimate identities and supported active class-line data, not complete skill/passive/CP/mastery inspection. LibSetDetection v5 optionally supplies shared set identities and per-bar activation without requiring Alpha Squad on the sender; hidden or unavailable sets remain unknown.
+## Sharing and dependencies
 
-A sender may use the full **Ąlpha Şquad UI** or the lightweight **AlphaSquadBuildShare** companion. Both need LibGroupBroadcast plus its required LibAddonMenu-2.0 and LibDebugLogger dependencies for the compatible build protocol. LibFoodDrinkBuff optionally improves food-buff identification on supported player/group units; missing remote observations still do not prove absence. Install the relevant libraries on the sending clients as well as the receiver.
+Open **Libraries** for dependency status, ESOUI links and all sharing switches. New installations configure supported sharing ON once; existing saved OFF choices are preserved. A switch changes the matching native library setting in place, without opening another addon page. Missing or incompatible libraries remain visibly unavailable rather than pretending to share.
 
-## Dependencies and sharing
+| Sender | Available evidence |
+| --- | --- |
+| No compatible sender | Native group identity/class and observable effects only |
+| LibSetDetection v5+ with LibGroupBroadcast | Disclosed set identities and per-bar counts; not exact items, skills or CP |
+| LibGroupCombatStats with its dependencies | Compatible Ultimate identities/resource and supported active class lines; not full builds |
+| Full Alpha Squad UI or AlphaSquadBuildShare companion | Supported equipment, separate skills, Champion allocation, mastery and readiness snapshot |
 
-Open **Libraries** for status and setup. Library installation does not by itself publish a build. For full build details, each participant must explicitly enable a compatible sender, join the group and opt into build sharing. In the full suite, enable **Share equipped build** in Libraries. LibSetDetection set sharing uses the **Share equipped sets** switch in Libraries and does not require enabling Alpha Squad's full-build protocol. Missing or incompatible senders leave remote fields unknown.
+The full build sender needs LibGroupBroadcast and its declared LibAddonMenu-2.0/LibDebugLogger dependencies. LibFoodDrinkBuff optionally improves food identification. Sending clients need the relevant libraries too. Installing a library alone does not provide arbitrary remote inventory inspection. LibSetDetection incognito choices remain respected.
 
-Full build sharing defaults OFF. Provisional protocol IDs require formal reservation and coexistence validation before a public sharing release. Use compatible versions and do not claim support for arbitrary unrelated addons' equipment protocols.
+Full build transport identifiers are provisional pending formal registration and coexistence validation. Compact summaries are automatic while grouped precombat sharing is enabled. Full details are requested on demand, validated and cached briefly; they are replaced only by a complete accepted snapshot. A reported build remains a statement from its sender, not proof against a modified client.
 
-Compact capability summaries are automatic while compatible precombat sharing is enabled. Detailed builds are requested on demand; a valid response is cached for 120 seconds and invalidated when the advertised build changes. Transfer delays do not justify guessing missing details.
+## Dashboard, placement and persistence
 
-The build viewer displays names and available details; internal identities are implementation details. Delayed snapshots must not be blended with an old build to invent a complete current loadout.
+Dashboard controls tracking independently of Libraries sharing. Turning Support Coverage off stops local HUD/coverage work; an enabled grouped sender can still answer valid build requests. Combat and loading suspend build scans/transfers.
 
-## Scope and persistence
+Use **MOVE HUD** in the sidebar or `/asmove` outside combat. Arrange enabled panels against the normal game UI, then choose **DONE** or Escape to save and lock. Disabled modules stay disabled. Cross-sync shares the current layout/settings across characters on the same account and server; OFF keeps character profiles separate.
 
-This version removes pull reports, live uptime, combat history and recorded-loadout planning from the active Support Coverage workflow. Checks are useful before combat; they do not need a pull to populate shared builds.
+Existing `AlphaSquadSupportCoverageSavedVariables` settings are preserved. Remote snapshots are bounded, transient group data. The addon does not change another player's equipment or role, consume a potion or post group messages automatically.
 
-Supported UI and effect preferences remain persistent in `AlphaSquadSupportCoverageSavedVariables`. Remote build snapshots are bounded transient group data. The addon never equips items, changes another player's role, consumes a potion or posts group messages automatically.
-
-## Validation
-
-Use the repository [test checklist](../../../docs/SUPPORT_COVERAGE_TESTING.md). Automated Lua checks are necessary but cannot certify ESO's runtime UI, real frame time or multi-client transport. No PR is authorized until the maintainer completes in-game testing and explicitly requests it.
-
-## Dashboard and visual coverage
-
-Dashboard controls tracking; Libraries controls sharing. Turning tracking off unregisters module gameplay work while a grouped, opted-in sender can still answer build requests. Cross-sync preserves the current layout and supports native character profiles.
-
-Coverage uses four compact columns with native effect/set icons, provider buttons and source explanations. Builds shows every equipped set with independent front/back counts. CP slots use ESO's native discipline star renderer as a static image, with the sender's invested points on hover. The food/potion summary is part of Builds, with group food status on the player list.
+See the [ESO validation checklist](../../../docs/SUPPORT_COVERAGE_TESTING.md), [architecture](../../../docs/ARCHITECTURE.md) and [performance notes](../../../docs/PERFORMANCE.md). Automated checks cover deterministic boundaries; native rendering, frame time and multi-client behavior still require in-game validation.

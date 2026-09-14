@@ -16,7 +16,7 @@ Audit.Copy = Copy
 function SC:EnsureAuditSettings()
     local sv = self.sv
     for key, default in pairs({checkFoodPresence=true, checkMissingGlyphs=true,
-        experimentalSharing=false, checkPotionPresence=false}) do
+        experimentalSharing=true, checkPotionPresence=false}) do
         if type(sv[key]) ~= "boolean" then sv[key] = default end
     end
     sv.foodWarningSeconds = self.Clamp(tonumber(sv.foodWarningSeconds) or 300, 0, 1800)

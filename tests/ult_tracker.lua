@@ -230,6 +230,42 @@ before = #delayed
 ULT:OnUltimateUsed(ULT.ULTIMATE_SLOT)
 check(#delayed == before, "Disabled personal tracking queues no settle callbacks")
 
+-- Ownership and preview use the actual UI paths, without a duplicate Ultimate scan.
+local moving, suppressed = false, true
+AlphaSquadUI.Layout = {
+    ShouldHidePersonalULT=function() return suppressed end,
+    IsMoving=function(module) return moving and (module==ULT or module==Group) end,
+}
+ULT.sv.enabled, ULT.sv.visible, ULT.uiObscured = true, true, false
+ULT.sv.hideInMenus, Group.sv.hideInMenus = true, true
+Group.sv.enabled, Group.sv.visible = true, true
+ULT:ApplyVisibility()
+check(ULT.window:IsHidden() and not Group.window:IsHidden(), "Overload ownership suppresses only the personal Ultimate HUD")
+check(updates.AlphaSquadUI_ULTTracker_Safety==nil, "A duplicate personal Ultimate HUD has no recovery timer")
+slotReads=0
+ULT:Refresh("overload owns personal HUD")
+check(slotReads==0, "Suppressed personal tracking skips both hotbar scans")
+suppressed=false
+ULT:ApplyVisibility()
+check(not ULT.window:IsHidden() and updates.AlphaSquadUI_ULTTracker_Safety~=nil, "Releasing Overload ownership restores personal ULT presentation")
+moving=true
+ULT.sv.visible, Group.sv.visible, ULT.uiObscured = false, false, true
+ULT:ApplyVisibility()
+check(not ULT.window:IsHidden() and not Group.window:IsHidden(), "Global move mode exposes both enabled HUDs without editing hidden preferences")
+check(not ULT.sv.visible and not Group.sv.visible, "Preview never permanently changes HUD visibility")
+check(updates.AlphaSquadUI_ULTTracker_Safety==nil and updates.AlphaSquadUI_ULTGroup_Safety==nil,
+    "Placement does not run personal or group recovery timers")
+local sounds=0
+PlaySound=function() sounds=sounds+1 end; SOUNDS={ABILITY_ULTIMATE_READY=1}
+ULT.sv.readySound, Group.sv.readySound = true, true
+ULT:PlayReadySound();Group:PlayReadySound()
+check(sounds==0, "Dragging previews never produces Ultimate-ready sounds")
+moving=false
+ULT:ApplyVisibility()
+check(ULT.window:IsHidden() and Group.window:IsHidden(), "Finishing placement restores the hidden HUD preferences")
+AlphaSquadUI.Layout=nil
+PlaySound=nil;SOUNDS=nil
+
 ULT.window, Group.window = nil, nil
 Group.RefreshConfig = Group.RefreshConfig or function() end
 ULT:RegisterSlashCommands()

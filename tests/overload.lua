@@ -73,6 +73,25 @@ check(hidden and updates.AlphaSquadUI_HealthSync==nil,"Loading always hides Over
 AOT.loading=false;AOT:ApplyVisualSettings()
 check(not hidden and updates.AlphaSquadUI_HealthSync~=nil,"Activation restores the enabled visible HUD")
 
+local moving=true
+AlphaSquadUI.Layout={IsMoving=function(module) return moving and module==AOT end}
+AOT.sv.visible=false;AOT.autoDormant=true;AOT.uiObscured=true
+AOT:ApplyVisualSettings()
+check(not hidden and not AOT.sv.visible, "Move mode exposes dormant hidden Overload without changing its visibility setting")
+check(updates.AlphaSquadUI_HealthSync==nil, "An Overload placement preview never runs its recovery timer")
+local oldFind=AOT.FindActiveOverloadBuff
+AOT.FindActiveOverloadBuff=function() error("Placement must not look for cancellable buffs") end
+local cancelled,reason=AOT:TryCancelOverload("preview")
+check(not cancelled and reason=="layout mode", "Dragging Overload cannot cancel a gameplay effect")
+AOT:CheckReserveCutoff(0)
+AOT:SetEmergencyFlashUpdate(true);AOT:SetReadyReminderFlashUpdate(true)
+check(updates.AlphaSquadUI_EmergencyFlash==nil and updates.AlphaSquadUI_ReadyReminderFlash==nil,
+    "Placement cannot start emergency or ready-reminder animation loops")
+AOT.FindActiveOverloadBuff=oldFind
+moving=false;AOT:ApplyVisualSettings()
+check(hidden and not AOT.sv.visible, "Finishing placement restores dormant/hidden Overload state")
+AlphaSquadUI.Layout=nil
+
 AOT.window=nil
 AOT:SetAddonEnabled(false)
 check(updates.AlphaSquadUI_HealthSync==nil,"Final disable leaves no Overload update registered")

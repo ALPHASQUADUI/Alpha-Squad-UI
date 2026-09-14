@@ -18,7 +18,7 @@
 local ADDON_NAME = "AlphaSquadUI"
 local DISPLAY_NAME = "Ąlpha Şquad UI - Overload"
 local SETTINGS_MENU_NAME = AlphaSquadUI and AlphaSquadUI.Theme and AlphaSquadUI.Theme.Brand and AlphaSquadUI.Theme.Brand() or "Ąlpha Şquad UI"
-local VERSION = (AlphaSquadUI and AlphaSquadUI.version) or "2.8.0"
+local VERSION = (AlphaSquadUI and AlphaSquadUI.version) or "2.9.0"
 
 AlphaSquadUI = AlphaSquadUI or {}
 AlphaSquadUI.Modules = AlphaSquadUI.Modules or {}
@@ -137,7 +137,9 @@ local function Chat(message)
 end
 
 function AOT:OpenWebsite()
-    if RequestOpenUnsafeURL then
+    if AlphaSquadUI.Settings and AlphaSquadUI.Settings.OpenLink then
+        AlphaSquadUI.Settings.OpenLink(SITE_URL)
+    elseif RequestOpenUnsafeURL then
         RequestOpenUnsafeURL(SITE_URL)
     else
         Chat("Visit the Ąlpha Şquad website: " .. SITE_URL)
@@ -165,6 +167,10 @@ local function CreateLabel(parent, name, font, text, color)
     return label
 end
 
+local function Moving()
+    return AlphaSquadUI.Layout and AlphaSquadUI.Layout.IsMoving(AOT) or false
+end
+
 local function GetMs()
     if GetGameTimeMilliseconds then
         return GetGameTimeMilliseconds()
@@ -181,7 +187,7 @@ end
 function AOT:GetDefaultPosition()
     local width = GuiRoot:GetWidth() or 1920
     local height = GuiRoot:GetHeight() or 1080
-    return math.floor((width - 330) / 2), math.floor(height * 0.22)
+    return math.floor((width - 330) / 2), math.floor(height * 0.30)
 end
 
 function AOT:ResetPosition()
@@ -301,16 +307,15 @@ function AOT:ApplyVisualSettings()
     local settings = AlphaSquadUI.Settings
     local settingsVisible = (settings and settings.AnyExclusiveWindowVisible and settings.AnyExclusiveWindowVisible())
         or (self.settingsWindow and not self.settingsWindow:IsHidden()) or false
+    local moving = Moving()
     local hidden = self.loading == true or (not self.sv.addonEnabled)
-        or (not self.sv.visible)
-        or self.autoDormant
-        or self.uiObscured
+        or ((not self.sv.visible or self.autoDormant or self.uiObscured) and not moving)
         or settingsVisible
         or self:IsPvPSuppressed()
     self.window:SetHidden(hidden)
     -- Native power/effect/slot events remain active while tracking is enabled. The recovery
     -- heartbeat is needed only while the gameplay HUD can actually be seen.
-    self:SetHealthSyncActive(not hidden)
+    self:SetHealthSyncActive(not hidden and not moving)
     self:UpdateLockState()
 end
 
@@ -364,6 +369,14 @@ function AOT:SetAutoDormant(dormant)
     self:RefreshSettingsWindow()
 end
 
+function AOT:RefreshPersonalULTVisibility()
+    local ult = AlphaSquadUI.Modules.ULTTracker
+    if ult and ult.ApplyVisibility then
+        ult:ApplyVisibility()
+        if ult.initialized and ult.Refresh then ult:Refresh("overload ownership") end
+    end
+end
+
 function AOT:SetAddonEnabled(enabled)
     if EVENT_MANAGER.SetActive then EVENT_MANAGER:SetActive(enabled==true and not self.loading) end
     self.sv.addonEnabled = enabled == true
@@ -376,11 +389,12 @@ function AOT:SetAddonEnabled(enabled)
         self:SetOverloadState(false, self.currentVariant)
     end
 
+    self:RefreshPersonalULTVisibility()
     self:RefreshSettingsWindow()
 end
 
 function AOT:SetHealthSyncActive(enabled)
-    enabled = enabled == true and not self.loading
+    enabled = enabled == true and not self.loading and not Moving()
     if self.healthSyncActive == enabled then return end
     self.healthSyncActive = enabled
     local updateName = ADDON_NAME .. "_HealthSync"
@@ -400,6 +414,7 @@ end
 function AOT:SetTrackerVisible(visible)
     self.sv.visible = visible == true
     self:ApplyVisualSettings()
+    self:RefreshPersonalULTVisibility()
     self:RefreshSettingsWindow()
 end
 
@@ -633,6 +648,7 @@ function AOT:GetReserveAlertLevel(currentUltimate)
 end
 
 function AOT:GetReadyReminderEligible(currentUltimate)
+    if Moving() then return false, nil end
     if not self.sv or not self.sv.addonEnabled or self.uiObscured or self:IsPvPSuppressed() or not self.sv.readyReminderEnabled or self.isOverloadActive then
         return false, nil
     end
@@ -668,6 +684,7 @@ function AOT:GetReadyReminderEligible(currentUltimate)
 end
 
 function AOT:SetEmergencyFlashUpdate(enabled)
+    enabled = enabled == true and not Moving()
     local updateName = ADDON_NAME .. "_EmergencyFlash"
     if enabled and not self.emergencyFlashRunning then
         self.emergencyFlashRunning = true
@@ -686,6 +703,7 @@ function AOT:SetEmergencyFlashUpdate(enabled)
 end
 
 function AOT:SetReadyReminderFlashUpdate(enabled)
+    enabled = enabled == true and not Moving()
     local updateName = ADDON_NAME .. "_ReadyReminderFlash"
     if enabled and not self.readyReminderFlashRunning then
         self.readyReminderFlashRunning = true
@@ -715,6 +733,7 @@ function AOT:SetReadyReminderFlashUpdate(enabled)
 end
 
 function AOT:PlayReadyReminder(force)
+    if Moving() then return end
     if not self.sv or self:IsPvPSuppressed() or not self.sv.readyReminderSound or not PlaySound or not SOUNDS then return end
 
     local now = GetMs()
@@ -893,7 +912,22 @@ end
 
 function AOT:UpdateReserveVisual(currentUltimate)
     if not self.window or not self.sv then return end
+    if Moving() then
+        self.reserveAlertLevel = "none"
+        self.readyReminderActive = false
+        self:SetEmergencyFlashUpdate(false)
+        self:SetReadyReminderFlashUpdate(false)
+        if self.window.cancelSurface then self.window.cancelSurface:SetMouseEnabled(false) end
+        if self.window.moveHint then self.window.moveHint:SetHidden(false) end
+        if self.window.statusLabel then self.window.statusLabel:SetText("MOVE HUD") end
+        self.layoutWasMoving = true
+        return
+    end
 
+    if self.layoutWasMoving then
+        self.layoutWasMoving = nil
+        if self.window.statusLabel then self.window.statusLabel:SetText(self.isOverloadActive and "OVERLOAD ON" or "OVERLOAD OFF") end
+    end
     local current = FiniteOr(currentUltimate, nil)
     if not current then
         current = select(1, self:GetUltimatePower())
@@ -1037,7 +1071,7 @@ function AOT:PlayReserveAlert(force, requestedLevel)
         local delay, soundId = pulse[1], pulse[2]
         if soundId then
             zo_callLater(function()
-                if AOT.sv and not AOT.uiObscured and not AOT:IsPvPSuppressed() and AOT.sv.reserveSound and AOT.isOverloadActive and AOT.reserveAlertLevel ~= "none" then
+                if AOT.sv and not Moving() and not AOT.uiObscured and not AOT:IsPvPSuppressed() and AOT.sv.reserveSound and AOT.isOverloadActive and AOT.reserveAlertLevel ~= "none" then
                     PlaySound(soundId)
                 end
             end, delay)
@@ -1046,6 +1080,7 @@ function AOT:PlayReserveAlert(force, requestedLevel)
 end
 
 function AOT:TryCancelOverload(reason, announceFailure)
+    if Moving() then return false, "layout mode" end
     local active, info = self:FindActiveOverloadBuff()
     if not active or not info then
         if announceFailure then
@@ -1089,6 +1124,7 @@ function AOT:TryCancelOverload(reason, announceFailure)
 end
 
 function AOT:CheckReserveCutoff(currentUltimate)
+    if Moving() then return end
     if not self.sv or not self.sv.addonEnabled then return end
 
     local current = FiniteOr(currentUltimate, nil)
@@ -1151,6 +1187,14 @@ function AOT:RefreshOverloadState(reason)
     -- If no tracked Overload morph is in the Ultimate slot of either weapon bar,
     -- the tracker becomes dormant, hidden and silent until one is equipped again.
     local slottedVariant = self:GetActuallySlottedOverloadVariant()
+    local hadOverload = self.hasSlottedOverload
+    self.hasSlottedOverload = slottedVariant ~= nil
+    if hadOverload ~= self.hasSlottedOverload then self:RefreshPersonalULTVisibility() end
+    if Moving() then
+        if slottedVariant then self:SetDisplayedVariant(slottedVariant) end
+        self:ApplyVisualSettings()
+        return
+    end
     if not slottedVariant then
         self:SetAutoDormant(true)
         return
@@ -1329,6 +1373,7 @@ function AOT:CreateTrackerWindow()
     window:SetDrawTier(DT_HIGH)
     window:SetDrawLayer(DL_OVERLAY)
     window:SetDrawLevel(20)
+    if AlphaSquadUI.Settings and AlphaSquadUI.Settings.ApplyWindowLayer then AlphaSquadUI.Settings.ApplyWindowLayer(window, true) end
 
     window.bg = CreateSolid(window, "AlphaSquadOverloadTrackerBG", COLORS.bg)
     window.glow = CreateSolid(window, "AlphaSquadOverloadTrackerGlow", {COLORS.cyan[1], COLORS.cyan[2], COLORS.cyan[3], 0.07}, 1, 1, -1, -1)
@@ -1633,6 +1678,7 @@ function AOT:CreateSettingsWindow()
     win:SetDrawTier(DT_HIGH)
     win:SetDrawLayer(DL_OVERLAY)
     win:SetDrawLevel(100)
+    if AlphaSquadUI.Settings and AlphaSquadUI.Settings.ApplyWindowLayer then AlphaSquadUI.Settings.ApplyWindowLayer(win, false) end
     win:SetHidden(true)
     if AlphaSquadUI.Settings.RegisterExclusiveWindow then
         AlphaSquadUI.Settings.RegisterExclusiveWindow("settings", win, function() AOT:CloseSettingsWindow() end)
@@ -1741,6 +1787,13 @@ function AOT:CreateSettingsWindow()
     future:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
     future:SetVerticalAlignment(TEXT_ALIGN_TOP)
     self.settingsSaveNote = future
+
+    self.settingsMoveButton = CreateButton(sidebar, "AlphaSquadMoveHUD", "MOVE HUD", 12, 0, 166, 38, function()
+        if AlphaSquadUI.Layout then AlphaSquadUI.Layout.Start() end
+    end)
+    self.settingsMoveButton:ClearAnchors()
+    self.settingsMoveButton:SetAnchor(BOTTOMLEFT, sidebar, BOTTOMLEFT, 12, -56)
+    self.settingsMoveButton.help = "Outside combat, place enabled HUDs against the game interface. Enable at least one module in Dashboard first. Drag each panel, then choose Done or press Escape to save and lock positions."
 
     local versionLabel = CreateLabel(sidebar, "AlphaSquadSidebarVersion", "ZoFontGameSmall", "v" .. VERSION, COLORS.muted)
     versionLabel:SetDimensions(150, 20)
@@ -1940,9 +1993,7 @@ function AOT:CreateSettingsWindow()
     local general = CreateCard(overload, "AlphaSquadCardGeneral", 8, 68, 322, 190, "GENERAL", COLORS.orange)
     AddToggleRow(general, "AlphaSquadOptVisible", "Show tracker HUD", 42,
         function() return AOT.sv.visible end, function(v) AOT:SetTrackerVisible(v) end)
-    AddToggleRow(general, "AlphaSquadOptLocked", "Lock position", 78,
-        function() return AOT.sv.locked end, function(v) AOT:SetLocked(v) end)
-    AddToggleRow(general, "AlphaSquadOptPvP", "Disable in PvP", 114,
+    AddToggleRow(general, "AlphaSquadOptPvP", "Disable in PvP", 78,
         function() return AOT.sv.disableInPvP end,
         function(v)
             AOT.sv.disableInPvP = v == true
@@ -1986,12 +2037,6 @@ function AOT:CreateSettingsWindow()
     CreateButton(appearance, "AlphaSquadOptReset", "RESET POSITION", 14, 132, 140, 34, function()
         AOT:ResetPosition()
     end)
-    CreateButton(appearance, "AlphaSquadOptMove", "UNLOCK & MOVE", 164, 132, 144, 34, function()
-        AOT:SetAddonEnabled(true)
-        AOT:SetTrackerVisible(true)
-        AOT:SetLocked(false)
-        AOT:CloseSettingsWindow()
-    end)
     local opacityNote = CreateLabel(appearance, "AlphaSquadOpacityNote", "ZoFontGameSmall",
         "Opacity affects the background only. Text, icon and borders stay fully visible.", COLORS.muted)
     opacityNote:SetDimensions(290, 48)
@@ -2012,7 +2057,7 @@ function AOT:CreateSettingsWindow()
 
     local runtime = CreateCard(overload, "AlphaSquadCardRuntime", 344, 492, 322, 126, "AT A GLANCE", COLORS.green)
     local runtimeText = CreateLabel(runtime, "AlphaSquadRuntimeText", "ZoFontGameSmall",
-        "Green means Overload is active. Reserve alerts warn you before Ultimate runs low. Use Unlock & Move to place the tracker, then lock it when you are happy with its position.", COLORS.muted)
+        "Green means Overload is active. Reserve alerts warn you before Ultimate runs low. Choose Move HUD in the sidebar to place every enabled panel together.", COLORS.muted)
     runtimeText:SetDimensions(290, 82)
     runtimeText:SetAnchor(TOPLEFT, runtime, TOPLEFT, 14, 38)
     runtimeText:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
@@ -2198,7 +2243,7 @@ function AOT:PrintHelp()
     Chat("/asoverload toggle - Toggle HUD visibility.")
     Chat("/asoverload show | hide - Show or hide the HUD.")
     Chat("/asoverload enable | disable - Enable or disable tracking.")
-    Chat("/asoverload lock | unlock - Save+lock position or unlock movement.")
+    Chat("/asmove - Place enabled HUDs together; Done or Esc saves and locks positions.")
     Chat("/asoverload reserve on|off - Enable or disable the emergency reserve system.")
     Chat("/asoverload warning 160 - Set the emergency alert start threshold (25-500).")
     Chat("/asoverload threshold 130 - Set the auto-stop reserve threshold (25-500).")
@@ -2219,7 +2264,11 @@ function AOT:RegisterSlashCommands()
         local arg = tostring(argument or ""):match("^%s*(.-)%s*$") or ""
         local lower = string.lower(arg)
 
-        if lower == "lock" then
+        if lower == "lock" and AlphaSquadUI.Layout then
+            AlphaSquadUI.Layout.Finish()
+        elseif (lower == "unlock" or lower == "move") and AlphaSquadUI.Layout then
+            AlphaSquadUI.Layout.Start()
+        elseif lower == "lock" then
             self:SetLocked(true)
             Chat(string.format("Position locked and saved at X:%d Y:%d.", self.sv.x or 0, self.sv.y or 0))
         elseif lower == "unlock" or lower == "move" then
@@ -2441,7 +2490,7 @@ function AOT:Initialize()
     local defaults = {
         addonEnabled = true,
         visible = true,
-        locked = false,
+        locked = true,
         scale = 100,
         opacity = 95,
         x = defaultX,
@@ -2469,6 +2518,8 @@ function AOT:Initialize()
     for key,value in pairs(defaults) do
         if self.sv[key]==nil or (type(value)=="boolean" and type(self.sv[key])~="boolean") then self.sv[key]=value end
     end
+    self.sv.locked=true -- Placement is a session-only mode, never a persisted unlock.
+    if not self.sv.positionSaved then self.sv.x,self.sv.y=defaultX,defaultY end
     self.sv.scale=Clamp(FiniteOr(self.sv.scale,defaults.scale),60,160)
     self.sv.opacity=Clamp(FiniteOr(self.sv.opacity,defaults.opacity),30,100)
     self.sv.x=Clamp(FiniteOr(self.sv.x,defaults.x),-100000,100000)

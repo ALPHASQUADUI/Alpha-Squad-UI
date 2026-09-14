@@ -29,3 +29,10 @@ optional integrations used by other modules.
 ## Dashboard and sharing
 
 Enable or disable this module from Dashboard. Disabled tracking removes its own gameplay subscriptions and recovery/animation timers. Libraries remains available and its sharing settings are independent. Cross-sync keeps HUD positions and module settings across characters by default; switch it off for character-specific layouts. Loading transitions pause tracking until activation.
+
+
+## Placement and personal ULT visibility
+
+Use **MOVE HUD** at the bottom of the settings sidebar or `/asmove` outside combat. Drag enabled panels against the normal game UI, then click **DONE** or press Escape to save and lock. Dashboard-disabled modules remain disabled; placement does not permanently change visibility settings.
+
+When this enabled, applicable module handles a slotted Overload morph, the personal ULT panel is hidden to avoid a duplicate display. It resumes when the dedicated Overload panel no longer applies. The group Ultimate view is unaffected. Existing OFF preferences, character layouts and library sharing remain independent.

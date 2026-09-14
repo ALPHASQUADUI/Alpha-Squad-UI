@@ -252,16 +252,19 @@ function ULT:ApplyVisibility()
     if settings and settings.AnyExclusiveWindowVisible then
         sharedSettingsVisible = sharedSettingsVisible or settings.AnyExclusiveWindowVisible()
     end
+    local moving = AlphaSquadUI.Layout and AlphaSquadUI.Layout.IsMoving(self)
+    local suppressed = AlphaSquadUI.Layout and AlphaSquadUI.Layout.ShouldHidePersonalULT()
     local hidden =
         self.loading == true
+        or suppressed
         or not self.sv.enabled
-        or not self.sv.visible
+        or (not self.sv.visible and not moving)
         or settingsVisible
         or sharedSettingsVisible
-        or (self.sv.hideInMenus and self.uiObscured)
+        or (self.sv.hideInMenus and self.uiObscured and not moving)
 
     self.window:SetHidden(hidden)
-    if self.SetSafetyUpdateActive then self:SetSafetyUpdateActive(not hidden) end
+    if self.SetSafetyUpdateActive then self:SetSafetyUpdateActive(not hidden and not moving) end
 
     if hidden then
         self:SetFlashUpdate(false)
@@ -269,7 +272,7 @@ function ULT:ApplyVisibility()
         local anyReady =
             (self:ShouldTrackBar("primary") and self.bars.primary.ready)
             or (self:ShouldTrackBar("backup") and self.bars.backup.ready)
-        self:SetFlashUpdate(anyReady and self.sv.readyFlash)
+        self:SetFlashUpdate(anyReady and self.sv.readyFlash and not moving)
     end
 
     if self.Group and self.Group.ApplyVisibility then
@@ -413,6 +416,7 @@ function ULT:CreateHUD()
     win:SetDrawTier(DT_HIGH)
     win:SetDrawLayer(DL_OVERLAY)
     win:SetDrawLevel(90)
+    if AlphaSquadUI.Settings and AlphaSquadUI.Settings.ApplyWindowLayer then AlphaSquadUI.Settings.ApplyWindowLayer(win, true) end
 
     win.bg = Solid(win, "AlphaSquadULTTrackerBG", COLORS.bg)
 

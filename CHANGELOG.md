@@ -1,14 +1,16 @@
 # Changelog
 
+All notable changes to Ąlpha Şquad UI are documented here.
+
+## 2.9.0 — 2026-09-14
+
+Restored extended brand characters, added global HUD placement, configured sharing automatically on new installations with truthful native switches, and kept link dialogs in front. Coverage now fits on one compact page. Build set totals use effective per-bar counts with native excess-piece warnings, alongside a larger equipment silhouette. Remote equipment and Champion-source validation are stricter. See [complete release notes](releases/2.9.0.md).
+
 ## 2.8.0 — 2026-09-14
 
 Dashboard and Cross-sync, independent library sharing, four visual Coverage columns, native Champion artwork, complete equipped-set summaries, foreground tooltips and lower idle module work. Food/potion readiness is integrated into Builds. See [complete release notes](releases/2.8.0.md).
 
-All notable changes to Ąlpha Şquad UI are documented here.
-
 ## 2.7.0
-
-
 
 ### Visual build inspection
 - Added a compact character-style build view with armor positioned around a body silhouette, jewelry and separate front/back weapons.

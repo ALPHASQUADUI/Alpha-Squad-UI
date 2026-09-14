@@ -15,7 +15,7 @@ if not ULT then return end
 ULT.Group = ULT.Group or {}
 local Group = ULT.Group
 
-Group.version = (AlphaSquadUI and AlphaSquadUI.version) or "2.8.0"
+Group.version = (AlphaSquadUI and AlphaSquadUI.version) or "2.9.0"
 Group.lgcs = nil
 Group.libraryAvailable = false
 Group.roster = {}
@@ -106,9 +106,9 @@ function Group:GetDefaults()
     local rootW = GuiRoot and GuiRoot:GetWidth() or 1920
     local rootH = GuiRoot and GuiRoot:GetHeight() or 1080
     return {
-        enabled = false,
+        enabled = true,
         visible = true,
-        locked = false,
+        locked = true,
         includeSelf = false,
         readySound = false,
         hideInMenus = true,
@@ -116,7 +116,7 @@ function Group:GetDefaults()
         hudWidth = 312,
         rowHeight = 36,
         opacity = 92,
-        x = math.floor(rootW * 0.70),
+        x = math.floor(rootW * 0.03),
         y = math.floor(rootH * 0.16),
         positionSaved = false,
         trackedAbilities = {},
@@ -586,6 +586,7 @@ function Group:GetSharingCount()
 end
 
 function Group:PlayReadySound()
+    if AlphaSquadUI.Layout and AlphaSquadUI.Layout.IsMoving(self) then return end
     if not ULT.sv or not ULT.sv.enabled or not self.sv or not self.sv.enabled or not self.sv.readySound or not PlaySound or not SOUNDS then return end
     if ULT.uiObscured then return end
 
@@ -741,7 +742,7 @@ function Group:RegisterRosterEvents()
 end
 
 function Group:SetSafetyUpdateActive(enabled)
-    enabled = enabled == true and not ULT.loading
+    enabled = enabled == true and not ULT.loading and not (AlphaSquadUI.Layout and AlphaSquadUI.Layout.IsMoving(self))
     if self.safetyUpdateActive == enabled then return end
     self.safetyUpdateActive = enabled
     local name = "AlphaSquadUI_ULTGroup_Safety"
@@ -791,6 +792,11 @@ end
 function Group:Initialize()
     if self.initialized then return end
     self:EnsureSavedVariables()
+    self.sv.locked = true
+    if not self.sv.positionSaved then
+        local defaults = self:GetDefaults()
+        self.sv.x, self.sv.y = defaults.x, defaults.y
+    end
 
     self:InitializeSharing()
 

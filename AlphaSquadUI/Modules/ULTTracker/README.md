@@ -1,227 +1,59 @@
 # ULT Tracker
 
-ULT Tracker is a generic Ultimate readiness module for **Ąlpha Şquad UI**.
+Personal and group Ultimate readiness for **Ąlpha Şquad UI**.
 
-## Purpose
+## Personal view
 
-Display the Ultimate equipped on the player's:
+Choose MAIN, BACK or BOTH to follow the actual Ultimate and morph slotted on either weapon bar. Class, guild, weapon and subclassed abilities use their native identity; there is no fixed list of supported personal Ultimates.
 
-- MAIN / PRIMARY bar
-- BACK / BACKUP bar
-- or both bars simultaneously
+The panel shows the ability icon/name, cost, current Ultimate resource, active bar and charging/READY/ACTIVE state. Crossing into READY can play a sound and show a pulse. Spending Ultimate clears readiness while native resource state settles. Toggle Ultimates use their actual toggled state instead of continuing to flash READY while active.
 
-The module does **not** maintain a hard-coded list of Ultimate abilities. It reads
-the currently slotted action directly from ESO, so class Ultimates, guild
-Ultimates, weapon Ultimates, subclassed builds and morphs are automatically
-supported.
+If an enabled, applicable Overload panel already handles a slotted Overload morph, the personal ULT panel yields to it. Removing that condition restores the personal view. Group Ultimate tracking stays independent.
 
-## Tracked information
+## Group view
 
-For each bar:
+Open **ULT Tracker → CONFIGURE GROUP** or `/asult group`. Select Ultimate abilities to monitor; matching group accounts appear automatically, without manual player assignments. **SELECT ALL** and **CLEAR ALL** are available. Up to 24 selected Ultimate filters are retained.
 
-- localized Ultimate name
-- icon
-- current Ultimate cost
-- current shared Ultimate resource
-- charging / ready / active state
-- whether the weapon bar is currently active
-- progress toward readiness
+Each row shows the player's @UserID, native ability icon, charge percentage and readiness state. The HUD omits repeated ability names and raw Ultimate-point totals. If a player matches multiple selected abilities, it prioritizes a ready Ultimate, otherwise the one closest to ready. READY players sort first; recent resource spends are temporarily dimmed.
 
-## Alerts
+A spend indicator is inferred from shared resource changes, not a guaranteed remote cast ID. Offline, dead, disconnected and stale records cannot be treated as actionable ready players.
 
-When a tracked Ultimate crosses from not-ready to ready:
+## Group data and sharing
 
-- the icon/card enters a green READY state
-- a lightweight pulse runs while it remains ready
-- an optional sound is played once on the ready transition
+Group tracking uses **LibGroupCombatStats** with its declared dependencies, including LibCombat and LibGroupBroadcast. The personal view needs none of these libraries. Alpha Squad requests ULT data, not DPS or HPS streams.
 
-When the Ultimate is used, the active bar is immediately removed from READY
-highlighting while the API/resource state settles.
+A compatible sender may be Alpha Squad or another addon publishing the same library data. Installing a library alone does not prove every group member is sharing. Ultimate/active-line reports do not establish complete gear, skill bars, CP, passives or masteries; supported full builds use a separate compatible sender.
 
-Toggle Ultimates use `IsSlotToggled()` and show `ACTIVE` rather than continuing
-to flash READY while toggled on.
+Open **Libraries** for dependency status and **Share group Ultimates**. A new installation enables supported sharing once, while existing saved OFF choices are preserved. The switch reads and changes the actual native protocol settings without opening another addon page. Other addons using those same protocols follow that library setting; unrelated protocols remain unchanged.
+
+## Placement and saved settings
+
+Use **MOVE HUD** in the main sidebar or `/asmove` outside combat. Position the enabled personal/group panels against the normal game interface, then click **DONE** or press Escape to save and lock. Disabled modules stay disabled and normal visibility choices are preserved. Group placement remains possible with no current matching members by showing its placement guide.
+
+Group configuration retains scale, list width, row height and background opacity controls, with reset actions. Row height also scales the icon. Cross-sync ON shares settings and positions across characters on the same account/server; OFF keeps native character profiles separate. Existing SavedVariables and group selections survive reloads and travel.
+
+Dashboard owns the module switch. Disabling tracking releases its gameplay work while Libraries sharing remains independent. The group view also respects its own enabled/visible settings and the parent's state.
 
 ## Performance
 
-ULT Tracker is event-driven:
+Native events drive personal slot/resource changes. A 1.5-second safety refresh runs only while the tracker is enabled, visible and unobscured. READY animation exists only while its output is visible and needed.
 
-- `EVENT_POWER_UPDATE`
-- hotbar/slot update events
-- active hotbar update events
-- Ultimate use
-- player activation
+Incoming group updates affect the relevant cached player. Membership changes and a two-second visible-state safety check rebuild the roster as needed. Up to twelve pooled rows are reused. Hidden/disabled group panels do not rebuild continuously; alerts and safety timers stop during placement or loading. No combat-log parsing is required.
 
-A 1.5 second safety refresh is retained only as a fallback while the tracker is
-enabled, visible and unobscured. The fast animation update exists only while a
-visible tracked Ultimate is actually READY.
+LibGroupCombatStats owns its shared callbacks and sender timer. Disabling the matching sharing protocol blocks that traffic without removing registrations belonging to other addons; the library's own timer may remain until reload.
 
 ## Commands
 
-- `/asult` — settings
-- `/asult main`
-- `/asult back`
-- `/asult both`
-- `/asult lock`
-- `/asult unlock`
-- `/asult show`
-- `/asult hide`
-- `/asult enable`
-- `/asult disable`
-- `/asult reset`
-- `/asult status`
+| Command | Action |
+| --- | --- |
+| `/asult` | ULT settings |
+| `/asult main`, `/asult back`, `/asult both` | Select the personal bars |
+| `/asult group` | Group Ultimate configuration |
+| `/asmove` | Position all enabled HUD panels |
+| `/asult show`, `/asult hide` | Change personal visibility |
+| `/asult enable`, `/asult disable` | Change personal/group parent activation |
+| `/asult reset`, `/asult status` | Reset placement or inspect status |
+| `/asult group show`, `/asult group hide` | Change group visibility |
+| `/asult group reset` | Reset group placement |
 
-
-## Group Ultimate Tracking
-
-ULT Tracker includes an optional raidlead-oriented group Ultimate list.
-
-### How tracking works
-
-The raidlead does **not** configure players manually.
-
-The configuration scans the current group and builds a unique list of every
-shared Ultimate ability currently slotted by group members. The raidlead then
-selects the **Ultimate abilities** to monitor.
-
-Examples:
-
-- Aggressive Horn
-- Glacial Colossus
-- Reviving Barrier
-- Shooting Star
-
-If a player has one of the selected Ultimates slotted on either weapon bar,
-their **@UserID** is automatically added to the raidlead list. If the player no
-longer has a selected Ultimate slotted, they disappear automatically.
-
-There is no FRONT/BACK distinction in the raidlead workflow.
-
-### Data source
-
-ESO does not expose another player's live Ultimate resource directly to arbitrary
-addons. Group tracking therefore integrates with **LibGroupCombatStats**, which
-shares Ultimate data through the official ZOS group broadcast API.
-
-Install LibGroupCombatStats with the dependencies declared by its current package. The personal MAIN/BACK tracker does not require this library. See the shared **Libraries** page for setup guidance.
-
-When LibGroupCombatStats is available, AlphaSquadUI registers for **ULT only**.
-No DPS or HPS data is requested.
-
-Compatible group Ultimate data can come from Ąlpha Şquad UI or another addon that actively publishes the same LibGroupCombatStats data. Merely installing a library does not guarantee every peer is sharing. This integration does not inspect remote gear, full skill bars, Champion selections or Class Masteries; Support Coverage build sharing is separate.
-
-### Raidlead configuration
-
-Open:
-
-`Settings > Ąlpha Şquad UI > ULT Tracker > CONFIGURE GROUP`
-
-or:
-
-`/asult group`
-
-The configuration shows the group's available Ultimate identities in a compact
-scrolling list. Up to 24 Ultimate filters can be retained in the saved selection.
-
-For each Ultimate:
-
-- icon
-- exact localized Ultimate name
-- number of group members currently slotting it
-- ON/OFF tracking state
-
-`SELECT ALL` and `CLEAR ALL` are available.
-
-### Group HUD
-
-The raidlead HUD is a compact vertical list with **one @UserID per line**.
-
-Each line shows:
-
-- @UserID
-- one large icon for the most relevant selected Ultimate
-- charge percentage calculated against that Ultimate's real cost
-- a compact progress bar
-- READY visual state
-
-The HUD intentionally does not display Ultimate names or raw Ultimate-point
-counts, keeping the raidlead list compact.
-
-If a player matches multiple selected Ultimates, the HUD prioritizes a READY
-Ultimate first; otherwise it displays the matching Ultimate closest to READY.
-
-READY players are sorted to the top and receive a high-contrast orange/gold/white
-pulse.
-
-When a tracked player's shared Ultimate resource drops after previously being
-ready for a selected Ultimate, that row is strongly dimmed for a short period.
-Because ESO group sharing exposes resource/slot information rather than a
-guaranteed remote cast ID, this spent-Ultimate indicator is an informed visual
-signal rather than combat-log proof of which exact remote Ultimate was cast.
-
-### Performance
-
-Group tracking remains event-driven through LibGroupCombatStats Ultimate events.
-
-- incoming updates are coalesced
-- hidden settings panels are not refreshed
-- disabled group HUDs do not rebuild rows
-- only READY rows use a lightweight pulse update
-- one 2-second safety refresh runs only while Group Tracking and its parent are enabled, visible and unobscured
-- row controls are created once and reused
-- no combat-log parsing is required
-
-### Commands
-
-- `/asult group` — open Group Ultimate configuration
-- `/asult group show`
-- `/asult group hide`
-- `/asult group lock`
-- `/asult group unlock`
-- `/asult group reset`
-
-
-### Compact percentage HUD
-
-The group HUD is intentionally minimal for raidlead use:
-
-- one @UserID per row
-- large tracked Ultimate icon
-- charge percentage only
-- no Ultimate name in the HUD
-- no raw Ultimate point count
-
-Percentage is calculated against the real cost of the tracked Ultimate and is
-capped at 100%.
-
-Rows are ordered:
-
-1. READY players first
-2. charging players by highest percentage
-3. recently spent Ultimates last
-
-READY rows use a high-contrast orange/gold/white pulse. Recently spent rows are
-strongly dimmed for a short period.
-
-
-### Persistent HUD sizing
-
-Group Ultimate Config exposes explicit HUD sizing controls:
-
-- **Overall Scale**: 60%–180%
-- **List Width**: 240–520 px
-- **Row Height**: 28–56 px
-- **Background Opacity**: 30%–100%
-- **Reset Size**
-- **Reset Position**
-
-Row Height also scales the Ultimate icon automatically, keeping the compact list
-balanced and responsive.
-
-All group tracker preferences are stored in account-wide ESO SavedVariables for
-the current server/world, including tracked Ultimate filters, HUD scale, width,
-row height, opacity, position, lock state, visibility, self inclusion and ready
-sound preference. Values survive reloads, zoning and game restarts.
-
-## Dashboard and sharing
-
-Enable or disable this module from Dashboard. Disabled tracking removes its own gameplay subscriptions and recovery/animation timers. Libraries remains available and its sharing settings are independent. Cross-sync keeps HUD positions and module settings across characters by default; switch it off for character-specific layouts. Loading transitions pause tracking until activation.
+See the [ESO acceptance checklist](../../../docs/SUPPORT_COVERAGE_TESTING.md) for actual-client verification. Automated results do not certify native rendering or measured frame time.

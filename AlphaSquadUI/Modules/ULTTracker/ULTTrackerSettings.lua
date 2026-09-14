@@ -74,11 +74,7 @@ function ULT:BuildIntegratedSettingsPage(page, ui)
         function() return ULT.sv and ULT.sv.visible == true end,
         function(v) if ULT.sv then ULT:SetVisible(v) end end)
 
-    AddToggleRow(general, "AlphaSquadULTIntegratedLocked", "Lock position", 114,
-        function() return ULT.sv and ULT.sv.locked == true end,
-        function(v) if ULT.sv then ULT:SetLocked(v) end end)
-
-    AddToggleRow(general, "AlphaSquadULTIntegratedMenus", "Hide HUD in menus", 150,
+    AddToggleRow(general, "AlphaSquadULTIntegratedMenus", "Hide HUD in menus", 114,
         function() return ULT.sv and ULT.sv.hideInMenus == true end,
         function(v)
             if ULT.sv then
@@ -89,17 +85,6 @@ function ULT:BuildIntegratedSettingsPage(page, ui)
 
     CreateButton(general, "AlphaSquadULTIntegratedReset", "RESET POSITION", 14, 188, 140, 30, function()
         if ULT.sv then ULT:ResetPosition() end
-    end)
-
-    CreateButton(general, "AlphaSquadULTIntegratedMove", "UNLOCK & MOVE", 164, 188, 144, 30, function()
-        if not ULT.sv then return end
-        ULT:SetEnabled(true)
-        ULT:SetVisible(true)
-        ULT:SetLocked(false)
-        local settings = AlphaSquadUI.Settings
-        if settings and settings.CloseMain then settings.CloseMain()
-        elseif settings and settings.mainWindow then settings.mainWindow:SetHidden(true) end
-        ULT:ApplyVisibility()
     end)
 
     local tracking = CreateCard(page, "AlphaSquadULTIntegratedTracking", 344, 68, 322, 226, "TRACKING", C.cyan)

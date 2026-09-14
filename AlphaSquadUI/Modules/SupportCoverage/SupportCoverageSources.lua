@@ -287,10 +287,13 @@ function SC:DeriveBuildCapabilities(snapshot)
     if skills.championKnown then
         for _,star in ipairs(skills.champion or {}) do
             for _,source in ipairs(Catalog.championSources or {}) do
-                local matched=Normalize(star.name)==Normalize(source.name)
-                for _,id in ipairs(source.championIds or {}) do if star.id==id then matched=true end end
-                if matched then
-                    for _,key in ipairs(source.provides) do Add(key,source.name,"champion",source.conditions,true,true,"SLOTTED_CHAMPION") end
+                local ids=source.championIds or {}
+                local matched=#ids==0 and Normalize(star.name)==Normalize(source.name)
+                for _,id in ipairs(ids) do if star.id==id then matched=true end end
+                if matched and self.IsChampionStarActive and self:IsChampionStarActive(star) then
+                    for _,key in ipairs(source.provides) do
+                        Add(key,source.name,"champion",source.conditions,true,true,"ALLOCATED_CHAMPION",{points=star.points,slot=star.slot})
+                    end
                 end
             end
         end

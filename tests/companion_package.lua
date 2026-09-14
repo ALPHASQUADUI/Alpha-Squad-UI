@@ -4,7 +4,7 @@ local function check(value,message) count=count+1;assert(value,message) end
 local now,grouped=10000,false
 local events,updates,later={},{},{}
 local eventNames={"EVENT_ADD_ON_LOADED","EVENT_PLAYER_ACTIVATED","EVENT_PLAYER_COMBAT_STATE",
-    "EVENT_GROUP_MEMBER_JOINED","EVENT_GROUP_MEMBER_LEFT","EVENT_GROUP_UPDATE","EVENT_GROUP_MEMBER_CONNECTED_STATUS",
+    "EVENT_PLAYER_DEACTIVATED","EVENT_GROUP_MEMBER_JOINED","EVENT_GROUP_MEMBER_LEFT","EVENT_GROUP_UPDATE","EVENT_GROUP_MEMBER_CONNECTED_STATUS",
     "EVENT_INVENTORY_SINGLE_SLOT_UPDATE","EVENT_ACTION_SLOT_UPDATED","EVENT_ACTION_SLOTS_ALL_HOTBARS_UPDATED",
     "EVENT_WEREWOLF_STATE_CHANGED","EVENT_ACTIVE_QUICKSLOT_CHANGED","EVENT_CHAMPION_PURCHASE_RESULT","EVENT_SKILL_POINTS_CHANGED",
     "EVENT_SKILLS_FULL_UPDATE","EVENT_SKILL_BUILD_SELECTION_UPDATED","EVENT_SKILL_RESPEC_RESULT",
@@ -72,16 +72,25 @@ local function Fire(event,...)
     fn(event,...)
 end
 Fire(EVENT_ADD_ON_LOADED,"AlphaSquadBuildShare")
-check(not SC.sv.enabled and not SC.sv.experimentalSharing,"Fresh companion installs are opt-in")
-check(next(updates)==nil,"Disabled companion has no update loop")
+check(SC.sv.enabled and SC.sv.experimentalSharing,"Fresh companion installs enable sharing")
+check(next(updates)==nil,"Solo companion has no update loop")
 SLASH_COMMANDS['/asbuildshare']('on')
 check(SC.sv.enabled and SC.share.available,"Explicit consent enables compatible transport")
 check(protocols[507] and protocols[510] and not protocols[508] and not protocols[509],"Companion registers only build protocols")
 check(next(updates)==nil,"Solo companion has no heartbeat")
+Fire(EVENT_PLAYER_ACTIVATED)
 grouped=true;Fire(EVENT_GROUP_MEMBER_JOINED)
 check(updates.AlphaSquadBuildShareHeartbeat and updates.AlphaSquadBuildShareHeartbeat.ms==60000,"Grouped companion uses a slow heartbeat")
 local pending=later;later={};for _,task in ipairs(pending) do now=task.at;task.fn() end
 check(SC.localSnapshot~=nil,"Generated shared scanner executes without full addon infrastructure")
+local beforeLoading=SC.localSnapshot
+Fire(EVENT_PLAYER_DEACTIVATED)
+check(SC.loading and not updates.AlphaSquadBuildShareHeartbeat,"Loading suspends the companion heartbeat")
+local loadingTasks=later;later={};for _,task in ipairs(loadingTasks) do now=task.at;task.fn() end
+Fire(EVENT_ACTION_SLOTS_ALL_HOTBARS_UPDATED)
+check(SC.localSnapshot==beforeLoading and #later==0,"Loading cancels queued captures and prevents new scans")
+Fire(EVENT_PLAYER_ACTIVATED)
+check(not SC.loading and updates.AlphaSquadBuildShareHeartbeat,"Activation resumes sharing after loading")
 Fire(EVENT_PLAYER_COMBAT_STATE,true)
 check(SC.inCombat and not updates.AlphaSquadBuildShareHeartbeat,"Combat stops companion scans and heartbeat")
 Fire(EVENT_PLAYER_COMBAT_STATE,false)

@@ -37,7 +37,7 @@ A **five-second lightweight recovery refresh** is restricted to visible or group
 
 There is **no combat sampler, uptime accumulator, pull report archive or planner search loop** in the active workflow. Build-sharing frames and pending receiver state are bounded, rate-limited and validated before affecting coverage. Only compact capability summaries are automatic; full builds are requested on demand. Detail transfers keep one acknowledged chunk in flight, wait at least 1.2 seconds between responses and cap the serialized snapshot at 3,584 bytes. Inactive transfers time out; completed detail data is cached for 120 seconds. The companion follows the same precombat transport constraints.
 
-Disabling a module removes its gameplay subscriptions and unnecessary updates. Explicitly enabled sharing retains only the minimal data path. A disabled Support Coverage module uses a sixty-second grouped recovery check and never evaluates coverage or renders hidden views. Native CP artwork is held at a static frame without twelve animation loops. A missing library must not cause a retry loop or chat spam.
+Disabling a module removes its gameplay subscriptions and unnecessary updates. Enabled sharing retains only the minimal data path. A disabled Support Coverage module uses a sixty-second grouped recovery check and never evaluates coverage or renders hidden views. Native CP artwork is held at a static frame without twelve animation loops. A missing library must not cause a retry loop or chat spam.
 
 ## Optional third-party evidence
 
@@ -54,3 +54,12 @@ In ESO, compare addon ON/OFF frame time and memory in a four-player dungeon and 
 Libraries remain installed and available independently of UI modules. Only verified matching protocols are changed, and queued disabled packets are pruned. LibGroupCombatStats does not expose sender unregistration; its own shared send timer can remain until reload after its protocol is disabled. The addon does not suppress callbacks belonging to another library or its other clients. On the next load, an explicitly disabled Ultimate sender is not registered by this addon.
 
 Dashboard and Libraries use static controls. Libraries fits its two columns and Minion footer on the settings canvas without a scrollbar. The common shell fits smaller viewports by scaling only when necessary. Native tooltip scale and draw order are restored after use.
+
+
+## Compact interface and placement
+
+The Coverage grid creates its controls once and reanchors them for filtering or viewport changes. A fixed single page replaces tall repeated provider rows; contributor descriptions are assembled on hover. Set-bonus thresholds use a bounded cache of 256 successful native lookups. Incomplete or unavailable native lookups are not cached as proof of absence.
+
+Global MOVE HUD is a short-lived placement state with no heartbeat or frame callback. Only Dashboard-enabled modules participate. Placement previews suspend normal alert animation work and preserve normal visibility settings; closing the placement state saves and locks the panels. Personal ULT presentation yields to a qualifying active Overload module using cached slot state, without another skill scan.
+
+Sharing defaults are applied once, and actual native library states remain authoritative afterward. Missing libraries and unsupported controls do not trigger polling or repeated navigation. Sharing controls do not create a second library-settings window.

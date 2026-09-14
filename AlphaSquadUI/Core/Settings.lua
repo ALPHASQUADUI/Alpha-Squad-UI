@@ -33,6 +33,7 @@ end
 function Settings.ShowExclusiveWindow(id)
     local target = Settings.exclusiveWindows[id]
     if not target then return false end
+    if AlphaSquadUI.Layout then AlphaSquadUI.Layout.Finish() end
     for otherId, entry in pairs(Settings.exclusiveWindows) do
         if otherId ~= id and not entry.control:IsHidden() then
             if type(entry.close) == "function" then entry.close()
@@ -131,8 +132,21 @@ function Settings.OpenPage(id)
 end
 
 local ASUI=AlphaSquadUI
+-- Native confirmation dialogs use MEDIUM/20. Keep addon windows below them,
+-- and leave tooltips on their native high tier. No modal hooks or polling.
+function Settings.ApplyWindowLayer(control,isHUD)
+    if not control then return end
+    control:SetDrawTier(DT_MEDIUM or DT_HIGH)
+    control:SetDrawLayer(DL_CONTROLS or DL_OVERLAY)
+    local dialogLevel=tonumber(ZO_MEDIUM_TIER_KEYBOARD_STANDARD_DIALOG) or 20
+    control:SetDrawLevel(math.max(0,dialogLevel-(isHUD and 15 or 5)))
+end
 local function OpenLink(url)
-    if type(url)=="string" and url:match("^https://") and RequestOpenUnsafeURL then RequestOpenUnsafeURL(url) end
+    if type(url)~="string" or #url>2048 or url:find("[%z\1-\32\127]") or not url:match("^https://") or not RequestOpenUnsafeURL then return false end
+    if ASUI.Layout then ASUI.Layout.Finish() end
+    if ASUI.Tooltips then ASUI.Tooltips.Hide() end
+    RequestOpenUnsafeURL(url)
+    return true
 end
 Settings.OpenLink=OpenLink
 Settings.modulePages={overload="Overload",ulttracker="ULTTracker",supportcoverage="SupportCoverage"}
@@ -200,10 +214,20 @@ Settings.RegisterPage("libraries",function(page,ui)
         local status=Label(ui,card,"AlphaSquadLibraryStatus"..index,"",half-188,10,112,22,c.red)
         ui.CreateButton(card,"AlphaSquadLibraryLink"..index,"ESOUI",half-76,6,62,26,function() OpenLink("https://www.esoui.com/downloads/info"..data.id) end)
         if data.kind then
-            ui.AddToggleRow(card,"AlphaSquadLibraryShare"..index,data.toggle,36,function() return ASUI.Sharing and ASUI.Sharing.IsEnabled(data.kind) or false end,
+            local switch=ui.AddToggleRow(card,"AlphaSquadLibraryShare"..index,data.toggle,36,function() return ASUI.Sharing and ASUI.Sharing.IsEnabled(data.kind) or false end,
                 function(value) if ASUI.Sharing then ASUI.Sharing.SetEnabled(data.kind,value) end end,
-                data.kind=="builds" and "Share supported equipment, traits, glyphs, skill bars, CP and readiness in your current group. Both clients need compatible software. Build transport registration is pending; use in coordinated groups. Module switches do not change sharing."
-                or "Changes this library's matching group protocols, including its saved settings. Other addons using the same protocol follow this library setting. If the library interface changes, open its native settings to configure it.")
+                data.kind=="builds" and "Share supported equipment, traits, glyphs, skill bars, CP and readiness in your current group. Both clients need compatible software. Build transport registration is pending; use in coordinated groups. Enabled at installation; your later OFF choice is saved. Module switches do not change sharing."
+                or "Changes this library's matching group protocols and saved settings here, without opening another panel. Other addons using the same protocols follow this setting. Enabled at installation; your later OFF choice is saved. Module switches do not change sharing.")
+            local baseHelp=switch.help
+            ui.RegisterRefresher(function()
+                local _,reason,available=false,"Install the listed libraries to enable sharing.",false
+                if ASUI.Sharing then _,reason,available=ASUI.Sharing.GetStatus(data.kind) end
+                switch.help=baseHelp..(reason and ("\n\n"..reason) or "")
+                if not available then
+                    switch.label:SetText("N/A")
+                    switch.label:SetColor(c.red[1],c.red[2],c.red[3],1)
+                end
+            end)
             Label(ui,card,"AlphaSquadLibraryHelp"..index,data.text,14,72,half-28,23)
         else Label(ui,card,"AlphaSquadLibraryHelp"..index,data.text,14,40,half-28,48) end
         ui.RegisterRefresher(function()
@@ -216,7 +240,6 @@ Settings.RegisterPage("libraries",function(page,ui)
     local help=ui.CreateCard(page,"AlphaSquadLibraryPrivacy",8+half+16,402,half,98,"DATA ACCESS",c.cyan)
     Label(ui,help,"AlphaSquadLibraryPrivacyText","Group membership alone cannot reveal full builds. Senders can use AlphaSquadBuildShare instead of the full UI. Unavailable data stays Unknown.",14,38,half-28,54)
     local footer=ui.CreateCard(page,"AlphaSquadMinion",8,518,width,70,"MINION • ADDON MANAGER",c.green)
-    Label(ui,footer,"AlphaSquadMinionHelp","Install and update ESO addons and libraries, then /reloadui.",14,34,width-310,26)
-    ui.CreateButton(footer,"AlphaSquadMinionLink","GET MINION",width-286,24,136,30,function() OpenLink("https://minion.mmoui.com/") end)
-    ui.CreateButton(footer,"AlphaSquadLibraryNativeSettings","SETTINGS",width-142,24,126,30,function() if ASUI.Sharing then ASUI.Sharing.OpenNativeSettings() end end)
+    Label(ui,footer,"AlphaSquadMinionHelp","Install and update ESO addons and libraries, then /reloadui.",14,34,width-180,26)
+    ui.CreateButton(footer,"AlphaSquadMinionLink","GET MINION",width-152,24,136,30,function() OpenLink("https://minion.mmoui.com/") end)
 end)

@@ -215,9 +215,6 @@ function Group:RefreshConfig()
     self.configWindow.visibleButton.label:SetText(g.visible and "HUD: SHOW" or "HUD: HIDE")
     SetColor(self.configWindow.visibleButton.label, g.visible and COLORS.green or COLORS.muted)
 
-    self.configWindow.lockButton.label:SetText(g.locked and "LOCKED" or "UNLOCKED")
-    SetColor(self.configWindow.lockButton.label, g.locked and COLORS.green or COLORS.gold)
-
     self.configWindow.selfButton.label:SetText(g.includeSelf and "SELF: ON" or "SELF: OFF")
     SetColor(self.configWindow.selfButton.label, g.includeSelf and COLORS.green or COLORS.muted)
 
@@ -267,6 +264,7 @@ function Group:CreateConfigWindow()
     win:SetDrawTier(DT_HIGH)
     win:SetDrawLayer(DL_OVERLAY)
     win:SetDrawLevel(140)
+    if AlphaSquadUI.Settings and AlphaSquadUI.Settings.ApplyWindowLayer then AlphaSquadUI.Settings.ApplyWindowLayer(win, false) end
     win:SetHidden(true)
     local settings = AlphaSquadUI.Settings
     if settings and settings.RegisterExclusiveWindow then
@@ -322,18 +320,13 @@ function Group:CreateConfigWindow()
         Group:RefreshConfig()
     end)
 
-    win.lockButton = Button(win, "AlphaSquadULTGroupConfigLock", "", 278, 96, 110, 28, function()
-        Group:SetLocked(not Group.sv.locked)
-        Group:RefreshConfig()
-    end)
-
-    win.selfButton = Button(win, "AlphaSquadULTGroupConfigSelf", "", 396, 96, 110, 28, function()
+    win.selfButton = Button(win, "AlphaSquadULTGroupConfigSelf", "", 278, 96, 110, 28, function()
         Group.sv.includeSelf = not Group.sv.includeSelf
         Group:Refresh("include self")
         Group:RefreshConfig()
     end)
 
-    win.soundButton = Button(win, "AlphaSquadULTGroupReadySound", "", 514, 96, 244, 28, function()
+    win.soundButton = Button(win, "AlphaSquadULTGroupReadySound", "", 396, 96, 362, 28, function()
         Group.sv.readySound = not Group.sv.readySound
         Group:RefreshConfig()
     end)
@@ -501,7 +494,7 @@ function Group:CreateConfigWindow()
     end)
 
     local saveNote = Label(win, "AlphaSquadULTGroupSaveNote", "ZoFontGameSmall",
-        "Saved per account/server: Ultimate filters, HUD size, opacity, position, lock state, visibility and sound settings.", COLORS.muted)
+        "Your profile keeps Ultimate filters, size, opacity, position, visibility and sounds. Use Move HUD in the sidebar to place all panels.", COLORS.muted)
     saveNote:SetDimensions(736, 30)
     saveNote:SetAnchor(TOPLEFT, win, TOPLEFT, 22, 682)
     saveNote:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
@@ -509,7 +502,6 @@ function Group:CreateConfigWindow()
 
     win.enabledButton.help = "Enable or disable group Ultimate tracking. Your selected abilities and HUD settings are kept."
     win.visibleButton.help = "Show or hide the group Ultimate HUD without clearing your selected abilities."
-    win.lockButton.help = "Unlock to drag the group HUD to a new position. Lock it again when you are finished."
     win.selfButton.help = "Include your own character in the group Ultimate list."
     win.soundButton.help = "Play a notification when a tracked group Ultimate becomes ready."
     self:ApplyConfigWindowScale()

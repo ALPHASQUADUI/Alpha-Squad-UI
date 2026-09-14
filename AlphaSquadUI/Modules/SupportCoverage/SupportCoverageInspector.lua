@@ -121,7 +121,7 @@ function SC:RefreshInspector()
     if details then subtitle=subtitle.."\n"..(player and player.unitTag=="player" and "Your equipped build" or "Shared build snapshot • refresh after changes")
     elseif player then subtitle=subtitle.."\nPartial information • request a compatible shared build for exact equipment and skill slots" end
     win.subtitle:SetText((UI.Text(subtitle):gsub("@SeRuM1",function() return AlphaSquadUI.Theme.authorText or "@SeRuM1" end)))
-    win.footer:SetText("Hover equipment, skills and Champion stars for their details. ? = unavailable • — = empty. Set names show equipped items; FRONT / BACK show set pieces.")
+    win.footer:SetText("Hover equipment, skills and Champion stars for their details. ? = unavailable • — = empty. Set headline = highest bar total; FRONT / BACK = exact set pieces.")
     self.BuildView.Bind(win.buildSheet,player,details,status)
     local height=math.max(700,win.buildSheet:GetHeight()+198)
     win:SetDimensions(1060,height)

@@ -16,7 +16,7 @@ AlphaSquadUI.Modules.ULTTracker = ULT
 
 ULT.name = "ULTTracker"
 ULT.displayName = "ULT Tracker"
-ULT.version = (AlphaSquadUI and AlphaSquadUI.version) or "2.8.0"
+ULT.version = (AlphaSquadUI and AlphaSquadUI.version) or "2.9.0"
 ULT.addonName = "AlphaSquadUI"
 ULT.savedVarsName = "AlphaSquadULTTrackerSavedVariables"
 
@@ -212,6 +212,8 @@ function ULT:ComputeBarState(bar, current)
 end
 
 function ULT:PlayReadySound()
+    local layout = AlphaSquadUI.Layout
+    if layout and (layout.IsMoving(self) or layout.ShouldHidePersonalULT()) then return end
     if not self.sv or not self.sv.readySound or not PlaySound or not SOUNDS then return end
     if self.uiObscured then return end
 
@@ -229,7 +231,7 @@ function ULT:PlayReadySound()
 end
 
 function ULT:SetFlashUpdate(enabled)
-    enabled = enabled == true
+    enabled = enabled == true and not (AlphaSquadUI.Layout and (AlphaSquadUI.Layout.IsMoving(self) or AlphaSquadUI.Layout.ShouldHidePersonalULT()))
     if self.flashRunning == enabled then return end
     self.flashRunning = enabled
 
@@ -249,6 +251,12 @@ function ULT:Refresh(reason, observedUltimate)
     if not self.initialized or not self.sv then return end
     if not self.sv.enabled then
         self:SetFlashUpdate(false)
+        return
+    end
+
+    if AlphaSquadUI.Layout and AlphaSquadUI.Layout.ShouldHidePersonalULT() then
+        self:SetFlashUpdate(false)
+        if self.ApplyVisibility then self:ApplyVisibility() end
         return
     end
 
@@ -367,7 +375,7 @@ function ULT:RefreshUIObscured()
 end
 
 function ULT:SetSafetyUpdateActive(enabled)
-    enabled = enabled == true and not self.loading
+    enabled = enabled == true and not self.loading and not (AlphaSquadUI.Layout and (AlphaSquadUI.Layout.IsMoving(self) or AlphaSquadUI.Layout.ShouldHidePersonalULT()))
     if self.safetyUpdateActive == enabled then return end
     self.safetyUpdateActive = enabled
     local name = "AlphaSquadUI_ULTTracker_Safety"
@@ -492,6 +500,10 @@ function ULT:RegisterSlashCommands()
 
         if lower == "" or lower == "settings" or lower == "options" then
             if ULT.ToggleSettings then ULT:ToggleSettings() end
+        elseif (lower == "move" or lower == "unlock" or lower == "group move" or lower == "group unlock") and AlphaSquadUI.Layout then
+            AlphaSquadUI.Layout.Start()
+        elseif (lower == "lock" or lower == "group lock") and AlphaSquadUI.Layout then
+            AlphaSquadUI.Layout.Finish()
         elseif lower == "lock" then
             ULT:SetLocked(true)
         elseif lower == "unlock" then
@@ -543,7 +555,7 @@ function ULT:RegisterSlashCommands()
                 p.name ~= "" and p.name or "EMPTY", p.cost or 0, p.state or "",
                 b.name ~= "" and b.name or "EMPTY", b.cost or 0, b.state or ""))
         else
-            d("|cE66A19[ĄS ULT]|r /asult • main • back • both • group • group show/hide • group lock/unlock • reset • status")
+            d("|cE66A19[ĄS ULT]|r /asult • main • back • both • group • group show/hide • reset • status • /asmove")
         end
     end
 end
@@ -555,7 +567,7 @@ function ULT:Initialize()
     local defaults = {
         enabled = true,
         visible = true,
-        locked = false,
+        locked = true,
         trackMode = "both",
         readySound = true,
         readyFlash = true,
@@ -576,6 +588,7 @@ function ULT:Initialize()
             self.sv[key] = value
         end
     end
+    self.sv.locked = true -- Global placement never resumes across reloads.
     self.sv.scale = Clamp(FiniteOr(self.sv.scale, defaults.scale), 70, 150)
     self.sv.opacity = Clamp(FiniteOr(self.sv.opacity, defaults.opacity), 30, 100)
     self.sv.x = Clamp(FiniteOr(self.sv.x, defaults.x), -100000, 100000)

@@ -258,6 +258,35 @@ function SC:GetChampionDiscipline(starId)
     if kind==CHAMPION_DISCIPLINE_TYPE_WORLD then return "WORLD" end
 end
 
+-- Use the inspected player's committed allocation with native preview APIs.
+-- IsPurchased() on the local data manager would substitute the viewer's build.
+function SC:IsChampionStarActive(star)
+    if type(star)~="table" or star.pointsKnown~=true then return false end
+    local id,points=NaturalNumber(star.id,2147483647),NaturalNumber(star.points,3600)
+    if not id or id<1 or not points or points<1 then return false end
+    local maximum=NaturalNumber(Try(GetChampionSkillMaxPoints,id),3600)
+    if not maximum or maximum<1 or points>maximum then return false end
+    local kind=Try(GetChampionSkillType,id)
+    local slottable=false
+    for _,name in ipairs({"NORMAL_SLOTTABLE","STAT_POOL_SLOTTABLE"}) do
+        local native=rawget(_G,"CHAMPION_SKILL_TYPE_"..name)
+        if native~=nil and kind==native then slottable=true end
+    end
+    if not slottable or Try(WouldChampionSkillNodeBeUnlocked,id,points)~=true then return false end
+    local jumps=Try(DoesChampionSkillHaveJumpPoints,id)
+    if jumps==false then return true end
+    if jumps~=true or type(GetChampionSkillJumpPoints)~="function" then return false end
+    local ok,values=pcall(function() return {GetChampionSkillJumpPoints(id)} end)
+    if not ok or #values>64 then return false end
+    local minimum
+    for _,value in ipairs(values) do
+        value=NaturalNumber(value,maximum)
+        if not value then return false end
+        if value>0 and (not minimum or value<minimum) then minimum=value end
+    end
+    return minimum~=nil and points>=minimum
+end
+
 function SC:ScanPoisons()
     local result = {known=false, items={}}
     if BAG_WORN == nil or not GetItemLink or EQUIP_SLOT_POISON == nil or EQUIP_SLOT_BACKUP_POISON == nil then return result end

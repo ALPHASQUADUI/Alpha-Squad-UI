@@ -1,6 +1,6 @@
 # Downloads and installation
 
-[Release downloads](https://github.com/ALPHASQUADUI/Alpha-Squad-UI/releases) · [Build artifacts](https://github.com/ALPHASQUADUI/Alpha-Squad-UI/actions) · [Version 2.8.0 notes](2.8.0.md)
+[Release downloads](https://github.com/ALPHASQUADUI/Alpha-Squad-UI/releases) · [Build artifacts](https://github.com/ALPHASQUADUI/Alpha-Squad-UI/actions) · [Version 2.9.0 notes](2.9.0.md)
 
 ## Install
 
@@ -8,9 +8,9 @@
 2. Extract **AlphaSquadUI.zip** so `AlphaSquadUI/AlphaSquadUI.txt` is directly inside the ESO `live/AddOns` directory.
 3. Install any libraries required by your selected group features. [Minion](https://minion.mmoui.com/) can manage published addons and dependencies.
 4. Enable the addon and libraries, then log in or `/reloadui`.
-5. Open **Settings → Ąlpha Şquad UI → Dashboard**. Configure sharing in **Libraries**.
+5. Open **Settings → Ąlpha Şquad UI → Dashboard**. Review sharing in **Libraries**; a new installation enables supported sharing automatically. Existing saved OFF choices are preserved. Use **MOVE HUD** in the sidebar to arrange enabled panels.
 
-The optional **AlphaSquadBuildShare.zip** installs a separate `AlphaSquadBuildShare` directory for players who want to share supported builds without the tracking interface. It requires LibGroupBroadcast and explicit `/asbuildshare on` consent. Install the appropriate package; the full suite already includes build sharing.
+The optional **AlphaSquadBuildShare.zip** installs a separate `AlphaSquadBuildShare` directory for players who want to share supported builds without the tracking interface. It requires LibGroupBroadcast, starts sharing on a new installation and preserves an existing OFF preference. Use `/asbuildshare off`, `/asbuildshare on` and `/asbuildshare status` to control it. Install the appropriate package; the full suite already includes build sharing.
 
 ## Automated build artifacts
 

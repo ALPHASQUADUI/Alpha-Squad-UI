@@ -83,7 +83,7 @@ check(canvas.skills.bars.werewolf.hidden,'Werewolf row is absent for a non-werew
 local setRows=V.SetRows(details.equipment)
 local arena
 for _,row in ipairs(setRows)do if row.name:find('Crushing Wall',1,true)then arena=row end end
-check(arena and arena.name=='1× Crushing Wall' and arena.front==0 and arena.back==2,'One arena staff is one physical item and two set pieces on its own bar')
+check(arena and arena.name=='2× Crushing Wall' and arena.front==0 and arena.back==2,'The arena headline counts two set pieces from one two-handed item')
 check(canvas.champion.rows.COMBAT.icons[1].badge.text=='50','Known CP committed points appear on their star')
 check(canvas.champion.rows.CONDITIONING.icons[1].badge.text=='','Unknown CP points never display fabricated numeric allocation')
 canvas.champion.rows.COMBAT.icons[1].handlers.OnMouseEnter()
@@ -112,7 +112,7 @@ check(canvas.equipment.slots.HEAD.data.value==nil and canvas.equipment.slots.HEA
 check(canvas.skills.bars.primary.icons[6].icon.texture=='shared-ultimate','Fresh partial ultimate is shown')
 check(canvas.skills.bars.primary.icons[1].data.value==nil,'Partial ultimate does not imply knowledge of normal skills')
 local shared=V.SetRows(nil,player.externalSets)[1]
-check(shared.name=='Shared set' and shared.front==5 and shared.back==nil,'Partial sets never invent physical counts or unknown-bar totals')
+check(shared.name=='≥5× Shared set' and shared.front==5 and shared.back==nil,'Partial sets show the known bar as a lower bound and leave the other bar unknown')
 check(canvas.champion.rows.COMBAT.icons[1].data.value==nil,'Switching player removes previous CP data')
 check(canvas.masteries.icons[1].hidden,'Switching player hides previous mastery icon')
 check(canvas.consumables.tiles[4].value.text=='Unknown','Missing curse state does not become uninfected')
@@ -125,6 +125,35 @@ check(canvas.equipment.silhouette.hidden,'No selected player never falls back to
 details.equipment.complete=false
 local incomplete=V.SetRows(details.equipment)
 check(incomplete[1].front==nil and incomplete[1].back==nil,'Incomplete item scan does not claim exact per-bar totals')
+
+-- Headline set counts are effective bar totals, never the sum of both weapon pairs.
+local mixed=V.SetRows({complete=true,setList={{id=99,name="Mixed bars",physicalCount=6,physicalCountKnown=true,mainCount=5,backCount=5}}})[1]
+check(mixed.name=="5× Mixed bars" and mixed.physical==6 and mixed.effective==5,"Body3 + front sword/shield + back staff count as five set pieces, not six")
+check(not mixed.warning,"An unknown native threshold cannot fabricate an excess warning")
+GetItemSetInfo=function(id)return true,"Known set",id==101 and 1 or 4 end
+GetItemSetBonusInfo=function(id,index)return id==101 and 2 or index+1,"Native bonus"end
+local extra=V.SetRows({complete=true,setList={{id=100,name="Six pieces",mainCount=6,backCount=5}}})[1]
+check(extra.name=="6× Six pieces" and extra.warning=="1 extra piece • front bar","A true sixth piece stays six and identifies the excessive bar")
+check(extra.tooltip:find("requires 5 pieces",1,true),"Excess warning explains the actual native set threshold")
+local arenaExtra=V.SetRows({complete=true,setList={{id=101,name="Arena",mainCount=2,backCount=0}}})[1]
+check(arenaExtra.required==2 and not arenaExtra.warning,"A full two-piece arena weapon is never judged against an assumed five-piece threshold")
+local unknown=V.SetRows({complete=false,setList={{id=100,name="Incomplete",mainCount=6,backCount=5}}})[1]
+check(unknown.effective==nil and unknown.warning==nil,"Incomplete equipment cannot assert a total or excess warning")
+local badNative=GetItemSetBonusInfo
+GetItemSetBonusInfo=function()return 0/0 end
+check(V.SetRequirement({id=102})==nil,"Malformed native requirements cannot create false excess warnings")
+GetItemSetBonusInfo=badNative
+check(canvas.equipment.silhouette.width==104 and canvas.equipment.silhouette.height==264,"Native silhouette fills the body panel with a larger static image")
+check(canvas.equipment.slots.HEAD.x+22==canvas.equipment.silhouette.x+52,"Head slot aligns with the center of the figure")
+check(canvas.equipment.slots.NECK.y==326 and canvas.equipment.slots.MAIN_HAND.y==421 and canvas.equipment.slots.BACKUP_MAIN.y==421,"Jewelry and both weapon sections retain their accepted positions")
+
+details.equipment.complete=true
+details.equipment.setList={{id=100,name="Six pieces",mainCount=6,backCount=5},{id=101,name="Arena",mainCount=0,backCount=2}}
+V.Bind(canvas,player,details)
+local warningRow=canvas.sets.rows[1]
+check(not warningRow.warning.hidden and warningRow.warning.text=="1 extra piece • front bar","True excess is explained visibly on the character sheet")
+check(warningRow.warning.y+warningRow.warning.height<=warningRow.height and canvas.sets.rows[2].y>=warningRow.y+warningRow.height,"An excess warning does not overlap the next set")
+check(warningRow.front.text=="6×" and warningRow.back.text=="5×","Excess warning leaves both exact bar counts readable")
 
 -- A maximally fragmented loadout remains a single sheet, including Werewolf.
 details.equipment.complete=true;details.equipment.setList={}

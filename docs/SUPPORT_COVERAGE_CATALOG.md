@@ -1,6 +1,6 @@
 # Support Coverage catalog — U50 pre-combat checks
 
-Reviewed against Live PC data and the project research on 13 September 2026. This is the feature-branch catalog, not a public release certification.
+Reference for the available PvE group-support effects and their source conditions. Source review: 13 September 2026. Equipped-source coverage does not guarantee live application, proc activation or recipient coverage.
 
 ## Two independent lists
 

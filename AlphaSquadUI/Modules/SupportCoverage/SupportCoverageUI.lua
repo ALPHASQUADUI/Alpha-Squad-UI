@@ -105,6 +105,7 @@ function UI.Window(name, title, close)
     local win = WINDOW_MANAGER:CreateTopLevelWindow(name)
     win:SetAnchor(CENTER, GuiRoot, CENTER, 0, 0); win:SetHidden(true)
     win:SetClampedToScreen(true); win:SetDrawTier(DT_HIGH); win:SetDrawLayer(DL_OVERLAY); win:SetDrawLevel(150)
+    if AlphaSquadUI.Settings.ApplyWindowLayer then AlphaSquadUI.Settings.ApplyWindowLayer(win) end
     win:SetMouseEnabled(true); win:SetMovable(true)
     win.bg = UI.Solid(win, name .. "BG", C.bg)
     local accent = WINDOW_MANAGER:CreateControl(name .. "Accent",win,CT_TEXTURE)
@@ -219,8 +220,9 @@ function SC:ApplyVisibility()
     local anyPopup=settings and settings.AnyExclusiveWindowVisible and settings.AnyExclusiveWindowVisible()
     local popup=(self.matrixWindow and not self.matrixWindow:IsHidden()) or (self.inspectorWindow and not self.inspectorWindow:IsHidden())
     local menu=settings and settings.mainWindow and not settings.mainWindow:IsHidden()
-    local hidden=self.loading==true or not self.sv.enabled or not self.sv.visible or self.inCombat==true
-        or (self.sv.hideInMenus and self.uiObscured) or anyPopup or popup or menu
+    local moving=AlphaSquadUI.Layout and AlphaSquadUI.Layout.IsMoving(self)
+    local hidden=self.loading==true or not self.sv.enabled or self.inCombat==true
+        or (not moving and (not self.sv.visible or (self.sv.hideInMenus and self.uiObscured))) or anyPopup or popup or menu
     self.window:SetHidden(hidden==true)
     if self.SetSafetyUpdateActive then
         local grouped=self.IsGrouped and self:IsGrouped()
@@ -291,6 +293,7 @@ function SC:CreateHUD()
     local win=WINDOW_MANAGER:CreateTopLevelWindow("AlphaSquadSupportCoverageHUD"); self.window=win
     win:SetDimensions(410,398); win:SetClampedToScreen(true); win:SetDrawTier(DT_HIGH)
     win:SetDrawLayer(DL_OVERLAY); win:SetDrawLevel(60); win:SetMouseEnabled(true)
+    if AlphaSquadUI.Settings.ApplyWindowLayer then AlphaSquadUI.Settings.ApplyWindowLayer(win,true) end
     win.bg=UI.Solid(win,"AlphaSquadSupportHUDBG",C.bg)
     win.title=UI.Label(win,"AlphaSquadSupportHUDTitle",(AlphaSquadUI.Theme.Brand and AlphaSquadUI.Theme.Brand() or "Ąlpha Şquad UI"),"ZoFontGameBold",C.orange)
     win.title:SetAnchor(TOPLEFT,win,TOPLEFT,12,8); win.title:SetDimensions(240,24)

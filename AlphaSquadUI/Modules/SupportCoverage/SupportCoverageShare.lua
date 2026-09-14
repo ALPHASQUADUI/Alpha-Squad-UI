@@ -1,6 +1,6 @@
 -- Ąlpha Şquad UI - Support Coverage compact group sharing
--- Uses a provisional protocol ID behind explicit sharing opt-in. It must be
--- formally reserved in LibGroupBroadcast_IDs before a public release.
+-- Protocol IDs remain provisional; conflicting registration fails closed.
+-- Sharing is enabled for a fresh installation and follows Libraries controls.
 
 local SC = AlphaSquadUI and AlphaSquadUI.Modules and AlphaSquadUI.Modules.SupportCoverage
 if not SC then return end
@@ -183,7 +183,9 @@ function SC:OnPeerShareData(unitTag, data)
         if not IsInteger(data[field],0,maximum) then return end
     end
     if type(data.food)~="boolean" or type(data.foodVerified)~="boolean" then return end
+    self:PrunePeerSharingData()
     local key = self:GetPlayerKey(unitTag)
+    if type(key)~="string" or #key<2 or #key>60 or not key:match("^@[^%c|]+$") then return end
     local previous = self.peerData[key]
 
     local foodId = tonumber(data.foodId) or 0
@@ -262,6 +264,26 @@ function SC:IsCurrentGroupMember(tag)
     return false
 end
 
+-- Keep transient peer state bounded even when Dashboard tracking is OFF.
+function SC:PrunePeerSharingData()
+    local current={}
+    local size=self:IsGrouped() and BoundedInteger(Call(GetGroupSize),0,12) or 0
+    for index=1,size do
+        local tag=Call(GetGroupUnitTagByIndex,index) or ("group"..index)
+        local key=self:GetPlayerKey(tag)
+        if key and key~="" then current[key]=true end
+    end
+    for key in pairs(self.peerData or {}) do if not current[key] then self.peerData[key]=nil end end
+    local share=self.share
+    if share then
+        if share.outgoingBuild and not current[share.outgoingBuild.requester] then share.outgoingBuild=nil end
+        if share.incomingBuild and not current[share.incomingBuild.key] then
+            share.incomingBuild=nil;share.buildStatus="Player left the group."
+        end
+        if share.requestedKey and not current[share.requestedKey] then share.requestedKey=nil end
+    end
+end
+
 function SC:MayReceiveBuild(tag)
     return self.sv and self.sv.shareData and self.sv.experimentalSharing
         and not self.loading and not self.inCombat and self:IsCurrentGroupMember(tag) and not self:IsSelf(tag)
@@ -292,8 +314,8 @@ function SC:InitializeSharing()
         local handler=LGB:RegisterHandler("AlphaSquadUI","ASUI")
         assert(handler,"Build sharing registration failed")
         self.share.handler=handler
-        if handler.SetDisplayName then handler:SetDisplayName("Ąlpha Şquad UI — Build Sharing") end
-        if handler.SetDescription then handler:SetDescription("Optional precombat build sharing. Protocol registration is pending; enable only with a coordinated group.") end
+        if handler.SetDisplayName then handler:SetDisplayName("Alpha Squad UI — Build Sharing") end
+        if handler.SetDescription then handler:SetDescription("Precombat build sharing, controlled in Alpha Squad UI Libraries. Protocol IDs are provisional; incompatible registration disables this transport.") end
         local protocol=handler:DeclareProtocol(LGB_BUILD_PROTOCOL_ID,LGB_BUILD_PROTOCOL_NAME)
         protocol:AddField(LGB.CreateNumericField("version",{minValue=0,maxValue=7}))
         protocol:AddField(LGB.CreateNumericField("role",{minValue=0,maxValue=15}))

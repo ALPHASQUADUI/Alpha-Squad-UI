@@ -110,4 +110,67 @@ input.equipment.slots[1].item.link="|H1:item:1:0|hInjected text|h"
 check(SC.BuildCodec.Encode(input)~=nil,"Item display text is not serialized; only native numeric item fields leave the client")
 input.equipment.slots[1].item.link="not an item link"
 check(SC.BuildCodec.Encode(input)==nil,"Unsupported links fail closed without executing arbitrary text")
+
+-- Verify the actual capability engine cannot turn contradictory wire metadata
+-- into a covered set. The fixture has three body pieces, sword/shield on the
+-- front and a perfected-family staff on the back: five pieces on either bar.
+SC.Catalog.setSources={{setId=30,label="Support set",requiredPieces=5,provides={"major_courage"}}}
+SC.Try=function(fn,...)
+    if type(fn)~="function" then return nil end
+    local ok,value=pcall(fn,...);if ok then return value end
+end
+function GetItemSetUnperfectedSetId(id) return id==31 and 30 or 0 end
+SC.EquipmentSlotOrder={};SC.EquipmentSlotDetails={}
+for slot=1,14 do
+    SC.EquipmentSlotOrder[slot]=slot
+    SC.EquipmentSlotDetails[slot]={slotKey="slot"..slot,slotName="Slot "..slot,
+        bar=slot<=10 and "BOTH" or slot<=12 and "PRIMARY" or "BACKUP"}
+end
+function SC:DescribeEquipmentItem(slot,link)
+    if link=="" then return nil end
+    local id=tonumber(link:match("|H%d+:item:(%d+):"))
+    local descriptor=self.EquipmentSlotDetails[slot] or {}
+    return {slot=slot,link=link,slotKey=descriptor.slotKey,slotName=descriptor.slotName,bar=descriptor.bar,
+        setId=id==204 and 31 or 30,setName="Support set",hasSet=true,setVerified=true,
+        isWeapon=descriptor.bar~="BOTH",twoHanded=id==204}
+end
+dofile("AlphaSquadUI/Modules/SupportCoverage/SupportCoverageSources.lua")
+local function EquippedBuild()
+    local equipment={complete=true,slots={},setList={{id=30,mainCount=5,backCount=5}}}
+    for slot=1,14 do
+        local id=slot<=3 and 101 or slot==11 and 202 or slot==12 and 203 or slot==13 and 204 or nil
+        local item=id and {link="|H1:item:"..id..":0|h|h"} or nil
+        equipment.slots[#equipment.slots+1]={slot=slot,known=true,empty=not item,item=item}
+    end
+    return {equipment=equipment}
+end
+local function DecodeBuild(build) return assert(SC.BuildCodec.Decode(assert(SC.BuildCodec.Encode(build)))) end
+local consistent=DecodeBuild(EquippedBuild())
+check(consistent.equipment.complete and consistent.equipment.countsVerified,
+    "Complete native slots verify front/back totals with perfected-family two-handed weight")
+check(consistent.capabilities.major_courage and consistent.capabilities.major_courage.mainBar
+    and consistent.capabilities.major_courage.backBar,"Consistent real items prove support-set coverage on both bars")
+local invalid=EquippedBuild();table.remove(invalid.equipment.slots,14)
+check(not DecodeBuild(invalid).equipment.complete,"A missing empty off-hand record cannot establish a complete equipment scan")
+invalid=EquippedBuild();invalid.equipment.slots[14].known=false
+check(not DecodeBuild(invalid).equipment.complete,"An explicitly unknown slot blocks claimed equipment completeness")
+invalid=EquippedBuild();invalid.equipment.setList[1].mainCount=6
+local inconsistent=DecodeBuild(invalid)
+check(not inconsistent.equipment.complete and not inconsistent.capabilities.major_courage,
+    "Inflated set totals remain unverified and do not become a covered capability")
+invalid=EquippedBuild();invalid.equipment.slots={}
+check(not DecodeBuild(invalid).capabilities.major_courage,"A set claim without any linked equipment cannot produce coverage")
+invalid=EquippedBuild();invalid.equipment.setList={}
+check(not DecodeBuild(invalid).equipment.complete,"Omitting a set present in linked equipment invalidates the totals")
+invalid=EquippedBuild();invalid.equipment.slots[11].item.link="|H1:item:204:0|h|h"
+invalid.equipment.setList[1].mainCount=6
+check(not DecodeBuild(invalid).equipment.complete,"A two-handed front weapon plus an occupied off-hand cannot establish valid coverage")
+invalid=EquippedBuild();invalid.equipment.setList[2]={id=31,mainCount=5,backCount=5}
+check(not DecodeBuild(invalid).equipment.complete,"Perfected and normal variants cannot duplicate the same family claim")
+local verifiedDescriptor=SC.DescribeEquipmentItem
+function SC:DescribeEquipmentItem(slot,link)
+    local item=verifiedDescriptor(self,slot,link);if item then item.setVerified=false end;return item
+end
+check(not DecodeBuild(EquippedBuild()).equipment.complete,"Unreadable native set identity cannot become verified equipment")
+SC.DescribeEquipmentItem=verifiedDescriptor
 print("Build codec: "..count.." assertions passed")

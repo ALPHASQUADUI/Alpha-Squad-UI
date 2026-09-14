@@ -58,25 +58,34 @@ check(registered.power2==event and filters.power2[2]=='player' and filters.power
 scope:UnregisterForEvent('power',2);scope:SetActive(false);scope:SetActive(true)
 check(not registered.power2,'Explicitly retired event subscriptions never reappear')
 
-local enabled={[20]=true,[21]=true,[40]=true,[99]=true};local removed=0
-local function Protocol(id,name) return {GetId=function()return id end,GetName=function()return name end,IsEnabled=function()return enabled[id] end} end
-local handlers={{addonName='LibGroupCombatStats',protocols={Protocol(20,'UltType'),Protocol(21,'UltValue')}},
-    {addonName='Unrelated',protocols={Protocol(99,'Other')}},{addonName='LibSetDetection',protocols={Protocol(40,'SetData')}}}
-LibGroupBroadcast={internal={handlerManager={GetHandlers=function()return handlers end},protocolManager={
-    SetProtocolEnabled=function(_,id,value)enabled[id]=value end,
-    RemoveDisabledMessages=function()removed=removed+1 end}}}
+local enabled={[20]=true,[21]=true,[40]=true,[99]=true}
+local function Option(id,name)
+    return {type='header',name=name}, {type='checkbox',name='Allow Sending',
+        getFunc=function()return enabled[id]end,setFunc=function(value)enabled[id]=value end}
+end
+local h20,c20=Option(20,'UltType');local h21,c21=Option(21,'UltValue')
+local h40,c40=Option(40,'SetData');local h99,c99=Option(99,'Other')
+local options={{type='submenu',name='Group Combat Stats',controls={h20,c20,h21,c21}},
+    {type='submenu',name='Lib Set Detection',controls={h40,c40}},
+    {type='submenu',name='Unrelated',controls={h99,c99}}}
+LibGroupBroadcast={};LibSetDetection={};LibGroupBroadcastOptions={}
+LibAddonMenu2={RegisterOptionControls=function()end}
+CALLBACK_MANAGER={FireCallbacks=function(_,event,panel)
+    assert(event=='LAM-BeforePanelControlsCreated' and panel==LibGroupBroadcastOptions)
+    LibAddonMenu2:RegisterOptionControls('LibGroupBroadcastOptions',options)
+end}
 local senders=0
 LibGroupCombatStats={RegisterAddon=function(_,stats)check(#stats==1 and stats[1]=='ULT','Only Ultimate sending is requested');senders=senders+1;return {} end}
 assert(loadfile('AlphaSquadUI/Core/Sharing.lua'))()
 local S=AlphaSquadUI.Sharing
 check(S.SetEnabled('ultimate',false) and not enabled[20] and not enabled[21],'Library OFF changes both actual Ultimate protocol settings')
-check(enabled[40] and enabled[99] and removed==1,'Other transports remain enabled and disabled messages are pruned')
+check(enabled[40] and enabled[99],'Changing native Ultimate sharing leaves other transports enabled')
 check(not S.IsEnabled('ultimate') and P.sv.ultimateSharing==false,'Displayed OFF matches the stored library choice')
 check(S.SetEnabled('ultimate',true) and enabled[20] and enabled[21] and senders==1,'Library ON restarts the sender independently of tracking')
 S.StartUltimateSender();check(senders==1,'Repeated activation does not register a second sender')
-handlers[1].protocols[1]=Protocol(20,'UnrelatedProtocol')
+h20.name='UnrelatedProtocol';S.nativeControls.ultimate=nil
 check(S.SetEnabled('ultimate',false)==false and enabled[20] and enabled[21],'An incompatible library protocol identity cannot be toggled by numeric coincidence')
-handlers[1].protocols[1]=Protocol(20,'UltType')
+h20.name='UltType';S.nativeControls.ultimate=nil
 module.sv.enabled=false
 check(S.IsEnabled('ultimate'),'Dashboard OFF does not change the library protocol setting')
 local tracked=0

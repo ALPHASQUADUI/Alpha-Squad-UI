@@ -11,13 +11,16 @@ Update the README, module documentation and changelog when behavior changes. Use
 ## Engineering rules
 
 - Prefer filtered events, coalesced work and bounded caches to frequent polling.
+- Apply fresh-install sharing defaults once, preserve explicit OFF choices, and display the actual native setting. Switches must not open another addon page.
 - Keep module tracking independent of library sharing. Disabled modules must release their subscriptions and timers; shared library events belong to their library.
 - Keep Cross-sync account and character settings separate, preserve existing namespaces and use deep copies for nested settings.
 - Use real ESO item links, skill/morph IDs, Champion allocation and native visual resources. Do not invent missing remote data or substitute the viewer's equipment for a sender's.
 - Validate incoming sizes, identities, versions, ranges and freshness before mutation. Keep network payloads and retry state bounded.
-- Keep native tooltips above addon windows and restore their state when closed.
+- Keep native tooltips and link-confirmation dialogs above addon windows and restore their state when closed.
+- Keep HUD placement centralized: preserve disabled modules and normal visibility, save on completion, and stop placement at combat/loading/menu boundaries.
+- Count set pieces per weapon bar, using two-handed weights and native bonus thresholds. Unknown data must not create an excess warning.
 - Register pages through Core and reuse controls. Put module switches in Dashboard and sharing switches in Libraries.
-- Use only the targeted library protocol settings after verifying ownership and identity. An unsupported integration must degrade safely.
+- Use only the targeted native library protocol settings after verifying their option section and identity; reject ambiguous duplicate controls. An unsupported integration must degrade safely.
 
 ## Local validation
 
@@ -31,7 +34,7 @@ The validator runs every regression suite with Lua 5.1 and 5.4, checks Lua synta
 
 Meaningful regressions should cover the affected boundary: exact item traits/enchantments, CP allocation, profile isolation, module lifecycle, tooltip ownership or malformed/stale packets. Avoid tests that only duplicate implementation details.
 
-For client validation, use the [ESO checklist](docs/SUPPORT_COVERAGE_TESTING.md). Include enabled/disabled states, both weapon bars, character changes, `/reloadui`, travel and instance transitions. Reproduce a defect with the smallest relevant addon/library combination and attach the exact error and steps.
+For client validation, use the [ESO checklist](docs/SUPPORT_COVERAGE_TESTING.md). Include enabled/disabled states, initial sharing setup, later OFF choices, global placement, both weapon bars, character changes, `/reloadui`, travel and instance transitions. Reproduce a defect with the smallest relevant addon/library combination and attach the exact error and steps.
 
 ## Release preparation
 

@@ -1,4 +1,4 @@
--- Deterministic tests for branch development. These doubles are not ESO runtime validation.
+-- Deterministic preparation/runtime regressions. These doubles are not ESO runtime validation.
 local total=0
 local function check(value,message) total=total+1;assert(value,message) end
 local now,epoch,groupSize=10000,100000,0
@@ -55,7 +55,7 @@ local function Control()
     return c
 end
 GuiRoot=Control();GuiRoot:SetDimensions(1920,1080)
-WINDOW_MANAGER={CreateControl=function(_,name) local c=Control();c.name=name;_G[name]=c;return c end,CreateTopLevelWindow=function(_,name) local c=Control();c.name=name;_G[name]=c;return c end}
+WINDOW_MANAGER={CreateControl=function(_,name) local c=Control();c.name=name;if name then _G[name]=c end;return c end,CreateTopLevelWindow=function(_,name) local c=Control();c.name=name;if name then _G[name]=c end;return c end}
 EVENT_MANAGER={RegisterForEvent=function(_,name,event,fn) events[name]={event=event,fn=fn} end,
     UnregisterForEvent=function(_,name) events[name]=nil end,AddFilterForEvent=function() end,
     RegisterForUpdate=function(_,name,ms,fn) updates[name]={ms=ms,fn=fn} end,UnregisterForUpdate=function(_,name) updates[name]=nil end}
@@ -121,9 +121,20 @@ for line in manifest:gmatch('[^\r\n]+') do
 end
 local SC=AlphaSquadUI.Modules.SupportCoverage
 SC:Initialize()
+-- Execute startup's deferred bootstrap once before measuring individual events.
+-- Sharing now defaults ON and intentionally schedules one initial build scan.
+local startupIndex=1
+while startupIndex<=#later do
+    assert(startupIndex<=64,'Startup cannot create an unbounded deferred queue')
+    later[startupIndex].fn();startupIndex=startupIndex+1
+end
+later={}
 check(SC.initialized,'Initialization works without optional libraries')
 check(SC.sv.activeProfile=='trial','New installs default to trial preparation')
-check(not SC.sv.experimentalSharing,'Private build sharing requires explicit opt-in')
+check(SC.sv.shareData and SC.sv.experimentalSharing,'Fresh installation enables the build-sharing preference')
+check(AlphaSquadUI.Preferences.sv.buildSharing==true and AlphaSquadUI.Preferences.sv.sharingDefaultsVersion==1,'Bootstrap records the account-wide sharing default once')
+check(SC.share and SC.share.available==false and SC.share.protocol==nil,'Missing optional transport cannot be mistaken for active exchange')
+check(SC.sv.enabled and SC.sv.visible and SC.sv.locked,'Fresh tracking is enabled while normal gameplay remains locked')
 check(not SC.StartPull and not SC.FinalizePull,'Pull collection is absent from runtime')
 check(not updates.AlphaSquadUI_SupportCoverage_Live,'No live combat sampling loop')
 check(not SLASH_COMMANDS['/asreport'],'No report command')
@@ -236,18 +247,28 @@ local before=scans
 SC:MarkScanDirty('disabled change')
 check(scans==before,'Disabled changes do not scan')
 SLASH_COMMANDS['/assupport']('move')
-check(SC.sv.enabled and SC.sv.visible and not SC.sv.locked,'Move command enables, shows and unlocks the HUD')
-check(updates.AlphaSquadUI_SupportCoverage_Safety.ms>=5000,'Preparation safety refresh is slow')
+check(not SC.sv.enabled and SC.sv.locked and SC.window:IsHidden(),'Move never enables a Dashboard-disabled module')
+check(not AlphaSquadUI.Layout.active,'With every module disabled, Move leaves gameplay and settings unchanged')
+SC:SetEnabled(true);SC:SetVisible(false)
+SLASH_COMMANDS['/assupport']('move')
+check(AlphaSquadUI.Layout.IsMoving(SC) and not SC.window:IsHidden() and not SC.sv.locked,'Common placement previews and unlocks the enabled Support HUD')
+check(not SC.sv.visible,'Placement preserves the saved hidden preference')
+check(updates.AlphaSquadUI_SupportCoverage_Safety.ms>=5000,'Preparation safety refresh remains bounded during placement')
+SC.window.x,SC.window.y=281,397
+SLASH_COMMANDS['/assupport']('lock')
+check(not AlphaSquadUI.Layout.active and SC.sv.locked and SC.sv.x==281 and SC.sv.y==397,'Done saves the real dragged position and locks Support')
+check(SC.window:IsHidden() and not SC.sv.visible,'Completing placement restores the hidden preference')
+SC:SetVisible(true)
 check(not updates.AlphaSquadUI_SupportCoverage_Live,'Move never enables combat collection')
 
--- Actual windows are constructed once and reused with scroll containers.
+-- Actual windows are constructed once and reused with the compact coverage grid.
 SC:OpenMatrix();local matrix=SC.matrixWindow
 check(matrix and not matrix:IsHidden(),'Coverage list opens')
 SC:OpenInspector('BUILD')
 check(SC.inspectorWindow and not SC.inspectorWindow:IsHidden(),'Build browser opens')
 check(matrix:IsHidden(),'Opening builds closes coverage popup')
 SC:OpenFoodCheck()
-check(SC.inspectorWindow and not SC.inspectorWindow:IsHidden(),'Food readiness opens')
+check(SC.inspectorWindow and not SC.inspectorWindow:IsHidden(),'Legacy food command opens the consolidated Builds view')
 SC:OnCombatState(true)
 check(SC.inspectorWindow:IsHidden(),'Combat closes the preparation inspector')
 SC:OnCombatState(false)

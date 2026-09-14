@@ -1,87 +1,106 @@
-# Support Coverage test checklist
+# ESO acceptance checklist
 
-Version: **2.8.0** / **20800**. This checklist is not a record of completed ESO tests.
+Version **2.9.0** / **20900**. This checklist is not a record of completed in-game tests.
 
-## Local and CI checks
+## Automated validation
 
-From the repository root, run the deterministic suites with both supported validation interpreters:
+From the repository root:
 
 ```sh
-for test in tests/*.lua; do
-    lua5.1 "$test"
-    lua5.4 "$test"
-done
-python3 tooling/build_companion.py AlphaSquadBuildShare.zip
-mkdir -p build/companion
-unzip -oq AlphaSquadBuildShare.zip -d build/companion
-lua5.1 tests/companion_package.lua build/companion/AlphaSquadBuildShare
-lua5.4 tests/companion_package.lua build/companion/AlphaSquadBuildShare
+python3 tooling/validate.py
 ```
 
-Also validate every packaged Lua file, manifest paths/order/metadata, Core/manifest version consistency and both full-suite/companion package contents. Use current test output for assertion counts; earlier revisions' counts are not acceptance results for this version.
+The validator runs every regression suite under Lua 5.1 and Lua 5.4, checks syntax and manifest/Core metadata, and builds/validates the full-suite and companion packages. Set `LUA51` and `LUA54` when interpreter executable names differ. Current output supplies the assertion totals; historical release counts are not evidence for this version.
 
-## In-game acceptance
+## Client preparation
 
-Download the addon from the [branch build instructions](../releases/README.md). Record the commit, ESO API version, addon/library versions and relevant screenshots with each finding. Close ESO and back up existing addon folders and SavedVariables before installation. Start with sharing OFF.
+Use the [installation instructions](../releases/README.md). Record the commit, ESO API version, addon/library versions and relevant screenshots for each finding. Close ESO and back up existing addon folders and SavedVariables before updating. Keep private chats, unrelated accounts and raw group snapshots out of reports.
+
+Check a fresh installation separately from migrated preferences. Fresh supported sharing starts ON once; a saved OFF choice must survive installation, reload, character changes and travel. Verify actual native library switches as well as the Alpha Squad display.
+
+## Settings, sharing and placement
 
 | Check | Required outcome |
 | --- | --- |
-| Fresh and migrated settings | Clean load, preserved existing tracker preferences, no chat spam or Lua errors |
-| Trial/Dungeon lists | Correct context list; ON/OFF settings persist independently; disabled effects stop contributing to that checklist |
-| Information/provider hovers | Readable effect/source names, conditions and duplicate providers; tooltips appear above every addon window without raw-ID clutter |
-| One-bar set coverage | Main-only and back-only threshold qualify; one/four pieces do not falsely become a five-piece source; two-handed weapons and normal/Perfected families count correctly |
-| Skill bars | Front/back skills and Ultimates match native tooltips; subclassed skills work without guessing from class |
-| Champion and masteries | Only committed supported selections are shown; missing APIs, absent fields and uncommitted respec choices remain appropriately unknown |
-| Build inspector | Every selected account shows its own supported snapshot in a compact character view; body-positioned armor, jewelry, both weapon bars, set summaries and missing slots are clear |
-| Item accuracy | Compare every item tooltip with the native inventory tooltip for the same link: quality, item name, armor/weapon/jewelry trait, enchantment and missing enchantment; repeat after changing trait/enchantment and after switching inspected players |
-| Set summaries | Front/back counts match the inspected player's actual equipped slots; native item tooltips clearly identify their viewer-based counters; a two-handed arena weapon counts as two bonus pieces while occupying one item slot; no combined total falsely enables a bonus |
-| Champion icons | Every star icon and tooltip matches its slotted Champion identity; unallocated, empty and unavailable data remain distinguishable |
-| Transformations | Werewolf transformation preserves separate normal bars; transformed bar and Vampire/Werewolf indicators show only supported current evidence; morph icons match the actual ability |
-| Food and potion | Known present/expired/absent food is distinguished from unknown; selected non-potion and empty quickslots are not invented potions; selection is not reported as proof of use |
-| Native-only peer | Identity/class/role are usable; unsupported gear/CP/mastery/food remain unknown, not empty/pass |
-| Full-suite sharing | Matching clients, installed LibGroupBroadcast and explicit sharing opt-in populate details before combat |
-| LibSetDetection peer | A player with LSD v5/LGB but no Alpha Squad contributes reported qualifying sets; front/back thresholds, incognito-hidden sets, report age and disconnect/rejoin remain correct. Old library cache from before the observed group session is not new evidence; idle change-only reports do not expire on an invented heartbeat |
-| LibGroupCombatStats peer | Fresh known Ultimate identities can contribute positive source hints; active class lines never imply purchased passives/masteries; old/missing records remain limited |
-| Companion sharing | Sharing-only peer populates the receiver without the full UI; disabling sharing removes actionable stale data after expiry |
-| Missing libraries / sharing OFF | Personal modules continue; remote unsupported fields stay unknown; setup guidance names the missing package |
-| Stale/partial data | A build change, delayed fragment, disconnect or old sender cannot mix old items into a new complete build |
-| Group lifecycle | Late join, leave/rejoin, disband, reconnect and character change invalidate inappropriate cached data |
-| Combat boundary | No Support scans, report/history collection or build sends during combat; pending precombat state refreshes after combat ends |
-| Layout | At 720p, 1080p and ultrawide with UI scaling, the selected build remains compact and readable; roster/coverage lists scroll; item, skill, Champion and information tooltips stay in the foreground and on screen |
-| Settings branding | **Ąlpha Şquad UI** appears in the intended settings location with ESO's standard font; Libraries is accessible |
-| Personal ULT | MAIN/BACK/BOTH, swap, spend, readiness sound/pulse, hide/disable and saved geometry behave correctly |
-| Group ULT | Selected abilities, dead/offline members, rejoin, missing LibGroupCombatStats and charge sorting remain correct |
-| Overload | All morphs, dormant wake-up, reserve behavior, PvP suppression and unlock/move from disabled state still work |
-| Performance/coexistence | Measure frame time/memory and broadcast behavior with four and twelve players plus the group's existing addons |
+| Fresh settings | All tracking modules start enabled; supported sharing categories initialize ON when their dependencies are available |
+| Existing preferences | Saved module, sharing, layout and visibility choices remain intact; an explicit OFF is never reset by routine activation |
+| Libraries truth | ON/OFF matches the real native setting; missing/incompatible controls show unavailable, not a guessed ON |
+| Sharing switches | Toggle each category in Alpha Squad without navigating away; verify only its matching native settings change |
+| External library changes | Change a matching option in the native library settings, return to Alpha Squad and verify the displayed state; reload and confirm it persists |
+| Missing dependency | Missing/update states are red; installed valid states are green; installing the dependency allows pending setup without a retry storm |
+| Native option identity | Unknown or ambiguous protocol controls fail closed; unrelated settings, set-incognito choices and other addons' callbacks remain untouched |
+| Independent tracking | Disable each Dashboard module: its navigation and gameplay HUD disappear; permitted grouped sharing remains available |
+| MOVE HUD | Click the sidebar action or `/asmove`: settings close, normal action bar/gameplay interfaces remain visible, enabled panels can be positioned |
+| Placement preferences | Disabled modules stay disabled; temporary placement previews do not permanently enable hidden HUDs |
+| Placement completion | Done or Escape saves positions and locks panels; combat, loading or another menu ends placement safely |
+| Empty group placement | Group HUD can be positioned with no matching players without inventing actual group evidence |
+| Cross-sync ON | Move panels and change settings, then reload and change character on the same account/server: positions/settings remain shared |
+| Cross-sync OFF | Two character profiles remain separate; switching mode keeps the active layout without requiring reload |
+| Overload handoff | A slotted Overload morph uses its applicable dedicated panel and suppresses the redundant personal ULT view; removal/disable restores it; group ULT remains independent |
+| Branding | Ą and Ş render fully in the static orange gradient; UI stays white; @SeRuM1 uses the blue gradient |
+| External links | Website, ESOUI and Minion confirmations appear above addon windows and can be accepted or cancelled normally |
+| Viewport | At 720p, 1080p and ultrawide UI scales, Libraries stays on one page, the main settings shell has no close cross, and long text remains available on hover |
 
-## Release gate
+## Builds and Coverage
 
-Source availability is not live application or guaranteed recipient coverage. No measured combat uptime is claimed. Automated tests do not prove runtime behavior, protected API permissions or visual correctness.
+| Check | Required outcome |
+| --- | --- |
+| Trial/Dungeon | Separate ON/OFF choices persist; disabled effects stop contributing to that context |
+| Complete Coverage page | Every catalog entry fits under Buffs, Debuffs, Group Sets or Group Mythics without scrolling or pagination; no tile/column/footer overlap |
+| Filters | All, Missing and Duplicates preserve their correct entries; stale pooled controls are hidden |
+| Contributor hover | Every known duplicate account and its exact source names/bar availability remain readable; a count opens the named build |
+| Effect hover | Full names, conditions, source alternatives and duplicate rules remain available without raw-ID clutter |
+| Set icons | Actual equipped pieces or clearly labelled native collection references are used; references never imply the sender's trait/enchantment |
+| Equipment layout | Larger native silhouette and armor locations are clear; jewelry/front/back weapon groups retain their positions |
+| Set headline | Three body pieces + front sword/shield + back staff from one set show 5×, with FRONT 5× and BACK 5×, despite six physical items |
+| Native excess warning | A genuine sixth piece remains 6× with an appropriate one-extra-piece warning; monster, arena, mythic and shorter sets use their actual native bonus thresholds |
+| Unknown threshold | Missing native bonus requirements or incomplete equipment never manufacture a five-piece rule, exact total or excess warning |
+| One-bar qualification | A qualifying front-only or back-only source counts; partial pieces do not falsely reach its requirement |
+| Two-handed and Perfected | Weapon weights and shared normal/Perfected set families match actual equipped links on both bars |
+| Exact item tooltip | Compare every slot with its native inventory link: item name, quality, trait, enchantment and missing glyph; repeat after item changes and player selection |
+| Viewer-dependent counters | Native item-tooltip set counters are identified as viewer-based; the inspected build's FRONT/BACK summary remains authoritative for its reported equipment |
+| Skills and Ultimates | Each bar has the exact slotted skills and Ultimate morph, including subclassed skills; gaps never shift abilities into another slot |
+| Champion artwork | Use native discipline stars, the correct slotted identity and the sender's invested points/bonus; no stray zero or unrelated ability icon |
+| Champion sources | Verified native CP identity and committed points qualify; translated names alone cannot substitute another star or an empty slot |
+| Masteries/passives | Only supported committed eligible selections qualify; class identity alone cannot fill missing evidence |
+| Transformations | Normal bars remain separate from a reported Werewolf bar; Vampire/Werewolf/stage indicators reflect only verified fields |
+| Food and potion | Known food absence differs from unknown; empty/non-potion quickslots are not invented potions; no separate Food Check page |
+| Tooltip foreground | Item, skill, CP, set and contributor tooltips remain above every addon window, clamp to screen and restore native state when closed |
 
-The active build protocols **507/510** remain provisional; legacy **508/509** are retired. Public build sharing requires formal ID reservation and coexistence validation. No PR, merge, tag or stable release is authorized by completing this checklist alone; wait for the maintainer's explicit request.
+## Transport, lifecycle and resources
 
-## API and transport references
+| Check | Required outcome |
+| --- | --- |
+| Native-only peer | Available identity/class/observable effects remain usable; unsupported gear, CP and masteries stay unknown |
+| Full-suite sender | Matching clients with dependencies and sharing ON exchange supported details before combat |
+| Companion sender | The lightweight companion supplies the compatible format without the suite; new ON, saved OFF and full-suite precedence behave correctly |
+| LibSetDetection peer | Disclosed v5 set/per-bar reports qualify without the full suite; incognito, report age and reconnect invalidation remain correct |
+| LibGroupCombatStats peer | Fresh Ultimate/active-line facts remain limited to their scope; class lines never imply purchased passives or masteries |
+| Native library OFF | Subsequent matching sends are blocked; other shared protocols/callbacks remain intact; acknowledge the library-owned timer may persist until reload |
+| Malformed data | Invalid sizes, field values, slots, identities, duplicates or contradictory set totals cannot certify a complete build or overwrite accepted evidence |
+| Partial/stale data | Delayed chunks, changed build fingerprints, incomplete senders and stale records never mix old gear into a new complete snapshot |
+| Group lifecycle | Late join, leave/rejoin, disband, reconnect and character change invalidate inappropriate cached state |
+| Combat | No Support scan or detailed build send during combat; queued invalidation is handled after combat ends; no uptime/report sampler appears |
+| Loading/travel | Overland, housing, dungeon, trial and PvP transitions pause local work during loading, then resume without changing preferences |
+| Personal ULT | MAIN/BACK/BOTH, swap, spend, ready sound/pulse, hide/disable and saved positions remain functional |
+| Group ULT | Filters, readiness sorting, dead/offline players, rejoin and missing-library states remain correct |
+| Overload | All morphs, dormant wake-up, reserve behavior, PvP suppression and global placement remain functional |
+| Performance/coexistence | Compare frame time/memory and traffic ON/OFF in four- and twelve-player groups alongside the group's existing addons |
+
+## Release requirements and references
+
+Source availability is not live application or guaranteed recipient coverage. A valid shared snapshot is still a report from its sender; it is not proof against a modified client. Automated checks cannot certify native rendering, protected API permissions, measured FPS or network coexistence.
+
+The active build protocols **507/510** remain provisional; legacy **508/509** are retired. Formal reservation and coexistence validation remain required before public full-build-sharing release. Completing this checklist does not itself authorize a pull request, merge, tag or release; maintainer approval remains required.
+
+Primary API and implementation references:
 
 - [ESO native UI source](https://github.com/esoui/esoui)
 - [ESO skill/mastery data](https://github.com/esoui/esoui/blob/live/esoui/ingame/skills/playerskillsdata.lua)
-- [ESO Champion data](https://github.com/esoui/esoui/blob/live/esoui/ingame/champion/championdatamanager.lua)
+- [ESO Champion data](https://github.com/esoui/esoui/blob/live/esoui/ingame/champion/championdatamanager.lua), [action bar](https://github.com/esoui/esoui/blob/live/esoui/ingame/champion/championassignableactionbar.lua) and [star renderer](https://github.com/esoui/esoui/blob/live/esoui/ingame/champion/championstarvisuals.lua)
 - [LibSetDetection author source](https://github.com/exoy94/LibSetDetection)
 - [LibGroupCombatStats author source](https://github.com/m00nyONE/LibGroupCombatStats)
-- [LibGroupBroadcast source and protocol documentation](https://github.com/sirinsidiator/ESO-LibGroupBroadcast)
+- [LibGroupBroadcast author source](https://github.com/sirinsidiator/ESO-LibGroupBroadcast)
+- [Native texture names](https://github.com/esoui/esoui/blob/live/esoui/publicallingames/globals/sharedtextures.lua) and [effect identities](https://github.com/DakJaniels/LuiExtended/blob/master/LuiData/Effects/BarHighlight/MajorMinor.lua)
 
-These describe API/transport behavior; they are not results from running this addon in ESO.
-
-## Dashboard, Libraries and travel
-
-- Turn each Dashboard module off: its navigation entry and HUD disappear, and its own gameplay event subscriptions/timers stop. Keep Libraries accessible.
-- With build sharing ON, turn Support Coverage OFF and inspect that player from another client: the sender still responds before combat, without evaluating/rendering Coverage locally.
-- Toggle library sharing OFF/ON and verify the matching switches in LGB settings. Confirm unrelated protocols and LibSetDetection incognito choices are unchanged.
-- Cross-sync ON: move each HUD, change module settings, `/reloadui`, log onto another character on the same server. Check the same layout/settings.
-- Cross-sync OFF: move/change settings on two characters and verify isolation. Switching mode keeps the active layout without a reload.
-- Travel through overland, dungeon, trial, PvP and housing transitions. Confirm no tracking UI or detail traffic during loading and normal resumption after activation.
-- Hover every CP: no standalone replacement-counter zero, correct native discipline star, correct sender allocation/bonus. No per-star animation timer.
-- Equip more than four distinct sets: every set remains visible, with correct independent front/back totals and exact item hovers. Test both weapons and two-handed offhand placeholders.
-- Inspect every Coverage column and filter. Hover native set references and actual equipped pieces: reference items must not claim the sender's trait/enchantment.
-- Check 1280×720 and 1920×1080: Libraries fits on one page, no parent settings close cross, long set/player names remain inspectable.
-
-Native visuals and library settings were checked against the [Champion action bar](https://github.com/esoui/esoui/blob/live/esoui/ingame/champion/championassignableactionbar.lua), [star renderer](https://github.com/esoui/esoui/blob/live/esoui/ingame/champion/championstarvisuals.lua), [shared textures](https://github.com/esoui/esoui/blob/live/esoui/publicallingames/globals/sharedtextures.lua), [LGB protocol settings](https://github.com/sirinsidiator/ESO-LibGroupBroadcast/blob/master/src/ProtocolManager.lua) and [effect identities](https://github.com/DakJaniels/LuiExtended/blob/master/LuiData/Effects/BarHighlight/MajorMinor.lua). The addon resolves their real textures in the running client.
+These references describe contracts and resources, not completed in-game acceptance results.

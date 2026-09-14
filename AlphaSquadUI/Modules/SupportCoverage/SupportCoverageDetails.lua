@@ -1,4 +1,4 @@
--- Optional precombat build sharing. Protocol 507 remains provisional and opt-in.
+-- Precombat build sharing controlled in Libraries. Protocol 507 remains provisional.
 -- Stop-and-wait flow control queues only one detail response per active transfer.
 local SC=AlphaSquadUI.Modules.SupportCoverage
 local Details={ID=507,VERSION=3,MAX_BYTES=64,CHUNK_BYTES=56,MAX_CHUNKS=64,MAX_HASH=16777214,
@@ -158,8 +158,16 @@ local function OnRequest(sc,tag,data)
     if old and now-old.updatedAt<=Details.TIMEOUT_MS then return end
     if now-(sc.share.lastResponseAt or -60000)<20000 then return end
     if not sc.ScanLocalPlayer then return end
-    sc.localSnapshot=sc:ScanLocalPlayer()
-    local body,errorText=sc.BuildCodec.Encode(sc.localSnapshot)
+    -- Rate-limit attempts too: unreadable native state must not permit a peer
+    -- to trigger an expensive failed capture on every incoming request.
+    sc.share.lastResponseAt=now
+    local scanned,snapshot=pcall(sc.ScanLocalPlayer,sc)
+    if not scanned or type(snapshot)~="table" then
+        sc.share.detailError="Build capture unavailable. Try again after the current transition.";return
+    end
+    local encoded,body,errorText=pcall(sc.BuildCodec.Encode,snapshot)
+    if not encoded then sc.share.detailError="Build capture could not be encoded.";return end
+    sc.localSnapshot=snapshot
     if not body or #body>Details.CHUNK_BYTES*Details.MAX_CHUNKS then
         sc.share.detailError=errorText or "Build exceeds the sharing size limit.";return
     end
@@ -237,6 +245,7 @@ function SC:OnDetailData(tag,data)
     if not self:MayReceiveBuild(tag) or type(data)~="table" or data.version~=Details.VERSION
         or not Integer(data.kind,0,3) or not Integer(data.revision,1,65535)
         or not Integer(data.checksum,0,Details.MAX_HASH) or type(data.body)~="string" or #data.body>Details.MAX_BYTES then return end
+    self:PrunePeerSharingData()
     if data.kind==0 then OnRequest(self,tag,data)
     elseif data.kind==1 then OnChunk(self,tag,data)
     elseif data.kind==3 then OnAcknowledgment(self,tag,data)
