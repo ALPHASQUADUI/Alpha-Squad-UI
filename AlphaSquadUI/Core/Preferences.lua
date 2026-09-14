@@ -2,7 +2,10 @@
 local ASUI=AlphaSquadUI
 local P={entries={}};ASUI.Preferences=P
 local function Copy(value,seen,depth)
-    if type(value)~="table" then return type(value)~="function" and value or nil end
+    if type(value)~="table" then
+        if type(value)~="function" then return value end
+        return nil
+    end
     if (depth or 0)>12 then return nil end
     seen=seen or {};if seen[value] then return nil end;seen[value]=true
     local result={};local count=0

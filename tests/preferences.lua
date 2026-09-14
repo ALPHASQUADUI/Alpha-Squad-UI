@@ -19,9 +19,11 @@ local P=AlphaSquadUI.Preferences;local module=AlphaSquadUI.Modules.ULTTracker
 module.sv=P.Open('ULTTracker','existing','EU',{enabled=true,x=20,group={tracked={17},x=60}})
 module.Group.sv=module.sv.group
 module.sv.x=90;module.sv.group.x=80
+module.sv.enabled=false;module.sv.group.warn=false
 local account=module.sv
 P.SetCrossSync(false)
 check(module.sv~=account and module.sv.x==90,'Cross-sync OFF preserves the current position in a separate character profile')
+check(module.sv.enabled==false and module.sv.group.warn==false,'Cross-sync preserves explicit OFF switches at every nesting level')
 check(module.Group.sv==module.sv.group and module.Group.sv~=account.group,'Group HUD follows the new profile without sharing nested tables')
 module.sv.x=120;module.sv.group.tracked[1]=33
 check(account.x==90 and account.group.tracked[1]==17,'Character edits do not mutate account layout or nested filters')
@@ -31,6 +33,7 @@ module.sv=P.Open('ULTTracker','existing','EU',{enabled=true,x=20,group={tracked=
 check(module.sv.x==90 and module.sv.group.tracked[1]==17,'A new character starts from the existing account profile')
 module.sv.x=250;P.SetCrossSync(true)
 check(module.sv.x==250 and account.x==250,'Cross-sync ON saves the active character placement for the account')
+check(module.sv.enabled==false and module.sv.group.warn==false,'Restoring shared preferences never converts OFF into a missing value')
 check(charA.x==120,'Existing character profile remains intact')
 character='A';P.entries={}
 module.sv=P.Open('ULTTracker','existing','EU',{})
