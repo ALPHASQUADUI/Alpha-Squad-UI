@@ -1,6 +1,6 @@
 # Support Coverage test checklist
 
-Version: **2.7.0** / **20710** on **support-coverage**. This checklist is not a record of completed ESO tests.
+Version: **2.8.0** / **20800**. This checklist is not a record of completed ESO tests.
 
 ## Local and CI checks
 
@@ -70,3 +70,18 @@ The active build protocols **507/510** remain provisional; legacy **508/509** ar
 - [LibGroupBroadcast source and protocol documentation](https://github.com/sirinsidiator/ESO-LibGroupBroadcast)
 
 These describe API/transport behavior; they are not results from running this addon in ESO.
+
+## Dashboard, Libraries and travel
+
+- Turn each Dashboard module off: its navigation entry and HUD disappear, and its own gameplay event subscriptions/timers stop. Keep Libraries accessible.
+- With build sharing ON, turn Support Coverage OFF and inspect that player from another client: the sender still responds before combat, without evaluating/rendering Coverage locally.
+- Toggle library sharing OFF/ON and verify the matching switches in LGB settings. Confirm unrelated protocols and LibSetDetection incognito choices are unchanged.
+- Cross-sync ON: move each HUD, change module settings, `/reloadui`, log onto another character on the same server. Check the same layout/settings.
+- Cross-sync OFF: move/change settings on two characters and verify isolation. Switching mode keeps the active layout without a reload.
+- Travel through overland, dungeon, trial, PvP and housing transitions. Confirm no tracking UI or detail traffic during loading and normal resumption after activation.
+- Hover every CP: no standalone replacement-counter zero, correct native discipline star, correct sender allocation/bonus. No per-star animation timer.
+- Equip more than four distinct sets: every set remains visible, with correct independent front/back totals and exact item hovers. Test both weapons and two-handed offhand placeholders.
+- Inspect every Coverage column and filter. Hover native set references and actual equipped pieces: reference items must not claim the sender's trait/enchantment.
+- Check 1280×720 and 1920×1080: Libraries fits on one page, no parent settings close cross, long set/player names remain inspectable.
+
+Native visuals and library settings were checked against the [Champion action bar](https://github.com/esoui/esoui/blob/live/esoui/ingame/champion/championassignableactionbar.lua), [star renderer](https://github.com/esoui/esoui/blob/live/esoui/ingame/champion/championstarvisuals.lua), [shared textures](https://github.com/esoui/esoui/blob/live/esoui/publicallingames/globals/sharedtextures.lua), [LGB protocol settings](https://github.com/sirinsidiator/ESO-LibGroupBroadcast/blob/master/src/ProtocolManager.lua) and [effect identities](https://github.com/DakJaniels/LuiExtended/blob/master/LuiData/Effects/BarHighlight/MajorMinor.lua). The addon resolves their real textures in the running client.

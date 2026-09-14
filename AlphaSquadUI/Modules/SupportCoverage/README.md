@@ -1,6 +1,6 @@
 # Support Coverage
 
-Precombat group support checks for **Ąlpha Şquad UI**, version **2.7.0** (`20710`) on `support-coverage`.
+Precombat group support checks for **Ąlpha Şquad UI**, version **2.8.0** (`20800`).
 
 ## Workflow
 
@@ -9,7 +9,7 @@ Precombat group support checks for **Ąlpha Şquad UI**, version **2.7.0** (`207
 3. Turn the relevant effects **ON/OFF**. Filter the list by **ALL**, **MISSING** or **DUPLICATES**. Hover an effect's information icon for its description, known sources and conditions.
 4. Review known providers, missing coverage and duplicates. Hover `@UserID` to inspect the identified skill/set/mastery source.
 5. Open **Builds** and choose a player. The compact character view shows armor at its body position, jewelry, both weapon bars, skill/Ultimate icons and Champion stars. Hover an icon for details. Use **REFRESH BUILD** to request a new snapshot.
-6. Open **Food** to review the group's known food/drink status.
+6. Review food and selected potions in **Builds**.
 
 A source counted on one weapon bar can cover its catalog entry even if it is absent from the other bar. Thresholds still apply: two-handed weapons count as two pieces, and one item from a five-piece set is insufficient.
 
@@ -43,7 +43,7 @@ A sender may use the full **Ąlpha Şquad UI** or the lightweight **AlphaSquadBu
 
 ## Dependencies and sharing
 
-Open **Libraries** for status and setup. Library installation does not by itself publish a build. For full build details, each participant must explicitly enable a compatible sender, join the group and opt into build sharing. In the full suite, enable both **Share my build** and **Enable build exchange**. LibSetDetection set sharing uses its own library controls and does not require enabling Alpha Squad's full-build protocol. Missing or incompatible senders leave remote fields unknown.
+Open **Libraries** for status and setup. Library installation does not by itself publish a build. For full build details, each participant must explicitly enable a compatible sender, join the group and opt into build sharing. In the full suite, enable **Share equipped build** in Libraries. LibSetDetection set sharing uses the **Share equipped sets** switch in Libraries and does not require enabling Alpha Squad's full-build protocol. Missing or incompatible senders leave remote fields unknown.
 
 Full build sharing defaults OFF. Provisional protocol IDs require formal reservation and coexistence validation before a public sharing release. Use compatible versions and do not claim support for arbitrary unrelated addons' equipment protocols.
 
@@ -60,3 +60,9 @@ Supported UI and effect preferences remain persistent in `AlphaSquadSupportCover
 ## Validation
 
 Use the repository [test checklist](../../../docs/SUPPORT_COVERAGE_TESTING.md). Automated Lua checks are necessary but cannot certify ESO's runtime UI, real frame time or multi-client transport. No PR is authorized until the maintainer completes in-game testing and explicitly requests it.
+
+## Dashboard and visual coverage
+
+Dashboard controls tracking; Libraries controls sharing. Turning tracking off unregisters module gameplay work while a grouped, opted-in sender can still answer build requests. Cross-sync preserves the current layout and supports native character profiles.
+
+Coverage uses four compact columns with native effect/set icons, provider buttons and source explanations. Builds shows every equipped set with independent front/back counts. CP slots use ESO's native discipline star renderer as a static image, with the sender's invested points on hover. The food/potion summary is part of Builds, with group food status on the player list.

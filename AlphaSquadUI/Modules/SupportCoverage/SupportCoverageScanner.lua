@@ -332,10 +332,13 @@ function SC:DescribeChampionSkill(id, slot, points, pointsKnown)
     points = Integer(points, 0, 3600)
     pointsKnown = pointsKnown ~= false and points ~= nil
     local abilityId = Integer(SafeCall(GetChampionAbilityId, id), 1, MAX_INTEGER_ID)
+    local discipline = self.GetChampionDiscipline and self:GetChampionDiscipline(id)
+    local disciplineType = discipline and rawget(_G,"CHAMPION_DISCIPLINE_TYPE_"..discipline)
+    local textures = disciplineType and SafeCall(ZO_GetChampionBarDisciplineTextures, disciplineType)
     return {id=id, slot=slot, points=pointsKnown and points or nil, pointsKnown=pointsKnown,
-        discipline=self.GetChampionDiscipline and self:GetChampionDiscipline(id),
+        discipline=discipline,
         name=tostring(SafeCall(GetChampionSkillName, id) or ""), abilityId=abilityId,
-        icon=abilityId and tostring(SafeCall(GetAbilityIcon, abilityId) or "") or "",
+        icon=type(textures)=="table" and textures.slotted or "",
         description=pointsKnown and tostring(SafeCall(GetChampionSkillDescription, id, points) or "") or "",
         currentBonus=pointsKnown and tostring(SafeCall(GetChampionSkillCurrentBonusText, id, points) or "") or ""}
 end

@@ -353,8 +353,17 @@ for _,reason in ipairs({"summary age","offline","checksum"}) do
         "An invalid completed transfer is not cached: "..reason)
 end
 
+-- Tracking visibility and sender consent have independent lifecycles.
+ResetWorld();alice,bob=NewClient("@Alice"),NewClient("@Bob")
+PrimeSummary(alice,bob);frames={}
+assert(alice.SC:RequestPlayerBuild("@Bob"));local pending=alice.SC.share.incomingBuild
+alice.SC:SetEnabled(false)
+check(alice.SC.sv.shareData and alice.SC.sv.experimentalSharing,"Dashboard OFF preserves explicit sender consent")
+check(alice.SC.share.incomingBuild==pending and alice.SC:MayReceiveBuild("group2"),"Disabling tracking preserves the active shared-data transport")
+check(alice.SC:ShareLocalSnapshot("sharing without UI")~=nil,"Transport remains callable when tracking is disabled")
+
 -- Pause and lifecycle cleanup use the real module methods, not mocked reset wrappers.
-for _,reason in ipairs({"module","sharing","experimental","disband","combat"}) do
+for _,reason in ipairs({"sharing","experimental","disband","combat"}) do
     ResetWorld();alice,bob=NewClient("@Alice"),NewClient("@Bob")
     PrimeSummary(alice,bob);frames={}
     assert(alice.SC:RequestPlayerBuild("@Bob"));local active=alice.SC.share.incomingBuild

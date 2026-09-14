@@ -1,16 +1,18 @@
-## Title: |cE66A19Ąlpha Şquad UI|r
+## Title: |cFF6F0CĄ|cFF7712l|cFF7F17p|cFF871Dh|cFF8F22a |cFF9828Ş|cFFA02Dq|cFFA833u|cFFB038a|cFFB83Ed |cFFFFFFUI|r
 ## APIVersion: 101050 101051
-## Version: 2.7.0
-## AddOnVersion: 20710
-## Author: SeRuM1
+## Version: 2.8.0
+## AddOnVersion: 20800
+## Author: |c4E9EFF@|c57A9FFS|c60B4FFe|c69BFFFR|c72CAFFu|c7BD5FFM|c84E0FF1|r
 ## Description: Modular Alpha Squad UI with pre-combat group readiness and voluntary build inspection.
-## SavedVariables: AlphaSquadOverloadTrackerSavedVariables AlphaSquadULTTrackerSavedVariables AlphaSquadSupportCoverageSavedVariables
+## SavedVariables: AlphaSquadOverloadTrackerSavedVariables AlphaSquadULTTrackerSavedVariables AlphaSquadSupportCoverageSavedVariables AlphaSquadUISettingsSavedVariables
 ## OptionalDependsOn: LibGroupCombatStats LibGroupBroadcast LibFoodDrinkBuff LibSetDetection
 
 Core/Core.lua
 Core/Theme.lua
 Core/Utils.lua
 Core/Events.lua
+Core/Preferences.lua
+Core/Sharing.lua
 Core/Tooltips.lua
 Core/Settings.lua
 

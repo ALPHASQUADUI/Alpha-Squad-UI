@@ -15,6 +15,8 @@ local function Control(name,parent)
     function c:SetColor(...)self.color={...}end
     function c:SetHandler(event,fn)self.handlers[event]=fn end
     function c:GetParent()return self.parent end
+    function c:GetName()return self.name end
+    function c:SetHeight(value)self.height=value end
     setmetatable(c,{__index=function(_,key)if key:match('^Set') or key:match('^Clear')then return function()end end end})
     return c
 end
@@ -123,4 +125,39 @@ check(canvas.equipment.silhouette.hidden,'No selected player never falls back to
 details.equipment.complete=false
 local incomplete=V.SetRows(details.equipment)
 check(incomplete[1].front==nil and incomplete[1].back==nil,'Incomplete item scan does not claim exact per-bar totals')
+
+-- A maximally fragmented loadout remains a single sheet, including Werewolf.
+details.equipment.complete=true;details.equipment.setList={}
+for i=1,14 do details.equipment.setList[i]={name='Distinct set '..i,physicalCount=1,physicalCountKnown=true,mainCount=1,backCount=1} end
+V.Bind(canvas,player,details)
+local visibleRows=0
+for _,row in ipairs(canvas.sets.rows)do
+    if not row.hidden then
+        visibleRows=visibleRows+1
+        check(row.x+row.width<=552 and row.y+row.height<=canvas.sets.height,'Every set remains inside its panel without pagination')
+        check(row.front.text=='F 1×' and row.back.text=='B 1×','Both condensed counts identify their weapon bar')
+    end
+end
+check(visibleRows==14 and canvas.skills.y>=canvas.sets.height+12,'All fourteen sets are displayed without overlapping skill bars')
+check(canvas.champion.y>=canvas.skills.y+canvas.skills.height+12 and canvas.consumables.y+canvas.consumables.height<=canvas.height,'Werewolf, CP and readiness fit the expanded single sheet')
+
+-- Bind the actual ESO champion visual contract, never an ability-icon lookup.
+WINDOW_MANAGER.CreateControlFromVirtual=function(_,name,parent,template)
+    check(template=='ZO_ChampionStarVisuals','Champion tiles instantiate the native ESO composite');return Control(name,parent)
+end
+ZO_CHAMPION_STAR_VISUAL_TYPE={SLOTTABLE=1};ZO_CHAMPION_STAR_STATE={PURCHASED=2};CHAMPION_DISCIPLINE_TYPE_COMBAT=3
+local setups,frames=0,0
+ZO_ChampionStarVisuals={New=function(_,control)return {
+    Setup=function(_,visual,state,discipline,slotted)check(visual==1 and state==2 and discipline==3 and slotted==false,'Champion visual matches the native assignable-bar state');setups=setups+1 end,
+    Update=function(_,time)check(time==0,'Champion artwork is held on a static frame');frames=frames+1 end,
+    interpolators={1},control=control}
+end}
+SC.DescribeChampionSkill=function(_,id)return {icon=id==1 and 'native-combat-background' or ''}end
+SC.GetChampionDiscipline=function()return 'COMBAT'end
+V.Bind(canvas,player,details)
+local nativeTile=canvas.champion.rows.COMBAT.icons[1]
+check(setups==1 and frames==1 and nativeTile.icon.texture=='native-combat-background','Champion texture comes from its discipline instead of the ability table')
+check(not nativeTile.star.hidden and #nativeTile.starVisuals.interpolators==0 and not nativeTile.star.handlers.OnUpdate,'Native star remains visible without an animation loop')
+V.Bind(canvas,nil,nil)
+check(nativeTile.star.hidden,'Selecting an unknown build clears the previous native star')
 print(string.format('Build visual sheet: %d assertions passed',checks))

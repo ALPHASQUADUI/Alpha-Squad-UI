@@ -16,11 +16,13 @@ AlphaSquadUI.Modules.ULTTracker = ULT
 
 ULT.name = "ULTTracker"
 ULT.displayName = "ULT Tracker"
-ULT.version = (AlphaSquadUI and AlphaSquadUI.version) or "2.6.0"
+ULT.version = (AlphaSquadUI and AlphaSquadUI.version) or "2.8.0"
 ULT.addonName = "AlphaSquadUI"
 ULT.savedVarsName = "AlphaSquadULTTrackerSavedVariables"
 
-local EM = EVENT_MANAGER
+local EM = AlphaSquadUI.Events and AlphaSquadUI.Events.NewScope and AlphaSquadUI.Events.NewScope(function(name,event)
+    return event==EVENT_ADD_ON_LOADED or event==EVENT_PLAYER_ACTIVATED or event==EVENT_PLAYER_DEACTIVATED or name=="AlphaSquadUI_SettingsResize"
+end) or EVENT_MANAGER
 local ULTIMATE_POWER_TYPE = COMBAT_MECHANIC_FLAGS_ULTIMATE or POWERTYPE_ULTIMATE
 local ULTIMATE_SLOT_BASE = ACTION_BAR_ULTIMATE_SLOT_INDEX or 7
 local ULTIMATE_SLOT = ULTIMATE_SLOT_BASE + 1
@@ -243,6 +245,7 @@ function ULT:SetFlashUpdate(enabled)
 end
 
 function ULT:Refresh(reason, observedUltimate)
+    if self.loading then return end
     if not self.initialized or not self.sv then return end
     if not self.sv.enabled then
         self:SetFlashUpdate(false)
@@ -310,7 +313,9 @@ function ULT:OnUltimateUsed(slotNum)
 end
 
 function ULT:SetEnabled(enabled)
+    if EM.SetActive then EM:SetActive(enabled==true and not self.loading) end
     self.sv.enabled = enabled == true
+    if self.Group and self.Group.SetTrackingEventsActive then self.Group:SetTrackingEventsActive() end
     if not self.sv.enabled then self:SetFlashUpdate(false) end
     self:SetSafetyUpdateActive(self.sv.enabled and not self.uiObscured)
     if self.Group and self.Group.SetSafetyUpdateActive then
@@ -349,7 +354,8 @@ local function SceneVisible(scene)
 end
 
 function ULT:RefreshUIObscured()
-    self.uiObscured = not (SceneVisible(HUD_SCENE) or SceneVisible(HUD_UI_SCENE))
+    self.uiObscured = self.loading or not (SceneVisible(HUD_SCENE) or SceneVisible(HUD_UI_SCENE))
+    if self.Group and self.Group.SetTrackingEventsActive then self.Group:SetTrackingEventsActive() end
     if self.uiObscured then self:SetFlashUpdate(false) end
     self:SetSafetyUpdateActive(self.sv and self.sv.enabled and not self.uiObscured)
     if self.Group and self.Group.SetSafetyUpdateActive then
@@ -361,7 +367,7 @@ function ULT:RefreshUIObscured()
 end
 
 function ULT:SetSafetyUpdateActive(enabled)
-    enabled = enabled == true
+    enabled = enabled == true and not self.loading
     if self.safetyUpdateActive == enabled then return end
     self.safetyUpdateActive = enabled
     local name = "AlphaSquadUI_ULTTracker_Safety"
@@ -440,6 +446,8 @@ function ULT:RegisterEvents()
     end
 
     EM:RegisterForEvent(prefix .. "_Activated", EVENT_PLAYER_ACTIVATED, function()
+        ULT.loading=false
+        if EM.SetActive then EM:SetActive(ULT.sv.enabled==true) end
         zo_callLater(function()
             if ULT then
                 ULT:RefreshUIObscured()
@@ -448,6 +456,13 @@ function ULT:RegisterEvents()
         end, 300)
     end)
 
+    if EVENT_PLAYER_DEACTIVATED then
+        EM:RegisterForEvent(prefix.."_Deactivated",EVENT_PLAYER_DEACTIVATED,function()
+            ULT.loading=true;ULT:RefreshUIObscured()
+            if EM.SetActive then EM:SetActive(false) end
+            if ULT.Group and ULT.Group.SetReadyPulseActive then ULT.Group:SetReadyPulseActive(false) end
+        end)
+    end
     if EVENT_SCREEN_RESIZED then
         EM:RegisterForEvent(prefix .. "_ScreenResized", EVENT_SCREEN_RESIZED, function()
             zo_callLater(function()
@@ -553,7 +568,8 @@ function ULT:Initialize()
     }
 
     local worldNamespace = GetWorldName and GetWorldName() or nil
-    self.sv = ZO_SavedVars:NewAccountWide(self.savedVarsName, 1, worldNamespace, defaults)
+    self.sv = AlphaSquadUI.Preferences and AlphaSquadUI.Preferences.Open("ULTTracker", self.savedVarsName, worldNamespace, defaults)
+        or ZO_SavedVars:NewAccountWide(self.savedVarsName, 1, worldNamespace, defaults)
 
     for key, value in pairs(defaults) do
         if self.sv[key] == nil or (type(value) == "boolean" and type(self.sv[key]) ~= "boolean") then
@@ -574,6 +590,7 @@ function ULT:Initialize()
 
     self:RegisterSceneCallbacks()
     self:RegisterEvents()
+    if EM.SetActive then EM:SetActive(self.sv.enabled) end
     self:RegisterSlashCommands()
 
     self.initialized = true

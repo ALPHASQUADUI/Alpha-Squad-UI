@@ -311,7 +311,8 @@ function Group:ApplyVisibility()
     local configVisible = self.configWindow and not self.configWindow:IsHidden() or false
 
     local hidden =
-        not ULT.sv.enabled
+        ULT.loading == true
+        or not ULT.sv.enabled
         or not self.sv.enabled
         or not self.sv.visible
         or sharedSettingsVisible
@@ -348,7 +349,7 @@ function Group:RefreshRow(row, entry)
     row:SetHidden(false)
 
     local userId = entry.displayName ~= "" and entry.displayName or entry.key or "@Unknown"
-    row.user:SetText(userId)
+    row.user:SetText(AlphaSquadUI.Theme and AlphaSquadUI.Theme.PlayerName and AlphaSquadUI.Theme.PlayerName(userId) or userId)
 
     local ultimate = entry.bestUltimate
     if not ultimate then

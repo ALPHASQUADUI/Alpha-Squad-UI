@@ -130,61 +130,93 @@ function Settings.OpenPage(id)
     return true
 end
 
-Settings.RegisterPage("libraries", function(page, ui)
-    page.contentHeight = 960
-    local colors = ui.colors
-    local title = ui.CreateLabel(page, "AlphaSquadLibrariesTitle", "ZoFontWinH2", "LIBRARIES & SHARING", colors.white)
-    title:SetDimensions(650, 34)
-    title:SetAnchor(TOPLEFT, page, TOPLEFT, 8, 2)
-    title:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
-    local intro = ui.CreateLabel(page, "AlphaSquadLibrariesIntro", "ZoFontGameSmall",
-        "Choose the group features you need. Install their libraries with Minion or ESOUI, then /reloadui.", colors.muted)
-    intro:SetDimensions(650, 36)
-    intro:SetAnchor(TOPLEFT, page, TOPLEFT, 9, 35)
-    intro:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
-    intro:SetVerticalAlignment(TEXT_ALIGN_TOP)
-
-    local rows = {
-        { key = "LibGroupBroadcast", name = "LibGroupBroadcast", y = 76,
-          text = "For build exchange. Requires LibAddonMenu-2.0 (38+) and LibDebugLogger. Use Alpha Squad UI or AlphaSquadBuildShare on each sender. Enable build exchange and Share my build in Support Coverage to send your build." },
-        { key = "LibGroupCombatStats", name = "LibGroupCombatStats", y = 184,
-          text = "For group Ultimates. Requires LibCombat and LibGroupBroadcast. Enable ULT sharing in its settings or a compatible sender addon. Group members do not need Alpha Squad UI. This does not share a complete build." },
-        { key = "LibFoodDrinkBuff", name = "LibFoodDrinkBuff", y = 292,
-          text = "For more food and drink recognition. Install and enable it; no additional setup is needed. Only buffs visible to your client or reported by a compatible sender can be checked. Unavailable information stays Unknown." },
-        { key = "LibCombat", name = "LibCombat", y = 400,
-          text = "Required by LibGroupCombatStats. Install the current version and leave it enabled. No Alpha Squad configuration is needed. Alpha Squad requests Ultimate sharing only; it does not collect combat reports." },
-        { key = "LibAddonMenu2", name = "LibAddonMenu-2.0", y = 508,
-          text = "Required by LibGroupBroadcast: version 38 or newer. Leave it enabled to access library settings and sharing options. Alpha Squad has its own settings window and does not otherwise require this library." },
-        { key = "LibDebugLogger", name = "LibDebugLogger", y = 616,
-          text = "Required by LibGroupBroadcast. Install and enable the current version. No Alpha Squad configuration or additional log viewer is needed. Your sharing settings still control which build details you send." },
-        { key = "LibSetDetection", name = "LibSetDetection", y = 724,
-          text = "For shared set names and front/back counts without the full addon. Install version 5+ and LibGroupBroadcast on both clients. Incognito choices are respected. Reports do not include individual items, traits, glyphs, CP or skill bars." },
+local ASUI=AlphaSquadUI
+local function OpenLink(url)
+    if type(url)=="string" and url:match("^https://") and RequestOpenUnsafeURL then RequestOpenUnsafeURL(url) end
+end
+Settings.OpenLink=OpenLink
+Settings.modulePages={overload="Overload",ulttracker="ULTTracker",supportcoverage="SupportCoverage"}
+function Settings.IsModuleEnabled(id)
+    local module=ASUI.Modules[Settings.modulePages[id]]
+    if not module or not module.sv then return false end
+    if id=="overload" then return module.sv.addonEnabled==true end
+    return module.sv.enabled==true
+end
+function Settings.SetModuleEnabled(id,enabled)
+    local module=ASUI.Modules[Settings.modulePages[id]]
+    if not module or not module.sv then return end
+    if id=="overload" then module:SetAddonEnabled(enabled) else module:SetEnabled(enabled) end
+    Settings.RefreshMain()
+end
+local function Label(ui,parent,name,text,x,y,w,h,color,font)
+    local control=ui.CreateLabel(parent,name,font or "ZoFontGameSmall",text,color or ui.colors.muted)
+    control:SetAnchor(TOPLEFT,parent,TOPLEFT,x,y);control:SetDimensions(w,h)
+    control:SetHorizontalAlignment(TEXT_ALIGN_LEFT);control:SetVerticalAlignment(TEXT_ALIGN_TOP)
+    return control
+end
+Settings.RegisterPage("dashboard",function(page,ui)
+    page.responsiveCards=true;page.contentHeight=590
+    local width=page:GetWidth()-16;local half=(width-16)/2
+    Label(ui,page,"AlphaSquadDashboardTitle","DASHBOARD",8,2,width,34,ui.colors.orange,"ZoFontWinH2")
+    Label(ui,page,"AlphaSquadDashboardIntro","Choose your tools. Disabled modules stop tracking and disappear from the menu.",8,40,width,26)
+    local entries={
+        {"overload","Overload","Reserve alerts and a compact HUD for Sorcerer Overload."},
+        {"ulttracker","ULT Tracker","Watch your front and back Ultimates, plus selected group Ultimates."},
+        {"supportcoverage","Support Coverage","Prepare the group: buffs, debuffs, useful sets and equipped builds."},
     }
-    for index, data in ipairs(rows) do
-        local card = ui.CreateCard(page, "AlphaSquadLibraryCard" .. index, 8, data.y, 658, 98, data.name, colors.orange)
-        local status = ui.CreateLabel(card, "AlphaSquadLibraryStatus" .. index, "ZoFontGameSmall", "", colors.muted)
-        status:SetDimensions(180, 24)
-        status:SetAnchor(TOPRIGHT, card, TOPRIGHT, -14, 8)
-        status:SetHorizontalAlignment(TEXT_ALIGN_RIGHT)
-        local body = ui.CreateLabel(card, "AlphaSquadLibraryBody" .. index, "ZoFontGameSmall", data.text, colors.muted)
-        body:SetDimensions(628, 58)
-        body:SetAnchor(TOPLEFT, card, TOPLEFT, 14, 34)
-        body:SetVerticalAlignment(TEXT_ALIGN_TOP)
-        body:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
-        local libraryKey = data.key
+    for index,data in ipairs(entries) do
+        local id=data[1];local x=8+((index-1)%2)*(half+16);local y=82+math.floor((index-1)/2)*174
+        local card=ui.CreateCard(page,"AlphaSquadDashboardModule"..index,x,y,half,158,data[2],ui.colors.orange)
+        Label(ui,card,"AlphaSquadDashboardHelp"..index,data[3],14,38,half-28,42)
+        ui.AddToggleRow(card,"AlphaSquadDashboardToggle"..index,"Enable module",104,function() return Settings.IsModuleEnabled(id) end,
+            function(v) Settings.SetModuleEnabled(id,v) end,"Stops this module's HUD, tracking events and timers. Sharing choices in Libraries are kept.")
+    end
+    local sync=ui.CreateCard(page,"AlphaSquadDashboardSync",8+half+16,256,half,158,"CROSS-SYNC",ui.colors.cyan)
+    Label(ui,sync,"AlphaSquadDashboardSyncHelp","Keep the same layout and module preferences on every character on this server. Turn off for character-specific settings.",14,38,half-28,58)
+    ui.AddToggleRow(sync,"AlphaSquadCrossSync","Across characters",104,function() return not ASUI.Preferences or not ASUI.Preferences.sv or ASUI.Preferences.sv.crossSync~=false end,
+        function(value) if ASUI.Preferences then ASUI.Preferences.SetCrossSync(value) end end,
+        "Your current layout is kept when switching. ON saves future changes across characters; OFF saves them for this character. Sharing choices always remain account-wide. No reload is needed.")
+    local help=ui.CreateCard(page,"AlphaSquadDashboardSharing",8,434,width,106,"GROUP DATA",ui.colors.green)
+    Label(ui,help,"AlphaSquadDashboardSharingHelp","Configure all sharing and required add-ons in Libraries. Sharing remains available even when a tracking module is disabled.",14,36,width-244,54)
+    ui.CreateButton(help,"AlphaSquadDashboardLibraries","LIBRARIES",width-206,42,190,32,function() Settings.OpenPage("libraries") end)
+end)
+Settings.RegisterPage("libraries",function(page,ui)
+    page.responsiveCards=true;page.contentHeight=590
+    local c=ui.colors;local width=page:GetWidth()-16;local half=(width-16)/2
+    Label(ui,page,"AlphaSquadLibrariesTitle","LIBRARIES & SHARING",8,2,width,34,c.orange,"ZoFontWinH2")
+    Label(ui,page,"AlphaSquadLibrariesIntro","Required add-ons for group features • green: installed • red: missing. Local trackers work without these libraries.",8,38,width,28)
+    local rows={
+        {key="LibGroupBroadcast",name="LibGroupBroadcast",id=1337,kind="builds",toggle="Share equipped build",text="Needs LibAddonMenu-2.0 (38+) + LibDebugLogger."},
+        {key="LibGroupCombatStats",name="LibGroupCombatStats",id=4024,kind="ultimate",toggle="Share group Ultimates",text="Needs LibCombat + LibGroupBroadcast."},
+        {key="LibSetDetection",name="LibSetDetection",id=3338,kind="sets",toggle="Share equipped sets",text="Version 5+ with LibGroupBroadcast. Respects incognito."},
+        {key="LibFoodDrinkBuff",name="LibFoodDrinkBuff",id=1902,text="Recognizes visible food/drink buffs. No setup needed."},
+        {key="LibCombat",name="LibCombat",id=2528,text="Required by LibGroupCombatStats. Leave enabled."},
+        {key="LibAddonMenu2",name="LibAddonMenu-2.0",id=7,text="Required by LibGroupBroadcast. Version 38 or newer."},
+        {key="LibDebugLogger",name="LibDebugLogger",id=2275,text="Required by LibGroupBroadcast. No logging setup needed."},
+    }
+    for index,data in ipairs(rows) do
+        local x=8+((index-1)%2)*(half+16);local y=78+math.floor((index-1)/2)*108
+        local card=ui.CreateCard(page,"AlphaSquadLibraryCard"..index,x,y,half,98,data.name,c.orange)
+        local status=Label(ui,card,"AlphaSquadLibraryStatus"..index,"",half-188,10,112,22,c.red)
+        ui.CreateButton(card,"AlphaSquadLibraryLink"..index,"ESOUI",half-76,6,62,26,function() OpenLink("https://www.esoui.com/downloads/info"..data.id) end)
+        if data.kind then
+            ui.AddToggleRow(card,"AlphaSquadLibraryShare"..index,data.toggle,36,function() return ASUI.Sharing and ASUI.Sharing.IsEnabled(data.kind) or false end,
+                function(value) if ASUI.Sharing then ASUI.Sharing.SetEnabled(data.kind,value) end end,
+                data.kind=="builds" and "Share supported equipment, traits, glyphs, skill bars, CP and readiness in your current group. Both clients need compatible software. Build transport registration is pending; use in coordinated groups. Module switches do not change sharing."
+                or "Changes this library's matching group protocols, including its saved settings. Other addons using the same protocol follow this library setting. If the library interface changes, open its native settings to configure it.")
+            Label(ui,card,"AlphaSquadLibraryHelp"..index,data.text,14,72,half-28,23)
+        else Label(ui,card,"AlphaSquadLibraryHelp"..index,data.text,14,40,half-28,48) end
         ui.RegisterRefresher(function()
-            local installed = rawget(_G, libraryKey) ~= nil
-            status:SetText(installed and "INSTALLED" or "NOT INSTALLED")
-            local c = installed and colors.green or colors.muted
-            status:SetColor(c[1], c[2], c[3], 1)
+            local lib=rawget(_G,data.key);local installed=lib~=nil
+            local old=data.key=="LibAddonMenu2" and type(lib)=="table" and tonumber(lib.version) and tonumber(lib.version)<38
+            status:SetText(old and "UPDATE NEEDED" or installed and "INSTALLED" or "MISSING")
+            local color=installed and not old and c.green or c.red;status:SetColor(color[1],color[2],color[3],1)
         end)
     end
-
-    local help = ui.CreateCard(page, "AlphaSquadLibraryHelp", 8, 838, 658, 104, "SETUP & PRIVACY", colors.cyan)
-    local body = ui.CreateLabel(help, "AlphaSquadLibraryHelpText", "ZoFontGameSmall",
-        "Missing data? Check ESO's Add-Ons menu for disabled dependencies, then confirm the sender has enabled sharing. Group membership alone does not reveal a complete build. Build exchange uses unreserved transport IDs; leave it off outside coordinated groups.", colors.muted)
-    body:SetDimensions(628, 68)
-    body:SetAnchor(TOPLEFT, help, TOPLEFT, 14, 34)
-    body:SetVerticalAlignment(TEXT_ALIGN_TOP)
-    body:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
+    local help=ui.CreateCard(page,"AlphaSquadLibraryPrivacy",8+half+16,402,half,98,"DATA ACCESS",c.cyan)
+    Label(ui,help,"AlphaSquadLibraryPrivacyText","Group membership alone cannot reveal full builds. Senders can use AlphaSquadBuildShare instead of the full UI. Unavailable data stays Unknown.",14,38,half-28,54)
+    local footer=ui.CreateCard(page,"AlphaSquadMinion",8,518,width,70,"MINION • ADDON MANAGER",c.green)
+    Label(ui,footer,"AlphaSquadMinionHelp","Install and update ESO addons and libraries, then /reloadui.",14,34,width-310,26)
+    ui.CreateButton(footer,"AlphaSquadMinionLink","GET MINION",width-286,24,136,30,function() OpenLink("https://minion.mmoui.com/") end)
+    ui.CreateButton(footer,"AlphaSquadLibraryNativeSettings","SETTINGS",width-142,24,126,30,function() if ASUI.Sharing then ASUI.Sharing.OpenNativeSettings() end end)
 end)

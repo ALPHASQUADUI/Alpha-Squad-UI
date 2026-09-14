@@ -68,9 +68,7 @@ function ULT:BuildIntegratedSettingsPage(page, ui)
 
     local general = CreateCard(page, "AlphaSquadULTIntegratedGeneral", 8, 68, 322, 226, "GENERAL", C.orange)
 
-    AddToggleRow(general, "AlphaSquadULTIntegratedEnabled", "Enable ULT Tracker", 42,
-        function() return ULT.sv and ULT.sv.enabled == true end,
-        function(v) if ULT.sv then ULT:SetEnabled(v) end end)
+
 
     AddToggleRow(general, "AlphaSquadULTIntegratedVisible", "Show tracker HUD", 78,
         function() return ULT.sv and ULT.sv.visible == true end,

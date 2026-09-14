@@ -11,8 +11,8 @@ local function Integer(value,minimum,maximum)
     return type(value)=="number" and value%1==0 and value>=minimum and value<=maximum and value or nil
 end
 local function Enabled(sc)
-    return sc.sv and sc.sv.enabled and sc.sv.experimentalSharing and sc.sv.shareData
-        and not sc.inCombat and sc:IsGrouped() and sc.share and sc.share.detailProtocol
+    return sc.sv and sc.sv.experimentalSharing and sc.sv.shareData
+        and not sc.inCombat and not sc.loading and sc:IsGrouped() and sc.share and sc.share.detailProtocol
 end
 local function ValidKey(key)
     return type(key)=="string" and #key>1 and #key<=60 and key:match("^@[^%c|]+$")

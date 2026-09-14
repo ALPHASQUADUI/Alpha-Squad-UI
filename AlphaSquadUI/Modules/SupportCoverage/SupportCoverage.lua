@@ -1,7 +1,7 @@
 --[[
     Ąlpha Şquad UI - Support Coverage
     Pre-combat group preparation and voluntary build sharing.
-    Author: SeRuM1
+    Author: @SeRuM1
 ]]
 
 AlphaSquadUI = AlphaSquadUI or {}
@@ -12,7 +12,7 @@ AlphaSquadUI.Modules.SupportCoverage = SC
 
 SC.name = "SupportCoverage"
 SC.displayName = "Support Coverage"
-SC.version = (AlphaSquadUI and AlphaSquadUI.version) or "2.7.0"
+SC.version = (AlphaSquadUI and AlphaSquadUI.version) or "2.8.0"
 SC.savedVarsName = "AlphaSquadSupportCoverageSavedVariables"
 SC.catalogPatch = "U50"
 SC.initialized = false
@@ -29,7 +29,9 @@ SC.lastSafetyAt = 0
 
 local VALID_PROFILES = {trial=true, dungeon=true, full=true, progression=true, damage=true, trash=true, boss=true, custom=true}
 
-local EM = EVENT_MANAGER
+local EM = AlphaSquadUI.Events and AlphaSquadUI.Events.NewScope and AlphaSquadUI.Events.NewScope(function(name,event)
+    return event==EVENT_ADD_ON_LOADED or event==EVENT_PLAYER_ACTIVATED or event==EVENT_PLAYER_DEACTIVATED or event==EVENT_GROUP_MEMBER_JOINED or event==EVENT_GROUP_MEMBER_LEFT or event==EVENT_GROUP_UPDATE
+end) or EVENT_MANAGER
 
 local function NowMs()
     if GetGameTimeMilliseconds then return GetGameTimeMilliseconds() end
@@ -88,8 +90,15 @@ end
 function SC:EnsureSavedVariables()
     local defaults = self:GetDefaults()
     local worldNamespace = GetWorldName and GetWorldName() or nil
-    self.sv = ZO_SavedVars:NewAccountWide(self.savedVarsName, 1, worldNamespace, defaults)
+    self.sv = AlphaSquadUI.Preferences and AlphaSquadUI.Preferences.Open("SupportCoverage", self.savedVarsName, worldNamespace, defaults)
+        or ZO_SavedVars:NewAccountWide(self.savedVarsName, 1, worldNamespace, defaults)
 
+    if AlphaSquadUI.Preferences then
+        local preferences=AlphaSquadUI.Preferences.sv
+        if type(preferences.buildSharing)=="boolean" then
+            self.sv.shareData=preferences.buildSharing;self.sv.experimentalSharing=preferences.buildSharing
+        end
+    end
     for key, value in pairs(defaults) do
         if self.sv[key] == nil then
             self.sv[key] = value
@@ -168,15 +177,33 @@ function SC:GetPlayerKey(unitTag)
     return tostring(unitTag or "unknown")
 end
 
+function SC:NeedsBuildData()
+    return not self.loading and self.sv and (self.sv.enabled or (self.sv.shareData and self.sv.experimentalSharing and self:IsGrouped()))
+end
+function SC:UpdateRuntime()
+    local active=self:NeedsBuildData()==true
+    if EM.SetActive then EM:SetActive(active) end
+    self:SetSafetyUpdateActive(active)
+    if not active then
+        if self.CancelBuildDetailTransfer then self:CancelBuildDetailTransfer() end
+        self.inCombat=false
+    elseif not self.runtimeDataActive then
+        local combat=self.Try and self.Try(IsUnitInCombat,"player")
+        if type(combat)=="boolean" then self.inCombat=combat end
+    end
+    self.runtimeDataActive=active
+end
+
 function SC:MarkScanDirty(reason)
     self.scanDirty = true
-    if not self.sv or not self.sv.enabled then return end
+    if not self:NeedsBuildData() then return end
     self:ScheduleRefresh(reason or "dirty", 80)
 end
 
 function SC:ScheduleRefresh(reason, delay)
     if not self.initialized then return end
-    if not self.sv or not self.sv.enabled then
+    self:UpdateRuntime()
+    if not self:NeedsBuildData() then
         if self.CheckGroupSession then self:CheckGroupSession() end
         return
     end
@@ -192,7 +219,7 @@ end
 function SC:Refresh(reason)
     if not self.initialized or not self.sv then return end
     if self.CheckGroupSession then self:CheckGroupSession() end
-    if not self.sv.enabled then return end
+    if not self:NeedsBuildData() then return end
     -- Preparation is frozen during combat; dirty build changes are coalesced and
     -- scanned exactly once after combat. No combat event stream is collected.
     if self.inCombat then return end
@@ -217,29 +244,32 @@ function SC:Refresh(reason)
         end
         self.buildSharePending=retryable==true and sent~=true
     end
-    if self.BuildRoster then self:BuildRoster() end
-    if self.EvaluateCoverage then self:EvaluateCoverage(reason) end
+    if self.sv.enabled then
+        if self.BuildRoster then self:BuildRoster() end
+        if self.EvaluateCoverage then self:EvaluateCoverage(reason) end
+    end
     if not self.inCombat and self.share then
         if self.NowMs()-(self.share.lastSendAt or 0)>60000 then self:ShareLocalSnapshot("heartbeat") end
     end
-    if self.RefreshHUD then self:RefreshHUD() end
-    if self.RefreshSettings then self:RefreshSettings() end
+    if self.sv.enabled then
+        if self.RefreshHUD then self:RefreshHUD() end
+        if self.RefreshSettings then self:RefreshSettings() end
+    end
 end
 
 function SC:SetEnabled(enabled)
     self.sv.enabled = enabled == true
     if not self.sv.enabled then
-        self.inCombat = false
         if self.CloseInspector then self:CloseInspector() end
         if self.CloseMatrix then self:CloseMatrix() end
         if self.ResetExternalSources then self:ResetExternalSources() end
-        if self.ResetSharingState then self:ResetSharingState("Module disabled") end
+        if not self:NeedsBuildData() and self.ResetSharingState then self:ResetSharingState("No active build consumer") end
     else
         self.inCombat = self.Try and self.Try(IsUnitInCombat, "player") == true or false
         if self.InitializeSharing then self:InitializeSharing() end
         self.scanDirty = true
     end
-    self:SetSafetyUpdateActive(self.sv.enabled)
+    self:UpdateRuntime()
     if self.ApplyVisibility then self:ApplyVisibility() end
     if self.sv.enabled then self:Refresh("enabled") end
 end
@@ -252,6 +282,7 @@ function SC:SetShareData(enabled)
     elseif self.ResetSharingState then
         self:ResetSharingState("Sharing disabled")
     end
+    self:UpdateRuntime()
     self:Refresh("sharing")
 end
 
@@ -263,6 +294,7 @@ function SC:SetExperimentalSharing(enabled)
     elseif self.ResetSharingState then
         self:ResetSharingState("Experimental sharing disabled")
     end
+    self:UpdateRuntime()
     self:Refresh("build exchange")
 end
 
@@ -330,7 +362,7 @@ function SC:CheckGroupSession()
 end
 
 function SC:OnCombatState(inCombat)
-    if not self.sv or not self.sv.enabled then return end
+    if not self:NeedsBuildData() then return end
     local wasInCombat = self.inCombat
     self.inCombat = inCombat == true
     if self.inCombat then
@@ -355,6 +387,7 @@ function SC:RegisterEvents()
         EM:RegisterForEvent(prefix .. "_Inventory", EVENT_INVENTORY_SINGLE_SLOT_UPDATE, function(_, bagId)
             if bagId == BAG_WORN then Dirty() end
         end)
+        if REGISTER_FILTER_BAG_ID and BAG_WORN then EM:AddFilterForEvent(prefix .. "_Inventory", EVENT_INVENTORY_SINGLE_SLOT_UPDATE, REGISTER_FILTER_BAG_ID, BAG_WORN) end
     end
 
     if EVENT_ACTION_SLOT_UPDATED then
@@ -377,6 +410,8 @@ function SC:RegisterEvents()
 
     if EVENT_PLAYER_ACTIVATED then
         EM:RegisterForEvent(prefix .. "_Activated", EVENT_PLAYER_ACTIVATED, function()
+            SC.loading=false
+            SC:UpdateRuntime()
             if SC.ResetExternalSources then SC:ResetExternalSources() end
             zo_callLater(function()
                 if SC then
@@ -390,9 +425,17 @@ function SC:RegisterEvents()
         end)
     end
 
+    if EVENT_PLAYER_DEACTIVATED then
+        EM:RegisterForEvent(prefix.."_Deactivated",EVENT_PLAYER_DEACTIVATED,function()
+            SC.loading=true;SC.scanDirty=true
+            SC:UpdateRuntime()
+            if SC.CloseInspector then SC:CloseInspector() end
+            if SC.CloseMatrix then SC:CloseMatrix() end
+        end)
+    end
     if EVENT_GROUP_MEMBER_JOINED then
         EM:RegisterForEvent(prefix .. "_Joined", EVENT_GROUP_MEMBER_JOINED, function()
-            if SC.sv.enabled and SC.sv.shareData and SC.sv.experimentalSharing then
+            if SC.sv.shareData and SC.sv.experimentalSharing then
                 -- A new peer has not seen the otherwise deduplicated summary or
                 -- signature frame. Queue one pair after the roster has settled.
                 SC.buildSharePending = true
@@ -412,7 +455,7 @@ function SC:RegisterEvents()
     end
     if EVENT_GROUP_MEMBER_CONNECTED_STATUS then
         EM:RegisterForEvent(prefix .. "_Connected", EVENT_GROUP_MEMBER_CONNECTED_STATUS, function(_, _, isOnline)
-            if isOnline == true and SC.sv.enabled and SC.sv.shareData and SC.sv.experimentalSharing then
+            if isOnline == true and SC.sv.shareData and SC.sv.experimentalSharing then
                 SC.buildSharePending = true
             end
             SC:ScheduleRefresh("group connected", 100)
@@ -428,13 +471,13 @@ function SC:RegisterEvents()
     if EVENT_EFFECT_CHANGED then
         local effectEvent = prefix .. "_LocalEffects"
         EM:RegisterForEvent(effectEvent, EVENT_EFFECT_CHANGED, function(_, _, _, _, unitTag)
-            if unitTag == "player" and SC.sv.enabled and not SC.inCombat then SC:ScheduleRefresh("consumable or boon", 500) end
+            if unitTag == "player" and SC:NeedsBuildData() and not SC.inCombat then SC:ScheduleRefresh("consumable or boon", 500) end
         end)
         if REGISTER_FILTER_UNIT_TAG then EM:AddFilterForEvent(effectEvent, EVENT_EFFECT_CHANGED, REGISTER_FILTER_UNIT_TAG, "player") end
     end
     if EVENT_INVENTORY_ITEM_USED then
         EM:RegisterForEvent(prefix .. "_ConsumableUsed", EVENT_INVENTORY_ITEM_USED, function(_, soundCategory)
-            if SC.sv.enabled then SC:OnConsumableUsed(soundCategory) end
+            if SC:NeedsBuildData() then SC:OnConsumableUsed(soundCategory) end
         end)
     end
     -- Only committed build changes invalidate the heavier scanner.
@@ -449,7 +492,7 @@ function SC:RegisterEvents()
     end
     if EVENT_ACTIVE_QUICKSLOT_CHANGED then
         EM:RegisterForEvent(prefix .. "_Quickslot", EVENT_ACTIVE_QUICKSLOT_CHANGED, function()
-            if SC.sv.enabled then SC:ScheduleRefresh("quickslot changed", 80) end
+            if SC:NeedsBuildData() then SC:ScheduleRefresh("quickslot changed", 80) end
         end)
     end
 
@@ -471,13 +514,15 @@ function SC:RegisterEvents()
 end
 
 function SC:SetSafetyUpdateActive(enabled)
-    enabled = enabled == true
-    if self.safetyUpdateActive == enabled then return end
-    self.safetyUpdateActive = enabled
+    enabled = enabled == true and not self.loading
+    local interval=self.sv and self.sv.enabled and 5000 or 60000
+    if self.safetyUpdateActive == enabled and self.safetyInterval==interval then return end
+    self.safetyUpdateActive = enabled;self.safetyInterval=interval
     local name = "AlphaSquadUI_SupportCoverage_Safety"
     if enabled then
-        EM:RegisterForUpdate(name, 5000, function()
-            if not SC or not SC.sv or not SC.sv.enabled then return end
+        EM:UnregisterForUpdate(name)
+        EM:RegisterForUpdate(name, interval, function()
+            if not SC or not SC:NeedsBuildData() then return end
             SC:CheckGroupSession()
             if SC.inCombat then return end
             local overlayVisible = SC.inspectorWindow and not SC.inspectorWindow:IsHidden()
@@ -497,8 +542,8 @@ local function SceneVisible(scene)
 end
 
 function SC:RefreshUIObscured()
-    self.uiObscured = not (SceneVisible(HUD_SCENE) or SceneVisible(HUD_UI_SCENE))
-    self:SetSafetyUpdateActive(self.sv and self.sv.enabled)
+    self.uiObscured = self.loading or not (SceneVisible(HUD_SCENE) or SceneVisible(HUD_UI_SCENE))
+    self:UpdateRuntime()
     if self.ApplyVisibility then self:ApplyVisibility() end
 end
 
@@ -555,7 +600,7 @@ function SC:RegisterSlashCommands()
         elseif lower == "trial" or lower == "dungeon" then
             SC:SetActiveProfile(lower)
         else
-            d("|cE66A19[ĄS SUPPORT]|r /assupport • builds • food • matrix • trial/dungeon • show/hide • lock/unlock • scan • status • reset")
+            d("|cE66A19[ĄS SUPPORT]|r /assupport • builds • matrix • trial/dungeon • show/hide • lock/unlock • scan • status • reset")
         end
     end
 end
@@ -572,7 +617,7 @@ function SC:Initialize()
     self:RegisterSceneCallbacks()
     self:RegisterSlashCommands()
     self:RegisterEvents()
-    self:SetSafetyUpdateActive(self.sv.enabled and not self.uiObscured)
+    self:UpdateRuntime()
     self:RefreshUIObscured()
 
     zo_callLater(function()

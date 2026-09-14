@@ -15,7 +15,7 @@ end
 local function Id(value) return Number(value,1,2147483647) and value%1==0 and value or nil end
 local function Text(value, fallback)
     if type(value)~="string" or value=="" then return fallback or "" end
-    return value:gsub("%^.*$",""):gsub("|[cC]%x%x%x%x%x%x",""):gsub("|[rR]",""):gsub("|","||")
+    return (value:gsub("%^.*$",""):gsub("|[cC]%x%x%x%x%x%x",""):gsub("|[rR]",""):gsub("|","||"))
 end
 local function Save(control)
     if not control or control==GuiRoot or saved[control] then return end
@@ -109,6 +109,7 @@ function T.ShowItem(owner,item,remote)
         -- Never resolve a remote item through this client's bag or equipped slots.
         local ok=pcall(ItemTooltip.SetLink,ItemTooltip,link)
         if ok then
+            if item.reference then Note(ItemTooltip,"Set reference item. This is not a report of the player's equipped trait or enchantment.") end
             if remote==true or item.remote==true then
                 Note(ItemTooltip,"Set counters in this tooltip use your equipment. See this player's set summary for their totals.")
             end

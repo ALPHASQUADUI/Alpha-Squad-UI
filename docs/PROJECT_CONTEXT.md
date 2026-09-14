@@ -1,46 +1,11 @@
-# Ąlpha Şquad UI — Project Context
+# Project context
 
-Last updated: **2026-09-13**.
+Ąlpha Şquad UI combines group preparation, visual build inspection, Overload and personal/group Ultimate tracking. The public maintainer identity is **@SeRuM1**.
 
-Repository: `ALPHASQUADUI/Alpha-Squad-UI`. Maintainer: **SeRuM1**. [Website](https://alphasquadeso.com/). Project language is English; communication with the maintainer is French.
+The interface favors compact visual lists, native ESO artwork, exact item/morph tooltips and clear evidence states. Dashboard owns module activation and Cross-sync; Libraries owns sharing and dependency guidance. Libraries remains available when every tracking module is disabled.
 
-## Branch state
+Support Coverage focuses on two configurable contexts, Trial and Dungeon, with Buffs, Debuffs, Group Sets and Group Mythics. It evaluates qualifying equipped sources before combat, with duplicate providers and exact source explanations. Builds integrates food and potion readiness; there is no separate Food Check page, combat report or uptime history.
 
-Stable `main` remains the separate **2.6.0** baseline with Overload, personal ULT and Group Ultimate trackers. Support Coverage is feature-branch work; always inspect **support-coverage** when auditing it. An earlier audit missed the feature by inspecting only `main`.
+Existing account/server settings remain the default. Character-specific profiles preserve current placement when Cross-sync is disabled. Sharing consent is separate from layout and tracking activation. Native group membership alone cannot reveal complete remote builds.
 
-The current version on this branch is **2.7.0** / **20710**. The maintainer authorized necessary addon changes, documentation, audit and publication to **support-coverage**, with no PR, merge, tag or stable release. Actual ESO testing is still a separate handoff; do not infer in-game acceptance from local tests.
-
-## Latest scope supersedes the previous report workflow
-
-Support Coverage now focuses on preparation before combat:
-
-- consolidated Trial and Dungeon effect lists with per-effect ON/OFF;
-- buff/debuff/set/mastery source coverage, explicit conditions and duplicate providers;
-- compact visual **Builds** inspection by `@UserID`, with body-positioned equipment, native item/skill tooltips, two icon skill bars and Champion icons, plus a **Food** check;
-- separate bar set counts, readable source names, glyphs, CP, skills and masteries where supported;
-- responsive views, foreground tooltips and library/setup guidance;
-- compatible build sharing from the full addon or a lightweight companion.
-
-Pull reports, combat uptime, history and loadout-planner workflows belong to earlier revisions and are retired from the active interface. Role assignments are not a mandatory readiness workflow. Historical changelog entries remain historical evidence, not current feature claims.
-
-## Technical limits
-
-ESO grouping does not expose arbitrary remote equipment, both skill bars, CP or Class Mastery selections. Native class/identity/visible-effect data is partial. LibGroupCombatStats supplies compatible Ultimate/active-line data, without proving mastery/passive selections. LibSetDetection v5 can share set identities and per-bar activation without Alpha Squad, with selective-sharing limits. Detailed peer builds require an opted-in compatible sender and LibGroupBroadcast. **AlphaSquadBuildShare** avoids requiring the full UI suite; it does not avoid sender installation or consent.
-
-Source coverage is availability, not observed application. One-bar set activation can qualify, but proc conditions and recipient caps still apply. Unknown or stale data must not turn into a successful check. Provisional protocol IDs block a normal public sharing release pending registration and coexistence validation.
-
-## Persistence and performance
-
-Preserve the established SavedVariables names:
-
-- `AlphaSquadOverloadTrackerSavedVariables`
-- `AlphaSquadULTTrackerSavedVariables`
-- `AlphaSquadSupportCoverageSavedVariables`
-
-Preserve relevant settings, filters and window geometry. Prefer events, bounded caches and coalesced refreshes; no unnecessary combat-log parsing or permanent fast loops while hidden/dormant.
-
-## Handoff
-
-The source of truth is the branch, its versioned files, current test outputs and [in-game checklist](SUPPORT_COVERAGE_TESTING.md). Do not repeat old assertion totals as current results. Branch Actions artifacts provide installable packages; see [download instructions](../releases/README.md).
-
-For cross-device continuity, read this file and `AGENTS.md`, inspect the actual branch and continue from the existing changes. Do not ask the maintainer to repeat already documented design decisions.
+Refer to the changelog for package changes, architecture for module boundaries and the ESO checklist for acceptance evidence. Maintainer review and actual client checks remain required before publishing a release.

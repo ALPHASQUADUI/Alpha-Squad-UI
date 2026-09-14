@@ -20,7 +20,7 @@ local constants={"EVENT_ADD_ON_LOADED","EVENT_PLAYER_ACTIVATED","EVENT_PLAYER_CO
     "EQUIP_SLOT_BACKUP_OFF","EQUIP_SLOT_POISON","EQUIP_SLOT_BACKUP_POISON","WEAPONTYPE_FIRE_STAFF","WEAPONTYPE_FROST_STAFF",
     "WEAPONTYPE_LIGHTNING_STAFF","WEAPONTYPE_HEALING_STAFF","WEAPONTYPE_BOW","WEAPONTYPE_TWO_HANDED_SWORD",
     "WEAPONTYPE_TWO_HANDED_AXE","WEAPONTYPE_TWO_HANDED_HAMMER","BUFF_TYPE_MAJOR_COURAGE","BUFF_TYPE_MINOR_FORCE",
-    "LFG_ROLE_DPS","LFG_ROLE_HEAL","LFG_ROLE_TANK","LFG_ROLE_INVALID"}
+    "LFG_ROLE_DPS","LFG_ROLE_HEAL","LFG_ROLE_TANK","LFG_ROLE_INVALID","EVENT_PLAYER_DEACTIVATED"}
 for i,k in ipairs(constants) do _G[k]=i end
 ACTION_BAR_ULTIMATE_SLOT_INDEX=7
 SCENE_SHOWING=1;SCENE_SHOWN=2
@@ -261,6 +261,8 @@ local savedVariables,originalSavedGetter=SC.sv,ZO_SavedVars.NewAccountWide
 local migrated={scale=135,width=510,opacity=80,x=123,y=456,positionSaved=true,activeProfile="full",
     profileOverrides={full={major_courage=false}},raidHistory={pulls={{}}},effectRules={major_breach={enabled=false,uptimeTarget=80}},
     roleOverrides=19}
+local oldProfile=AlphaSquadUI.Preferences.entries.SupportCoverage
+AlphaSquadUI.Preferences.entries.SupportCoverage=nil
 ZO_SavedVars.NewAccountWide=function() return migrated end
 SC:EnsureSavedVariables()
 check(SC.sv.scale==135 and SC.sv.x==123 and SC.sv.y==456,'Migration preserves layout preferences')
@@ -273,5 +275,23 @@ SC:EnsureSavedVariables()
 check(SC.sv.scale==100 and SC.sv.width==410,'Non-finite saved geometry returns to valid defaults')
 check(SC.sv.profileOverrides.trial.major_courage==nil and SC.sv.profileOverrides[42]==nil,'Malformed tracking values cannot enter evaluation')
 ZO_SavedVars.NewAccountWide=originalSavedGetter;SC.sv=savedVariables
+AlphaSquadUI.Preferences.entries.SupportCoverage=oldProfile
+
+-- Hiding tracking cannot stop a consented sender, but loading must stop both.
+groupSize=2;SC.sv.shareData=true;SC.sv.experimentalSharing=true
+SC:SetEnabled(false);SC:ApplyVisibility()
+check(SC.window:IsHidden() and updates.AlphaSquadUI_SupportCoverage_Safety.ms==60000,'Dashboard OFF preserves the slow sender heartbeat while hiding the HUD')
+check(events.AlphaSquadUI_SupportCoverage_Inventory~=nil,'Consented sharing retains build invalidation events')
+SC.sv.shareData=false;SC.sv.experimentalSharing=false;SC:UpdateRuntime();SC:ApplyVisibility()
+check(not updates.AlphaSquadUI_SupportCoverage_Safety and not events.AlphaSquadUI_SupportCoverage_Inventory,'Disabling both consumers removes tracking work')
+SC:SetEnabled(true);SC.sv.hideInMenus=false
+check(events.AlphaSquadUI_SupportCoverage_Inventory~=nil,'Re-enabling the module restores its gameplay subscriptions')
+events.AlphaSquadUI_SupportCoverage_Deactivated.fn()
+SC:ApplyVisibility();local scansBeforeLoading=scans;SC:Refresh('delayed loading refresh')
+check(SC.loading and SC.window:IsHidden() and not updates.AlphaSquadUI_SupportCoverage_Safety,'Loading hides the HUD and cannot restart a timer even with menu hiding off')
+check(not events.AlphaSquadUI_SupportCoverage_Inventory and scans==scansBeforeLoading,'Loading unregisters scanning events and rejects an already queued refresh')
+check(SC:OpenInspector()==false and SC:OpenMatrix()==false,'Preparation windows cannot open during loading')
+events.AlphaSquadUI_SupportCoverage_Activated.fn();later[#later].fn()
+check(not SC.loading and events.AlphaSquadUI_SupportCoverage_Inventory and SC.scanDirty,'Zone activation resumes subscriptions and marks the build for refresh')
 
 print(string.format('Support Coverage preparation: %d assertions passed',total))

@@ -157,7 +157,7 @@ function ULT:ApplyLayout()
 
     if both then
         self.window.brand:SetFont("ZoFontGameBold")
-        self.window.brand:SetText("ĄLPHA ŞQUAD  •  ULT TRACKER")
+        self.window.brand:SetText((AlphaSquadUI.Theme and AlphaSquadUI.Theme.Brand and AlphaSquadUI.Theme.Brand("ULT") or "Ąlpha Şquad UI • ULT"))
         self.window.brand:SetDimensions(300, 24)
         self.window.ultCounter:SetAnchor(TOPRIGHT, self.window, TOPRIGHT, -15, 10)
         self.window.moveHint:SetText("CLICK + DRAG")
@@ -167,7 +167,7 @@ function ULT:ApplyLayout()
         -- Compact header for MAIN-only / BACK-only mode. Avoids text collisions
         -- and keeps the window readable at smaller resolutions/UI scales.
         self.window.brand:SetFont("ZoFontGameSmall")
-        self.window.brand:SetText("ĄLPHA ŞQUAD  •  ULT TRACKER")
+        self.window.brand:SetText((AlphaSquadUI.Theme and AlphaSquadUI.Theme.Brand and AlphaSquadUI.Theme.Brand("ULT") or "Ąlpha Şquad UI • ULT"))
         self.window.brand:SetDimensions(188, 22)
         self.window.ultCounter:SetAnchor(TOPRIGHT, self.window, TOPRIGHT, -14, 9)
         self.window.moveHint:SetText("DRAG")
@@ -253,7 +253,8 @@ function ULT:ApplyVisibility()
         sharedSettingsVisible = sharedSettingsVisible or settings.AnyExclusiveWindowVisible()
     end
     local hidden =
-        not self.sv.enabled
+        self.loading == true
+        or not self.sv.enabled
         or not self.sv.visible
         or settingsVisible
         or sharedSettingsVisible
@@ -421,7 +422,7 @@ function ULT:CreateHUD()
     topLine:SetHeight(2)
     SetColor(topLine, COLORS.orange)
 
-    win.brand = Label(win, "AlphaSquadULTTrackerBrand", "ZoFontGameBold", "ĄLPHA ŞQUAD  •  ULT TRACKER", COLORS.orange)
+    win.brand = Label(win, "AlphaSquadULTTrackerBrand", "ZoFontGameBold", (AlphaSquadUI.Theme and AlphaSquadUI.Theme.Brand and AlphaSquadUI.Theme.Brand("ULT") or "Ąlpha Şquad UI • ULT"), COLORS.orange)
     win.brand:SetDimensions(310, 24)
     win.brand:SetAnchor(TOPLEFT, win, TOPLEFT, 18, 7)
     win.brand:SetHorizontalAlignment(TEXT_ALIGN_LEFT)

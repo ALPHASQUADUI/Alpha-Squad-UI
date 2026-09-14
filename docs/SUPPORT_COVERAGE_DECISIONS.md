@@ -1,35 +1,11 @@
-# Support Coverage — current approved direction
+# Support Coverage decisions
 
-The active branch is **support-coverage**. Version **2.7.0** (`20710`) replaces the previous report/planning workflow with precombat build and group support checks. The maintainer authorized implementation, visual/performance improvements, audit and publication to this branch. No PR, merge or changes to `main` are authorized.
+- **Preparation first:** configured source availability, food/potion readiness and duplicate providers before combat.
+- **Truthful evidence:** complete supported snapshots, partial library reports and unavailable data remain distinguishable.
+- **Visual inspection:** equipment silhouette, native links, both skill bars and Ultimates, native CP stars and integrated consumables.
+- **Separate responsibilities:** Dashboard controls tracking; Libraries controls sender consent and matching library protocol settings.
+- **Low idle work:** event scopes, coalesced build invalidation, reused controls and a slow sender heartbeat when tracking is disabled.
+- **Local persistence:** account/server layouts by default, optional character profiles and no persisted group build archive.
+- **Transport restraint:** bounded, validated, on-demand detail exchange, paused during combat/loading. Protocol registration remains a requirement for public full-build-sharing distribution.
 
-## User-facing scope
-
-- One consolidated **Trial** list and one **Dungeon** list of useful group support effects and sources.
-- Individual ON/OFF tracking with persistent preferences.
-- Clear effect explanations and known source/proc/recipient conditions in information tooltips.
-- Multiple known providers listed by `@UserID`; hover for the specific skill, set or mastery producing the duplicate.
-- A **Builds** button leading to the group roster and a compact character-style overview: armor slots positioned around a body silhouette, jewelry/front/back weapons, named per-bar set counts, skill and Ultimate icons, Champion icons, masteries and consumables.
-- A **Food** group check, distinguishing verified absence from unknown state.
-- Foreground tooltips for exact item/trait/enchantment and ability identities; readable responsive windows with persistent geometry. Coverage and roster lists scroll when necessary; the selected build emphasizes a single compact overview.
-- **Ąlpha Şquad UI** branding, preserving the accented letters and ESO's standard UI font.
-- Visible library/setup guidance within the addon and repository.
-
-Pull reports, history, uptime, expected-role loadout templates and whole-loadout proposals are retired from the active workflow. Existing settings namespaces and relevant preferences must survive the migration. There is no mandatory MT/OT/healer assignment workflow.
-
-## Evidence rules
-
-A source is counted only when the available evidence establishes the corresponding equipment/skill/mastery requirement. One-bar set activation is valid if the required pieces are active on that bar. Class identity alone does not establish skill, passive or mastery selection.
-
-Source availability and live application are different facts. The UI must not promise twelve recipients for a six-player effect, proc activation, maintained duration or stacking merely because it identifies multiple providers.
-
-Native group data is partial. Remote gear, full skill bars, CP and mastery inspection require a compatible sender. LibGroupCombatStats provides compatible Ultimate/active-line data, not a full remote build API or mastery/passive proof. LibSetDetection v5 adds reported set identities and per-bar activation without the full suite, while respecting hidden/partial data. A small **AlphaSquadBuildShare** companion offers an alternative to installing the full suite, but still requires explicit installation/opt-in and LibGroupBroadcast.
-
-A transformation icon or class badge is shown only when the available evidence supports it. Werewolf form must not overwrite the saved normal weapon bars; a Vampire skill icon alone does not establish an active transformation.
-
-Unsupported, stale, malformed or incomplete data remains `UNKNOWN`. Missing observations are not automatically proof of missing food or missing equipment. No packet or manual claim should silently become stronger evidence than it provides.
-
-## Performance and release boundaries
-
-Use cached snapshots, coalesced build events and bounded sharing. Do not reintroduce a combat sampler or report history for these checks. Hidden views must not continually rebuild controls; disabled modules must stop unnecessary callbacks.
-
-Full build sharing defaults OFF and uses provisional protocol IDs. Formal reservation and coexistence tests are required before a public sharing release. Deterministic tests, syntax success and a clean audit do not establish in-game acceptance or authorize a PR.
+Class Masteries require committed, eligible selections. Front/back equipment activation is evaluated separately. A selected potion is preparation evidence, not proof of consumption. Tooltips may use viewer-dependent native stat calculations, which must be identified for shared skills.

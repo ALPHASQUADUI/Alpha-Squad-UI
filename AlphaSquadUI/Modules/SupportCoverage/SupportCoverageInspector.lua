@@ -1,9 +1,9 @@
--- One-page character sheet and a separate, reusable group food list.
+-- One-page character sheet with group food status alongside player selection.
 local SC=AlphaSquadUI and AlphaSquadUI.Modules and AlphaSquadUI.Modules.SupportCoverage
 if not SC then return end
 local UI,C=SC.UI,SC.UI.colors
 local function Text(value,fallback)
-    if type(value)=="string" and value~="" then return value:gsub("%^.*$","") end
+    if type(value)=="string" and value~="" then return (value:gsub("%^.*$","")) end
     return fallback or "Unknown"
 end
 local function PlayerKey(player) return player and (player.key or player.displayName) end
@@ -11,14 +11,6 @@ local function FoodText(food)
     if not food or not food.verified then return "FOOD UNKNOWN",C.muted,"Food information is unavailable." end
     if not food.active then return "NO FOOD",C.red,"No active food or drink detected." end
     return "FOOD ACTIVE",C.green,Text(food.name,"Food or drink active")
-end
-local function PotionText(potion)
-    if potion and potion.known then
-        local stock=potion.stack or potion.count
-        return Text(potion.name,"Potion selected")..(type(stock)=="number" and (" • "..stock.." available") or "")
-    end
-    if potion and potion.selectionKnown then return "No potion selected" end
-    return "Selected potion unavailable"
 end
 local function ClassName(player)
     if player and type(player.className)=="string" and player.className~="" then return Text(player.className) end
@@ -48,8 +40,8 @@ function SC:RequestInspectedBuild(key)
     return ok
 end
 function SC:OpenInspector(tab)
-    if self.inCombat then return false end
-    self.inspectorTab=tab=="FOOD" and "FOOD" or "BUILD"
+    if self.loading or self.inCombat then return false end
+    self.inspectorTab="BUILD"
     if not self.inspectorWindow then self:CreateInspectorWindow() end
     if not self:GetInspectedPlayer() then
         local first=(self.roster or {})[1]
@@ -60,14 +52,10 @@ function SC:OpenInspector(tab)
     if self.inspectorTab=="BUILD" and self.inspectorPlayerKey then self:RequestInspectedBuild(self.inspectorPlayerKey) end
     self:RefreshInspector();return true
 end
-function SC:OpenFoodCheck() return self:OpenInspector("FOOD") end
+function SC:OpenFoodCheck() return self:OpenInspector("BUILD") end
 function SC:CreateInspectorWindow()
     local win=UI.Window("AlphaSquadSupportInspector","Ąlpha Şquad UI  •  Builds",function()SC:CloseInspector()end)
     self.inspectorWindow=win;UI.RegisterWindow("supportBuilds",win,function()SC:CloseInspector()end)
-    win.buildTab=UI.Button(win,"AlphaSquadInspectorBuildTab","BUILDS",112,30,function()SC.inspectorTab="BUILD";UI.ClearTooltip();SC:RefreshInspector()end)
-    win.buildTab:SetAnchor(TOPLEFT,win,TOPLEFT,18,96)
-    win.foodTab=UI.Button(win,"AlphaSquadInspectorFoodTab","FOOD CHECK",130,30,function()SC.inspectorTab="FOOD";UI.ClearTooltip();SC:RefreshInspector()end)
-    win.foodTab:SetAnchor(TOPLEFT,win,TOPLEFT,138,96)
     win.coverage=UI.Button(win,"AlphaSquadInspectorCoverage","COVERAGE",124,30,function()SC:OpenMatrix()end)
     win.coverage:SetAnchor(TOPRIGHT,win,TOPRIGHT,-18,96)
     win.request=UI.Button(win,"AlphaSquadInspectorRequest","REFRESH BUILD",144,30,function()
@@ -78,23 +66,8 @@ function SC:CreateInspectorWindow()
     win.playerHeader:SetAnchor(TOPLEFT,win,TOPLEFT,18,146);win.playerHeader:SetDimensions(176,24)
     win.playerList=UI.Scroll(win,"AlphaSquadInspectorPlayers")
     win.playerList:SetAnchor(TOPLEFT,win,TOPLEFT,18,174);win.playerList:SetDimensions(180,474)
-    win.detailList=UI.Scroll(win,"AlphaSquadInspectorDetails")
-    win.detailList:SetAnchor(TOPLEFT,win,TOPLEFT,18,146);win.detailList:SetDimensions(1024,502)
     win.buildSheet=self.BuildView.Create(win);win.buildSheet:SetAnchor(TOPLEFT,win,TOPLEFT,212,146)
     win.footer:SetText("Hover any item, skill or Champion star for details. ? means unavailable; an empty slot is shown as —. Front and back set totals are counted separately.")
-end
-function SC:GetInspectorRows()
-    local rows={}
-    if self.inspectorTab~="FOOD" then return rows end
-    for _,player in ipairs(self.roster or {}) do
-        local status,color,food=FoodText(player.food)
-        local unavailable=player.connected==false and "OFFLINE • " or player.dead and "DEAD • " or ""
-        rows[#rows+1]={title=unavailable..Text(player.displayName,"Unknown player"),status=status,color=color,
-            detail=food,subdetail=PotionText(player.potion),player=player,
-            tooltip="Food presence can be verified independently of a full build. A selected potion is preparation evidence only. An unavailable reading does not mean this player has no food."}
-    end
-    if #rows==0 then rows[1]={title="No group members",status="",color=C.muted,detail="Join a group to check food and selected potions.",subdetail=""} end
-    return rows
 end
 function SC:RefreshInspectorRoster()
     local win=self.inspectorWindow;local roster=self.roster or {}
@@ -121,7 +94,7 @@ function SC:RefreshInspectorRoster()
         end
         row.player=player;row:SetHidden(false);row:ClearAnchors();row:SetAnchor(TOPLEFT,win.playerList.content,TOPLEFT,0,(index-1)*63)
         local selected=PlayerKey(player)==self.inspectorPlayerKey
-        row.label:SetText(UI.Text(Text(player.displayName,"Unknown player")));UI.Color(row.label,selected and C.orange or C.white)
+        row.label:SetText(AlphaSquadUI.Theme.PlayerName and AlphaSquadUI.Theme.PlayerName(player.displayName) or UI.Text(Text(player.displayName,"Unknown player")));UI.Color(row.label,selected and C.orange or C.white)
         row.marker:SetHidden(not selected)
         local status,color=FoodText(player.food)
         row.detail:SetText(player.connected==false and "OFFLINE" or player.dead and "DEAD" or status)
@@ -131,47 +104,14 @@ function SC:RefreshInspectorRoster()
     win.playerHeader:SetText("GROUP  •  "..#roster)
     UI.FinishScroll(win.playerList,#roster*63,158)
 end
-function SC:RefreshInspectorFood()
-    local win=self.inspectorWindow;local rows=self:GetInspectorRows()
-    for index,data in ipairs(rows) do
-        local row=win.detailList.rows[index]
-        if not row then
-            local name="AlphaSquadInspectorFoodRow"..index
-            row=WINDOW_MANAGER:CreateControl(name,win.detailList.content,CT_CONTROL)
-            row.bg=UI.Solid(row,name.."BG",C.panel)
-            row.title=UI.Label(row,name.."Title","","ZoFontGameBold")
-            row.title:SetAnchor(TOPLEFT,row,TOPLEFT,14,8);row.title:SetDimensions(310,27)
-            row.status=UI.Label(row,name.."Status","","ZoFontGameBold")
-            row.status:SetAnchor(TOPRIGHT,row,TOPRIGHT,-14,8);row.status:SetDimensions(180,27);row.status:SetHorizontalAlignment(TEXT_ALIGN_RIGHT)
-            row.detail=UI.Label(row,name.."Detail","","ZoFontGameSmall",C.muted)
-            row.detail:SetAnchor(TOPLEFT,row,TOPLEFT,14,39);row.detail:SetDimensions(472,23)
-            row.potion=UI.Label(row,name.."Potion","","ZoFontGameSmall",C.muted)
-            row.potion:SetAnchor(TOPLEFT,row,TOPLEFT,512,39);row.potion:SetDimensions(472,23)
-            UI.Hover(row,function()return row.data and row.data.tooltip end)
-            win.detailList.rows[index]=row
-        end
-        row.data=data;row:SetHidden(false);row:ClearAnchors();row:SetAnchor(TOPLEFT,win.detailList.content,TOPLEFT,0,(index-1)*78);row:SetDimensions(1002,72)
-        row.title:SetText(UI.Text(data.title));row.status:SetText(data.status or "");UI.Color(row.status,data.color)
-        row.detail:SetText(UI.Text(data.detail));row.potion:SetText(UI.Text(data.subdetail))
-    end
-    for index=#rows+1,#win.detailList.rows do win.detailList.rows[index]:SetHidden(true);win.detailList.rows[index].data=nil end
-    UI.FinishScroll(win.detailList,#rows*78,1002)
-end
 function SC:RefreshInspector()
     local win=self.inspectorWindow;if not win or win:IsHidden() then return end
     -- A stable logical canvas keeps the complete character sheet on one page at all UI scales.
     win:SetDimensions(1060,700);win:SetScale(math.max(0.1,math.min(1,(GuiRoot:GetWidth()-24)/1060,(GuiRoot:GetHeight()-24)/700)))
-    local foodMode=self.inspectorTab=="FOOD"
-    win.title:SetText("Ąlpha Şquad UI  •  "..(foodMode and "Food check" or "Builds"))
-    UI.Color(win.buildTab.label,not foodMode and C.orange or C.muted);UI.Color(win.foodTab.label,foodMode and C.orange or C.muted)
-    win.playerList:SetHidden(foodMode);win.playerHeader:SetHidden(foodMode);win.detailList:SetHidden(not foodMode);win.buildSheet:SetHidden(foodMode)
+    win.title:SetText(AlphaSquadUI.Theme.Brand and AlphaSquadUI.Theme.Brand("Builds") or "Ąlpha Şquad UI  •  Builds")
     local player=self:GetInspectedPlayer()
-    win.request:SetHidden(foodMode or not player)
-    if foodMode then
-        win.subtitle:SetText("Check food presence and the selected potion for every player before combat.")
-        win.footer:SetText("Food active confirms a detected buff. Unknown means the information is unavailable; it does not mean no food. Selected potions do not prove use.")
-        self:RefreshInspectorFood();return
-    end
+    win.request:SetHidden(not player)
+    win.buildSheet:SetHidden(false)
     self:RefreshInspectorRoster()
     local details,status
     if player and self.GetPlayerBuildDetails then details,status=self:GetPlayerBuildDetails(PlayerKey(player))
@@ -180,9 +120,12 @@ function SC:RefreshInspector()
     local subtitle=player and (Text(player.displayName).."  •  "..ClassName(player)..(player.connected==false and "  •  Offline" or "")) or "Select a player from the group list."
     if details then subtitle=subtitle.."\n"..(player and player.unitTag=="player" and "Your equipped build" or "Shared build snapshot • refresh after changes")
     elseif player then subtitle=subtitle.."\nPartial information • request a compatible shared build for exact equipment and skill slots" end
-    win.subtitle:SetText(UI.Text(subtitle))
+    win.subtitle:SetText((UI.Text(subtitle):gsub("@SeRuM1",function() return AlphaSquadUI.Theme.authorText or "@SeRuM1" end)))
     win.footer:SetText("Hover equipment, skills and Champion stars for their details. ? = unavailable • — = empty. Set names show equipped items; FRONT / BACK show set pieces.")
     self.BuildView.Bind(win.buildSheet,player,details,status)
+    local height=math.max(700,win.buildSheet:GetHeight()+198)
+    win:SetDimensions(1060,height)
+    win:SetScale(math.max(0.1,math.min(1,(GuiRoot:GetWidth()-24)/1060,(GuiRoot:GetHeight()-24)/height)))
 end
 -- Harmless migration aliases for windows that no longer exist.
 function SC:ClosePullReport() if self.reportWindow then self.reportWindow:SetHidden(true) end end

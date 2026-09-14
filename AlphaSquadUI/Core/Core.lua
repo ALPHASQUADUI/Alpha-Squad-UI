@@ -6,8 +6,8 @@ local ASUI = AlphaSquadUI
 
 ASUI.name = "AlphaSquadUI"
 ASUI.displayName = "Ąlpha Şquad UI"
-ASUI.version = "2.7.0"
-ASUI.author = "SeRuM1"
+ASUI.version = "2.8.0"
+ASUI.author = "@SeRuM1"
 ASUI.website = "https://alphasquadeso.com/"
 
 ASUI.Modules = ASUI.Modules or {}

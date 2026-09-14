@@ -263,8 +263,8 @@ function SC:IsCurrentGroupMember(tag)
 end
 
 function SC:MayReceiveBuild(tag)
-    return self.sv and self.sv.enabled and self.sv.shareData and self.sv.experimentalSharing
-        and not self.inCombat and self:IsCurrentGroupMember(tag) and not self:IsSelf(tag)
+    return self.sv and self.sv.shareData and self.sv.experimentalSharing
+        and not self.loading and not self.inCombat and self:IsCurrentGroupMember(tag) and not self:IsSelf(tag)
 end
 
 function SC:IsRaidLead()
@@ -273,7 +273,7 @@ end
 
 function SC:InitializeSharing()
     self.share=self.share or {}
-    if not self.sv or not self.sv.enabled or not self.sv.experimentalSharing or not self.sv.shareData then
+    if not self.sv or not self.sv.experimentalSharing or not self.sv.shareData then
         self.share.available=false
         self.share.error="Build sharing is off. Enable sharing on each participating client."
         return
@@ -320,7 +320,7 @@ function SC:InitializeSharing()
 end
 
 function SC:ShareLocalSnapshot(reason)
-    if not self.sv or not self.sv.enabled or not self.sv.experimentalSharing or not self.sv.shareData or self.inCombat then return false end
+    if not self.sv or not self.sv.experimentalSharing or not self.sv.shareData or self.inCombat or self.loading then return false end
     if not self:IsGrouped() or not self.share or not self.share.available or not self.share.protocol then return false end
     if self.share.protocol.IsEnabled and not self.share.protocol:IsEnabled() then return false end
     local now=self.NowMs()

@@ -207,6 +207,16 @@ Group.sv.visible = false
 Group:ApplyVisibility()
 check(updates.AlphaSquadUI_ULTGroup_ReadyPulse == nil, "Hiding the group tracker stops its READY pulse")
 
+ULT.loading=true;ULT.sv.hideInMenus=false;Group.sv.hideInMenus=false;Group.sv.visible=true
+ULT:ApplyVisibility();Group:ApplyVisibility()
+check(ULT.window:IsHidden() and Group.window:IsHidden(),"Loading hides both HUDs regardless of menu visibility preferences")
+check(updates.AlphaSquadUI_ULTTracker_Safety==nil and updates.AlphaSquadUI_ULTGroup_Safety==nil and updates.AlphaSquadUI_ULTGroup_ReadyPulse==nil,
+    "Loading cannot restart Ultimate recovery or pulse loops")
+local queuedBeforeLoading=#delayed
+Group:ScheduleRefresh(true)
+check(#delayed==queuedBeforeLoading,"Group loading cannot queue new roster work")
+ULT.loading=false
+
 local before = #delayed
 ULT.sv.enabled, Group.sv.enabled = false, true
 Group:ScheduleRefresh(true)

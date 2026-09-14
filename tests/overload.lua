@@ -68,6 +68,11 @@ check(updates.AlphaSquadUI_HealthSync==nil,"Dormant Overload unregisters its rec
 AOT:SetAutoDormant(false)
 check(updates.AlphaSquadUI_HealthSync~=nil,"Slot-event wake restores the visible recovery heartbeat")
 
+AOT.loading=true;AOT:ApplyVisualSettings()
+check(hidden and updates.AlphaSquadUI_HealthSync==nil,"Loading always hides Overload and suspends its heartbeat")
+AOT.loading=false;AOT:ApplyVisualSettings()
+check(not hidden and updates.AlphaSquadUI_HealthSync~=nil,"Activation restores the enabled visible HUD")
+
 AOT.window=nil
 AOT:SetAddonEnabled(false)
 check(updates.AlphaSquadUI_HealthSync==nil,"Final disable leaves no Overload update registered")

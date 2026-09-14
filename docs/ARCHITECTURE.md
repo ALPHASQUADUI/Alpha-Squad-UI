@@ -4,7 +4,7 @@
 
 `AlphaSquadUI/` is the full ESO suite. The **AlphaSquadBuildShare** companion is a separate sharing-only installation for group members who do not want the UI suite; it uses the same compatible build format.
 
-Core owns identity/version (`Core.lua`), theme tokens (`Theme.lua`), shared helpers (`Utils.lua`), event namespaces (`Events.lua`), the settings-page bridge (`Settings.lua`) and shared foreground tooltip routing (`Tooltips.lua`). New pages register through:
+Core owns identity/version (`Core.lua`), theme tokens (`Theme.lua`), shared helpers (`Utils.lua`), module event scopes (`Events.lua`) and account/character preferences (`Preferences.lua`), the settings-page bridge (`Settings.lua`) centralized library consent (`Sharing.lua`) and shared foreground tooltip routing (`Tooltips.lua`). New pages register through:
 
 ```lua
 AlphaSquadUI.Settings.RegisterPage(id, builder)
@@ -24,7 +24,7 @@ The settings shell implementation is hosted by Overload. Other modules use the C
 | Support engine/lifecycle | Cached roster, precombat capability evaluation, context toggles, duplicate providers and event invalidation |
 | Support external adapters | Optional LibSetDetection group set facts and compatible LibGroupCombatStats information with explicit data limits |
 | Support share/details/codec | Bounded compatible snapshot transport and validation |
-| Support UI/settings/inspector | Coverage list, player selection, Food and dependency guidance |
+| Support UI/settings/inspector | Categorized Coverage, build selection and integrated consumable readiness |
 | Support BuildView | Compact equipment silhouette, set summaries, skill/Ultimate and Champion icons |
 | Core tooltip routing | Native item/ability details and readable custom descriptions above addon windows |
 
@@ -72,4 +72,14 @@ Group Ultimate settings remain inside the ULT Tracker namespace. Relevant Suppor
 
 Prefer events, coalescing, bounded caches and reused controls. Do not keep animation callbacks alive when hidden. Keep optional-library failures local to their integration. Preserve working module behavior and user preferences; avoid a broad rewrite where a targeted change is sufficient.
 
-Development remains on `support-coverage`. In-game tests and an explicit maintainer PR request are required before proposing changes to stable `main`.
+Maintainer review and the ESO acceptance checklist are required before release.
+
+## Independent tracking, sharing and profiles
+
+Dashboard invokes each module's lifecycle setter and hides disabled navigation entries. Core event scopes unregister gameplay callbacks and restore their exact filters on enable. The settings shell stays accessible when Overload is disabled. Loading transitions stop local timers and defer scan/transfer work until activation.
+
+Support Coverage runs its scanner and sender without HUD/coverage evaluation when explicit sharing is enabled and the player is grouped. That mode uses a sixty-second recovery check; relevant local build changes still coalesce through native events. Library consent remains separate from module activation. Group Ultimate reception and sending have separate LibGroupCombatStats registrations.
+
+The Libraries bridge checks LGB handler ownership and both protocol names and identifiers before invoking the same protocol-setting manager as LGB's native settings. It prunes disabled messages only and falls back to the native library panel for incompatible layouts. It does not modify unrelated transports or another library's event registrations.
+
+Core Preferences opens existing account namespaces by default and native character-ID namespaces when Cross-sync is off. Switching deep-copies the current values into the selected destination and updates the live module/Group ULT references. Core sharing choices remain account/server scoped. The settings shell also retains its position.

@@ -47,6 +47,7 @@ WINDOW_MANAGER={CreateControl=function(_,name,parent) return Control(name,parent
     CreateTopLevelWindow=function(_,name) return Control(name,GuiRoot) end}
 EVENT_MANAGER={RegisterForEvent=function() end,UnregisterForEvent=function() end,UnregisterForUpdate=function() end}
 AlphaSquadUI={version="test",Modules={}}
+assert(loadfile("AlphaSquadUI/Core/Theme.lua"))()
 assert(loadfile("AlphaSquadUI/Core/Settings.lua"))()
 local Settings=AlphaSquadUI.Settings
 local main,detail=Control("main"),Control("detail")
@@ -83,10 +84,17 @@ AOT.sv={scale=100,opacity=95,reserveWarningThreshold=160,reserveThreshold=130,re
 AOT:CreateSettingsWindow()
 check(Settings.GetPageBuilder("libraries") and AOT.settingsPages.libraries,"Libraries page is registered in the real shell")
 Settings.OpenPage("libraries")
-check(controls.AlphaSquadSettingsTitle.text:find("Ąlpha Şquad UI",1,true)~=nil,"Settings brand retains the original letters and UI suffix")
-check(AOT.settingsWindow.height==680 and AOT.settingsScroll:GetHeight()==600,"Settings fit a 720p viewport and scroll lower content")
-check(AOT.settingsContent:GetHeight()==960 and AOT.settingsScroll.maximum==360,"Long library setup content remains reachable through scrolling")
-check(controls.AlphaSquadLibraryStatus1.text=="NOT INSTALLED","Missing transport is clearly identified")
+check(controls.AlphaSquadSettingsTitle.text:gsub("|c%x%x%x%x%x%x",""):gsub("|r",""):find("Ąlpha Şquad UI",1,true)~=nil,"Settings brand retains the original letters and UI suffix")
+check(AOT.settingsWindow.width==1350 and AOT.settingsWindow.height<=720,"Settings provide the wider desktop canvas and fit the viewport")
+check(AOT.settingsScroll.maximum==0 and AOT.settingsPages.libraries.contentHeight==590,"Every library and sharing switch fits on one page")
+GuiRoot:SetDimensions(854,480);AOT:ApplySettingsGeometry()
+check(AOT.settingsWindow.width*AOT.settingsWindow.scale<=814 and AOT.settingsWindow.height*AOT.settingsWindow.scale<=440,
+    "The complete settings canvas fits a smaller viewport without clipping")
+check(AOT.settingsScroll.maximum==0,"Libraries still needs no scrollbar at a smaller viewport")
+GuiRoot:SetDimensions(1280,720);AOT:ApplySettingsGeometry()
+check(controls.AlphaSquadSettingsClose==nil,"Parent settings has no close cross")
+check(AOT.settingsPages.dashboard~=nil,"Dashboard is available independently of modules")
+check(controls.AlphaSquadLibraryStatus1.text=="MISSING","Missing transport is clearly identified")
 LibGroupBroadcast={};Settings.RefreshMain()
 check(controls.AlphaSquadLibraryStatus1.text=="INSTALLED","Installed library state refreshes when settings are shown")
 local refreshCount=0

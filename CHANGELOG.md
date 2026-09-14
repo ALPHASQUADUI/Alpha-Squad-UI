@@ -1,10 +1,14 @@
 # Changelog
 
+## 2.8.0 — 2026-09-14
+
+Dashboard and Cross-sync, independent library sharing, four visual Coverage columns, native Champion artwork, complete equipped-set summaries, foreground tooltips and lower idle module work. Food/potion readiness is integrated into Builds. See [complete release notes](releases/2.8.0.md).
+
 All notable changes to Ąlpha Şquad UI are documented here.
 
 ## 2.7.0
 
-Available on `support-coverage`. The separate `main` branch is unchanged.
+
 
 ### Visual build inspection
 - Added a compact character-style build view with armor positioned around a body silhouette, jewelry and separate front/back weapons.
@@ -66,7 +70,7 @@ Available on `support-coverage`. The separate `main` branch is unchanged.
 - Uses lightweight `GetUnitULT()` reads during full roster rebuilds.
 
 ### Repository
-- Replaced branch-specific validation with repository-wide PR/main validation.
+- Added repository-wide validation and installable packages.
 - Updated README, architecture and performance documentation.
 - Removed the stale committed Overload-only ZIP from the active release path.
 

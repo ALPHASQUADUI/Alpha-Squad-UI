@@ -1,6 +1,6 @@
 --[[
     Ąlpha Şquad UI - ULT Tracker / Group Tracking
-    Author: SeRuM1
+    Author: @SeRuM1
 
     Group Ultimate data is received through LibGroupCombatStats when available.
     The personal ULT Tracker remains fully functional without that library.
@@ -15,7 +15,7 @@ if not ULT then return end
 ULT.Group = ULT.Group or {}
 local Group = ULT.Group
 
-Group.version = (AlphaSquadUI and AlphaSquadUI.version) or "2.6.0"
+Group.version = (AlphaSquadUI and AlphaSquadUI.version) or "2.8.0"
 Group.lgcs = nil
 Group.libraryAvailable = false
 Group.roster = {}
@@ -28,7 +28,7 @@ Group.previousUltValues = Group.previousUltValues or {}
 Group.recentlyUsedUntil = Group.recentlyUsedUntil or {}
 Group.initialized = false
 
-local EM = EVENT_MANAGER
+local EM = AlphaSquadUI.Events and AlphaSquadUI.Events.NewScope and AlphaSquadUI.Events.NewScope() or EVENT_MANAGER
 local MAX_TRACKED_ABILITIES = 24
 local MAX_ABILITY_ID = 2147483647
 local MAX_ULTIMATE_VALUE = 1000000
@@ -278,7 +278,7 @@ function Group:InitializeSharing()
     end
 
     local ok, result = pcall(function()
-        return LibGroupCombatStats.RegisterAddon("AlphaSquadUIULTTracker", {"ULT"})
+        return LibGroupCombatStats.RegisterAddon("AlphaSquadUIULTTracker", AlphaSquadUI.Sharing and {} or {"ULT"})
     end)
 
     if not ok or not result then
@@ -287,6 +287,7 @@ function Group:InitializeSharing()
 
     self.lgcs = result
     self.libraryAvailable = true
+    if AlphaSquadUI.Sharing then AlphaSquadUI.Sharing.StartUltimateSender() end
 
     if result.RegisterForEvent then
         if LibGroupCombatStats.EVENT_GROUP_ULT_UPDATE then
@@ -662,7 +663,7 @@ function Group:RefreshIntegratedSettings()
 end
 
 function Group:ScheduleRefresh(rebuildRoster)
-    if not self.sv then return end
+    if ULT.loading or not self.sv then return end
 
     local configVisible = self.configWindow and not self.configWindow:IsHidden() or false
     local settings = AlphaSquadUI and AlphaSquadUI.Settings
@@ -688,7 +689,7 @@ function Group:ScheduleRefresh(rebuildRoster)
 end
 
 function Group:Refresh(reason, rebuildRoster)
-    if not self.initialized or not self.sv then return end
+    if ULT.loading or not self.initialized or not self.sv then return end
 
     if rebuildRoster ~= false then
         self:BuildRoster()
@@ -706,6 +707,8 @@ function Group:Refresh(reason, rebuildRoster)
 end
 
 function Group:OnGroupUltUpdate(unitTag, data)
+    if ULT.loading then return end
+    if (not ULT.sv or not ULT.sv.enabled or not self.sv or not self.sv.enabled) and not (self.configWindow and not self.configWindow:IsHidden()) then return end
     if self:UpdateEntryFromUltData(unitTag, data) then
         self:ScheduleRefresh(false)
     else
@@ -738,7 +741,7 @@ function Group:RegisterRosterEvents()
 end
 
 function Group:SetSafetyUpdateActive(enabled)
-    enabled = enabled == true
+    enabled = enabled == true and not ULT.loading
     if self.safetyUpdateActive == enabled then return end
     self.safetyUpdateActive = enabled
     local name = "AlphaSquadUI_ULTGroup_Safety"
@@ -754,9 +757,15 @@ function Group:SetSafetyUpdateActive(enabled)
     end
 end
 
+function Group:SetTrackingEventsActive()
+    local active=not ULT.loading and ULT.sv and ULT.sv.enabled and self.sv and self.sv.enabled
+    if EM.SetActive then EM:SetActive(active==true) end
+end
+
 function Group:SetEnabled(enabled)
     if not self.sv then return end
     self.sv.enabled = enabled == true
+    self:SetTrackingEventsActive()
     self:SetSafetyUpdateActive(self.sv.enabled and ULT.sv and ULT.sv.enabled and not ULT.uiObscured)
     self:Refresh("enabled", true)
     self:ApplyVisibility()
@@ -789,6 +798,7 @@ function Group:Initialize()
     if self.CreateConfigWindow then self:CreateConfigWindow() end
 
     self:RegisterRosterEvents()
+    self:SetTrackingEventsActive()
     self.initialized = true
     self:SetSafetyUpdateActive(self.sv.enabled and ULT.sv and ULT.sv.enabled and not ULT.uiObscured)
 

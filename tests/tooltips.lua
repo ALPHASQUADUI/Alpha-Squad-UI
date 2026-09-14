@@ -30,7 +30,10 @@ function InitializeTooltip(tip,control,point,x,y,relative)
     tip.owner,tip.point,tip.offset,tip.relative=control,point,x,relative;tip.lines={};tip:SetHidden(false)
 end
 function ClearTooltipImmediately(tip)tip.owner=nil;tip.lines={};tip:SetHidden(true) end
-function SetTooltipText(tip,text)tip:AddLine(text) end
+function SetTooltipText(tip,text,...)
+    assert(select('#',...)==0,'Text must not leak a replacement count into native tooltip color arguments')
+    tip:AddLine(text)
+end
 function ItemTooltip:SetLink(link)self.link=link end
 function ItemTooltip:SetBagItem()error('Remote items must never resolve the viewer bag')end
 function AbilityTooltip:SetAbilityId(id)self.abilityId=id end
@@ -95,6 +98,7 @@ function SC:DescribeChampionSkill(id,slot,points,known)
 end
 T.ShowChampion(owner,{id=8,slot=2,points=30,pointsKnown=true})
 check(receivedPoints==30,'Champion description gets the inspected player allocation')
+check(not InformationTooltip.lines[1]:find('\n\n0\n',1,true),'Champion tooltip has no stray replacement counter')
 check(InformationTooltip.lines[1]:find('30 points invested',1,true) and InformationTooltip.lines[1]:find('Current bonus: 6%',1,true),'Champion popup includes verified allocation and resulting bonus')
 T.ShowChampion(owner,{id=8,slot=2,points=0,pointsKnown=false})
 check(not InformationTooltip.lines[1]:find('0 points',1,true) and not InformationTooltip.lines[1]:find('6%',1,true),'Legacy unknown points do not become a precise zero or invented bonus')

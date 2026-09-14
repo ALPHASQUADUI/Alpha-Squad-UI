@@ -18,7 +18,7 @@ def build(destination):
     addon_version = re.search(r"^## AddOnVersion: (.+)$", manifest, re.M).group(1)
     api = re.search(r"^## APIVersion: (.+)$", manifest, re.M).group(1)
     metadata = [
-        "## Title: Ąlpha Şquad Build Share", "## Author: SeRuM1",
+        "## Title: Ąlpha Şquad Build Share", "## Author: @SeRuM1",
         f"## Version: {version}", f"## AddOnVersion: {addon_version}", f"## APIVersion: {api}",
         "## DependsOn: LibGroupBroadcast", "## OptionalDependsOn: AlphaSquadUI LibFoodDrinkBuff",
         "## SavedVariables: AlphaSquadBuildShareSavedVariables", "",

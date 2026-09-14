@@ -6,7 +6,7 @@ local UI = {}; SC.UI = UI
 UI.colors = C
 
 function UI.Text(value)
-    return tostring(value or ""):gsub("|[cC]%x%x%x%x%x%x", ""):gsub("|[rR]", ""):gsub("|", "||"):gsub("[\r]", "")
+    return (tostring(value or ""):gsub("|[cC]%x%x%x%x%x%x", ""):gsub("|[rR]", ""):gsub("|", "||"):gsub("[\r]", ""))
 end
 function UI.Color(control, color)
     control:SetColor(color[1], color[2], color[3], color[4] or 1)
@@ -98,6 +98,10 @@ function UI.ForwardWheel(control,delta)
     end
 end
 function UI.Window(name, title, close)
+    if AlphaSquadUI.Theme.Brand then
+        local section=title:match("UI%s+•%s+(.+)$")
+        title=AlphaSquadUI.Theme.Brand(section)
+    end
     local win = WINDOW_MANAGER:CreateTopLevelWindow(name)
     win:SetAnchor(CENTER, GuiRoot, CENTER, 0, 0); win:SetHidden(true)
     win:SetClampedToScreen(true); win:SetDrawTier(DT_HIGH); win:SetDrawLayer(DL_OVERLAY); win:SetDrawLevel(150)
@@ -215,12 +219,14 @@ function SC:ApplyVisibility()
     local anyPopup=settings and settings.AnyExclusiveWindowVisible and settings.AnyExclusiveWindowVisible()
     local popup=(self.matrixWindow and not self.matrixWindow:IsHidden()) or (self.inspectorWindow and not self.inspectorWindow:IsHidden())
     local menu=settings and settings.mainWindow and not settings.mainWindow:IsHidden()
-    local hidden=not self.sv.enabled or not self.sv.visible or self.inCombat==true
+    local hidden=self.loading==true or not self.sv.enabled or not self.sv.visible or self.inCombat==true
         or (self.sv.hideInMenus and self.uiObscured) or anyPopup or popup or menu
     self.window:SetHidden(hidden==true)
     if self.SetSafetyUpdateActive then
         local grouped=self.IsGrouped and self:IsGrouped()
-        self:SetSafetyUpdateActive(self.sv.enabled and not self.inCombat and (grouped or not hidden or popup or self.settingsPageVisible)==true)
+        local tracking=self.sv.enabled and (grouped or not hidden or popup or self.settingsPageVisible)==true
+        local sharing=self.sv.shareData and self.sv.experimentalSharing and grouped
+        self:SetSafetyUpdateActive(not self.loading and not self.inCombat and (tracking or sharing)==true)
     end
 end
 function SC:GetHUDIssues()
@@ -286,7 +292,7 @@ function SC:CreateHUD()
     win:SetDimensions(410,398); win:SetClampedToScreen(true); win:SetDrawTier(DT_HIGH)
     win:SetDrawLayer(DL_OVERLAY); win:SetDrawLevel(60); win:SetMouseEnabled(true)
     win.bg=UI.Solid(win,"AlphaSquadSupportHUDBG",C.bg)
-    win.title=UI.Label(win,"AlphaSquadSupportHUDTitle","Ąlpha Şquad UI","ZoFontGameBold",C.orange)
+    win.title=UI.Label(win,"AlphaSquadSupportHUDTitle",(AlphaSquadUI.Theme.Brand and AlphaSquadUI.Theme.Brand() or "Ąlpha Şquad UI"),"ZoFontGameBold",C.orange)
     win.title:SetAnchor(TOPLEFT,win,TOPLEFT,12,8); win.title:SetDimensions(240,24)
     win.status=UI.Label(win,"AlphaSquadSupportHUDStatus","","ZoFontGameBold")
     win.status:SetAnchor(TOPLEFT,win,TOPLEFT,12,36); win.status:SetHeight(24)
@@ -298,7 +304,7 @@ function SC:CreateHUD()
     win.drag:SetHandler("OnMouseUp",function() win:StopMovingOrResizing(); SC:SavePosition() end)
     local close=UI.Button(win,"AlphaSquadSupportHUDClose","×",28,24,function() SC:SetVisible(false) end)
     close:SetAnchor(TOPRIGHT,win,TOPRIGHT,-8,8)
-    local actions={{"Coverage",function() SC:OpenMatrix() end},{"Builds",function() SC:OpenInspector("BUILD") end},{"Food",function() SC:OpenFoodCheck() end}}
+    local actions={{"Coverage",function() SC:OpenMatrix() end},{"Builds",function() SC:OpenInspector("BUILD") end}}
     for index,data in ipairs(actions) do
         local b=UI.Button(win,"AlphaSquadSupportHUDAction" .. index,data[1],88,28,data[2])
         b:SetAnchor(TOPLEFT,win,TOPLEFT,12+(index-1)*92,91)

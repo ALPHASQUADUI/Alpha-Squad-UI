@@ -221,3 +221,7 @@ All group tracker preferences are stored in account-wide ESO SavedVariables for
 the current server/world, including tracked Ultimate filters, HUD scale, width,
 row height, opacity, position, lock state, visibility, self inclusion and ready
 sound preference. Values survive reloads, zoning and game restarts.
+
+## Dashboard and sharing
+
+Enable or disable this module from Dashboard. Disabled tracking removes its own gameplay subscriptions and recovery/animation timers. Libraries remains available and its sharing settings are independent. Cross-sync keeps HUD positions and module settings across characters by default; switch it off for character-specific layouts. Loading transitions pause tracking until activation.

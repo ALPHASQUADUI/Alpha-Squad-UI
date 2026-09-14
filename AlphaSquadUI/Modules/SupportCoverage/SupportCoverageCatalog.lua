@@ -8,7 +8,7 @@ SC.Catalog = SC.Catalog or {}
 local Catalog = SC.Catalog
 
 Catalog.patch = "U50"
-Catalog.reviewedAt = "2026-09-13"
+Catalog.reviewedAt = "2026-09-14"
 Catalog.profileOrder = {"trial", "dungeon"}
 Catalog.bossArmor = 18200
 Catalog.criticalDamageCap = 125
@@ -941,3 +941,116 @@ function Catalog:FindSkillSources(abilityId, skillName)
     end
     return found
 end
+
+-- Presentation uses native effect/item textures, never a guessed skill icon.
+local displaySources={}
+for _,source in ipairs(Catalog.setSources) do
+    for _,key in ipairs(source.provides or {}) do
+        local effect=Catalog.effects[key]
+        if effect and effect.kind~="buff" and not key:find("^major_") and not key:find("^minor_") then
+            displaySources[key]=displaySources[key] or source
+        end
+    end
+end
+function Catalog:GetDisplayCategory(key)
+    local source=displaySources[key]
+    if source then return source.requiredPieces==1 and "mythics" or "sets" end
+    local effect=self.effects[key]
+    return effect and (effect.boss or effect.kind=="debuff" or effect.kind=="status") and "debuffs" or "buffs"
+end
+local previewCache={}
+local effectVisualCache={}
+local function Native(fn,...)
+    if type(fn)~="function" then return nil end
+    local ok,value=pcall(fn,...);if ok then return value end
+end
+function Catalog:GetSetPreview(setId)
+    if type(setId)~="number" or setId<=0 or setId%1~=0 then return nil end
+    if previewCache[setId] then return previewCache[setId] end
+    local piece=Native(GetItemSetCollectionPieceInfo,setId,1)
+    local link=piece and Native(GetItemSetCollectionPieceItemLink,piece,LINK_STYLE_DEFAULT or 0,ITEM_TRAIT_TYPE_NONE or 0)
+    if type(link)~="string" or link=="" then return nil end
+    local icon=Native(GetItemLinkIcon,link)
+    local result={link=link,icon=icon,reference=true}
+    previewCache[setId]=result;return result
+end
+function Catalog:GetEffectVisual(key)
+    if effectVisualCache[key] then return effectVisualCache[key] end
+    local source=displaySources[key]
+    if source then return self:GetSetPreview(source.setId) end
+    local effect=self.effects[key]
+    local id=self.visualAbilityIds and self.visualAbilityIds[key] or effect and effect.abilityIds and effect.abilityIds[1]
+    if id then
+        local icon=Native(GetAbilityIcon,id)
+        if type(icon)=="string" and icon~="" then
+            local result={icon=icon,abilityId=id};effectVisualCache[key]=result;return result
+        end
+    end
+    return nil
+end
+
+-- Native effect identities cross-checked against LuiExtended's MajorMinor registry.
+-- https://github.com/DakJaniels/LuiExtended/blob/master/LuiData/Effects/BarHighlight/MajorMinor.lua
+Catalog.visualAbilityIds={
+    major_aegis=93123,
+    major_berserk=61745,
+    major_breach=61743,
+    major_brittle=145977,
+    major_brutality=61665,
+    major_courage=66902,
+    major_cowardice=111354,
+    major_defile=61727,
+    major_endurance=61705,
+    major_evasion=61716,
+    major_expedition=61736,
+    major_force=61747,
+    major_fortitude=61698,
+    major_heroism=61709,
+    major_intellect=61707,
+    major_maim=61725,
+    major_mending=61711,
+    major_prophecy=61689,
+    major_protection=61722,
+    major_resolve=61694,
+    major_savagery=61667,
+    major_slayer=93109,
+    major_sorcery=61687,
+    major_vitality=61713,
+    major_vulnerability=106754,
+    minor_aegis=76618,
+    minor_berserk=61744,
+    minor_breach=61742,
+    minor_brittle=145975,
+    minor_brutality=61662,
+    minor_courage=121878,
+    minor_cowardice=46202,
+    minor_defile=61726,
+    minor_endurance=61704,
+    minor_enervation=47202,
+    minor_evasion=61715,
+    minor_expedition=61735,
+    minor_force=61746,
+    minor_fortitude=61697,
+    minor_heroism=61708,
+    minor_intellect=61706,
+    minor_lifesteal=80020,
+    minor_magickasteal=26809,
+    minor_maim=61723,
+    minor_mangle=61733,
+    minor_mending=61710,
+    minor_prophecy=61691,
+    minor_protection=61721,
+    minor_resolve=61693,
+    minor_savagery=61666,
+    minor_slayer=76617,
+    minor_sorcery=61685,
+    minor_timidity=134149,
+    minor_toughness=88490,
+    minor_uncertainty=47204,
+    minor_vitality=61549,
+    minor_vulnerability=61782,
+}
+Catalog.visualAbilityIds.major_brutality_sorcery=Catalog.visualAbilityIds.major_brutality
+Catalog.visualAbilityIds.minor_brutality_sorcery=Catalog.visualAbilityIds.minor_brutality
+Catalog.visualAbilityIds.major_savagery_prophecy=Catalog.visualAbilityIds.major_savagery
+Catalog.visualAbilityIds.minor_savagery_prophecy=Catalog.visualAbilityIds.minor_savagery

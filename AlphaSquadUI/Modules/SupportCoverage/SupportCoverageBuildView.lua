@@ -5,7 +5,7 @@ local UI,C=SC.UI,SC.UI.colors
 local View={};SC.BuildView=View
 local WIDTH,HEIGHT=830,502
 local function Text(value,fallback)
-    if type(value)=="string" and value~="" then return value:gsub("%^.*$","") end
+    if type(value)=="string" and value~="" then return (value:gsub("%^.*$","")) end
     return fallback or "Unknown"
 end
 local function Try(fn,...)
@@ -62,7 +62,26 @@ local function Bind(tile,kind,value,tooltip,empty,color,badge)
     local texture=value and value.icon
     if (not texture or texture=="") and kind=="item" and value and value.link then texture=Try(GetItemLinkIcon,value.link) end
     if (not texture or texture=="") and kind=="skill" and value then texture=Try(GetAbilityIcon,value.abilityId or value.id or 0) end
-    if (not texture or texture=="") and kind=="champion" and value then texture=Try(GetAbilityIcon,Try(GetChampionAbilityId,value.id or 0) or 0) end
+    if kind=="champion" and value and SC.DescribeChampionSkill then
+        local native=SC:DescribeChampionSkill(value.id,value.slot,value.points,value.pointsKnown)
+        texture=native and native.icon or ""
+    end
+    if kind=="champion" and value and texture and texture~="" and ZO_ChampionStarVisuals and WINDOW_MANAGER.CreateControlFromVirtual then
+        if not tile.star then
+            tile.star=WINDOW_MANAGER:CreateControlFromVirtual(tile:GetName().."NativeStar",tile,"ZO_ChampionStarVisuals")
+            tile.star:SetAnchorFill(tile.icon);tile.star:SetMouseEnabled(false)
+            tile.starVisuals=ZO_ChampionStarVisuals:New(tile.star)
+        end
+        local discipline=SC.GetChampionDiscipline and SC:GetChampionDiscipline(value.id)
+        local kindId=discipline and rawget(_G,"CHAMPION_DISCIPLINE_TYPE_"..discipline)
+        if kindId then
+            tile.starVisuals:Setup(ZO_CHAMPION_STAR_VISUAL_TYPE.SLOTTABLE,ZO_CHAMPION_STAR_STATE.PURCHASED,kindId,false)
+            tile.starVisuals:Update(0)
+            -- Preserve the real star artwork at a static frame; never animate 12 CP tiles.
+            tile.starVisuals.interpolators={}
+            tile.star:SetHidden(false)
+        else tile.star:SetHidden(true) end
+    elseif tile.star then tile.star:SetHidden(true) end
     local hasTexture=type(texture)=="string" and texture~=""
     tile.icon:SetHidden(not hasTexture);tile.icon:SetTexture(hasTexture and texture or "")
     tile.icon:SetColor(1,1,1,1);tile.empty:SetHidden(hasTexture);tile.empty:SetText(empty or "?")
@@ -137,7 +156,12 @@ function View.SetRows(equipment,external)
         local tooltip=name.."\n\n"..(physical and (physical.." equipped item"..(physical==1 and "" or "s").." across body, jewelry and both weapon bars.\n") or "Exact equipment slots and item count were not shared.\n")
             .."Front bar: "..(front and tostring(front) or "unknown").." set pieces\nBack bar: "..(back and tostring(back) or "unknown").." set pieces\n\nTwo-handed weapons are one item and contribute two set pieces. Counts are evaluated separately on each bar; a proc is not guaranteed active."
         if external then tooltip=tooltip.."\n\nLibSetDetection • "..SourceAge(external.updatedAt)..". This report is retained for the current uninterrupted group session. The player may withhold sets." end
-        rows[#rows+1]={name=count..name,front=front,back=back,tooltip=tooltip,physical=physical}
+        local item
+        for _,candidate in ipairs(equipment and equipment.items or {}) do
+            if ((set.id or set.setId) and (set.id or set.setId)>0 and (candidate.setId==set.id or candidate.setId==set.setId)) or candidate.setName==set.name then item=candidate;break end
+        end
+        if not item and SC.Catalog and SC.Catalog.GetSetPreview then item=SC.Catalog:GetSetPreview(set.id or set.setId) end
+        rows[#rows+1]={name=count..name,front=front,back=back,tooltip=tooltip,physical=physical,item=item}
     end
     table.sort(rows,function(a,b)
         local ac,bc=math.max(a.front or 0,a.back or 0),math.max(b.front or 0,b.back or 0)
@@ -167,13 +191,20 @@ function View.Create(parent)
     canvas.sets.front=Label(canvas.sets,"AlphaSquadBuildSetFront","FRONT",398,5,60,22,nil,C.muted)
     canvas.sets.back=Label(canvas.sets,"AlphaSquadBuildSetBack","BACK",478,5,60,22,nil,C.muted)
     canvas.sets.rows={}
-    for i=1,4 do
+    for i=1,14 do
         local row=WINDOW_MANAGER:CreateControl("AlphaSquadBuildSetRow"..i,canvas.sets,CT_CONTROL)
         At(row,canvas.sets,12,27+(i-1)*22,526,22)
         row.name=Label(row,"AlphaSquadBuildSetName"..i,"",0,0,374,22)
         row.front=Label(row,"AlphaSquadBuildSetFront"..i,"",386,0,60,22,"ZoFontGameBold",C.gold)
         row.back=Label(row,"AlphaSquadBuildSetBack"..i,"",466,0,60,22,"ZoFontGameBold",C.gold)
-        UI.Hover(row,function()return row.tooltip end);canvas.sets.rows[i]=row
+        row.icon=WINDOW_MANAGER:CreateControl("AlphaSquadBuildSetIcon"..i,row,CT_TEXTURE)
+        row:SetMouseEnabled(true)
+        row:SetHandler("OnMouseEnter",function()
+            if row.item then UI.ItemTooltip(row,row.item,canvas.isRemote)
+            else UI.Tooltip(row,row.tooltip) end
+        end)
+        row:SetHandler("OnMouseExit",UI.ClearTooltip)
+        canvas.sets.rows[i]=row
     end
     canvas.skills=Panel(canvas,"AlphaSquadBuildSkills",278,136,552,150,"SKILL BARS")
     canvas.skills.bars={}
@@ -267,19 +298,27 @@ function View.Bind(canvas,player,details,status)
     if not (external and external.sessionValid and external.fresh) then external=nil end
     local rows=View.SetRows(equipment,external)
     canvas.sets.title:SetText(external and "SETS • LAST REPORTED" or "SETS • EQUIPPED ITEMS")
+    local columns=#rows>6 and 2 or 1
+    local rowCount=math.max(3,math.ceil(#rows/columns))
+    local setHeight=32+rowCount*22
+    canvas.sets:SetHeight(setHeight)
+    canvas.sets.front:SetHidden(columns==2);canvas.sets.back:SetHidden(columns==2)
     for i,row in ipairs(canvas.sets.rows) do
-        local data=rows[i]
-        row:SetHidden(not data)
+        local data=rows[i];row:SetHidden(not data);row.item=data and data.item;row.tooltip=data and data.tooltip
         if data then
-            if i==4 and #rows>4 then
-                local all={"Additional equipped sets"};for index=4,#rows do
-                    local extra=rows[index]
-                    all[#all+1]=extra.name.." • Front "..(extra.front and tostring(extra.front) or "?").." / Back "..(extra.back and tostring(extra.back) or "?")
-                end
-                all[#all+1]="Names count physical items when known; bar totals count set pieces. A two-handed weapon is one item worth two set pieces."
-                row.name:SetText(UI.Text("+ "..(#rows-3).." more sets • hover to inspect"));row.front:SetText("");row.back:SetText("");row.tooltip=table.concat(all,"\n\n")
-            else row.name:SetText(UI.Text(data.name));row.front:SetText(data.front and tostring(data.front).."×" or "?");row.back:SetText(data.back and tostring(data.back).."×" or "?");row.tooltip=data.tooltip end
-        else row.tooltip=nil end
+            local col=math.floor((i-1)/rowCount);local y=(i-1)%rowCount
+            local width=columns==2 and 258 or 526
+            At(row,canvas.sets,12+col*270,29+y*22,width,22)
+            At(row.icon,row,0,1,20,20)
+            local icon=data.item and (data.item.icon or Try(GetItemLinkIcon,data.item.link))
+            row.icon:SetTexture(icon or "");row.icon:SetHidden(not icon or icon=="")
+            At(row.name,row,24,0,width-(columns==2 and 120 or 164),22)
+            At(row.front,row,width-(columns==2 and 92 or 140),0,columns==2 and 46 or 60,22)
+            At(row.back,row,width-(columns==2 and 46 or 60),0,columns==2 and 46 or 60,22)
+            row.name:SetText(UI.Text(data.name))
+            row.front:SetText((columns==2 and "F " or "")..(data.front and tostring(data.front).."×" or "?"))
+            row.back:SetText((columns==2 and "B " or "")..(data.back and tostring(data.back).."×" or "?"))
+        end
     end
     canvas.state:SetHidden(#rows>0)
     local setState=details and (equipment and equipment.complete and "No equipped set items." or "Set information is incomplete.") or Text(status,"Request a shared build to inspect equipment, skills and Champion Points.")
@@ -293,6 +332,14 @@ function View.Bind(canvas,player,details,status)
     end
     local curse=details and details.curse or {}
     local showWerewolf=(skills.werewolfKnown==true and #(skills.werewolf or {})>0) or curse.kind=="WEREWOLF"
+    local skillsY=setHeight+12
+    local skillsHeight=showWerewolf and 150 or 112
+    At(canvas.skills,canvas,278,skillsY,552,skillsHeight)
+    local cpY=skillsY+skillsHeight+12
+    At(canvas.champion,canvas,278,cpY,552,84)
+    At(canvas.masteries,canvas,278,cpY+96,552,48)
+    At(canvas.consumables,canvas,278,cpY+156,552,48)
+    canvas:SetHeight(math.max(HEIGHT,cpY+204))
     for _,bar in ipairs({"primary","backup","werewolf"}) do
         local group=canvas.skills.bars[bar];local barMap=View.SkillMap(skills[bar])
         if not details and externalUlts[bar] then barMap[6]=externalUlts[bar] end

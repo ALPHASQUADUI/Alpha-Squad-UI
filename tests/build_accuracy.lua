@@ -74,10 +74,17 @@ local set=equipment.setList[1]
 check(set.id == 100 and set.physicalCount == 1 and set.backupItemCount == 1, "Perfected-family merging retains one physical arena staff")
 check(set.mainCount == 0 and set.backCount == 2, "One physical two-handed weapon correctly contributes two back-bar set pieces")
 
+local savedDiscipline=SC.GetChampionDiscipline
+SC.GetChampionDiscipline=function() return "COMBAT" end
+CHAMPION_DISCIPLINE_TYPE_COMBAT=1
+function ZO_GetChampionBarDisciplineTextures(kind)
+    assert(kind==CHAMPION_DISCIPLINE_TYPE_COMBAT)
+    return {slotted="EsoUI/Art/Champion/ActionBar/champion_bar_combat_slotted.dds"}
+end
 local star=SC:DescribeChampionSkill(42,1,20,true)
 check(star.points == 20 and star.pointsKnown and cpDescriptionPoints == 20 and cpBonusPoints == 20,
     "Champion tooltip uses the shared total allocation, not zero or the viewer's fifty points")
-check(star.icon == "ability_9042.dds" and star.currentBonus == "Bonus 20", "Champion icon and current bonus belong to the selected star")
+check(star.icon == "EsoUI/Art/Champion/ActionBar/champion_bar_combat_slotted.dds" and star.currentBonus == "Bonus 20", "Champion uses the native discipline slot texture and the correct invested bonus")
 star=SC:DescribeChampionSkill(42,1,0,true)
 check(star.points == 0 and star.description == "Allocation 0", "A known zero-point star remains distinguishable from unknown allocation")
 cpDescriptionPoints=nil
@@ -85,6 +92,8 @@ star=SC:DescribeChampionSkill(42,1,nil,false)
 check(star.points == nil and not star.pointsKnown and star.description == "" and cpDescriptionPoints == nil,
     "Unknown remote CP allocation never uses the inspecting player's allocation")
 check(SC:DescribeChampionSkill(42,1,0/0,true).pointsKnown == false, "Non-finite Champion allocation stays unknown")
+
+SC.GetChampionDiscipline=savedDiscipline
 
 function GetSlotBoundId(slot,category)
     if category==HOTBAR_CATEGORY_CHAMPION then return slot==1 and 42 or 0 end

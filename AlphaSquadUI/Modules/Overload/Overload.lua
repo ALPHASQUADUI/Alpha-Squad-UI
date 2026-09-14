@@ -1,6 +1,6 @@
 --[[
     Ąlpha Şquad - Overload Tracker
-    Author: SeRuM1
+    Author: @SeRuM1
     Version: 2.6.0
 
     Tracks all Sorcerer Overload variants (Overload, Energy Overload, Power Overload),
@@ -13,17 +13,19 @@
     Reserve cutoff uses the public CancelBuff API only when ESO marks the active
     Overload effect as click-off capable; otherwise it warns the player immediately.
 
-    AI-assisted development disclosure: implementation was assisted by OpenAI ChatGPT.
 ]]
 
 local ADDON_NAME = "AlphaSquadUI"
 local DISPLAY_NAME = "Ąlpha Şquad UI - Overload"
-local SETTINGS_MENU_NAME = "|cF6A968Ąlpha Şquad UI|r"
-local VERSION = (AlphaSquadUI and AlphaSquadUI.version) or "2.6.0"
+local SETTINGS_MENU_NAME = AlphaSquadUI and AlphaSquadUI.Theme and AlphaSquadUI.Theme.Brand and AlphaSquadUI.Theme.Brand() or "Ąlpha Şquad UI"
+local VERSION = (AlphaSquadUI and AlphaSquadUI.version) or "2.8.0"
 
 AlphaSquadUI = AlphaSquadUI or {}
 AlphaSquadUI.Modules = AlphaSquadUI.Modules or {}
 AlphaSquadUI.Modules.Overload = AlphaSquadUI.Modules.Overload or {}
+local EVENT_MANAGER = AlphaSquadUI.Events and AlphaSquadUI.Events.NewScope and AlphaSquadUI.Events.NewScope(function(name,event)
+    return event==EVENT_ADD_ON_LOADED or event==EVENT_PLAYER_ACTIVATED or event==EVENT_PLAYER_DEACTIVATED or name=="AlphaSquadUI_SettingsResize"
+end) or EVENT_MANAGER
 local SITE_URL = "https://alphasquadeso.com/"
 -- ESO's ACTION_BAR_ULTIMATE_SLOT_INDEX is the zero-offset/base index used by the UI.
 -- The actual action-slot number passed to GetSlot* / OnSlot* for the player ultimate is +1
@@ -299,14 +301,14 @@ function AOT:ApplyVisualSettings()
     local settings = AlphaSquadUI.Settings
     local settingsVisible = (settings and settings.AnyExclusiveWindowVisible and settings.AnyExclusiveWindowVisible())
         or (self.settingsWindow and not self.settingsWindow:IsHidden()) or false
-    local hidden = (not self.sv.addonEnabled)
+    local hidden = self.loading == true or (not self.sv.addonEnabled)
         or (not self.sv.visible)
         or self.autoDormant
         or self.uiObscured
         or settingsVisible
         or self:IsPvPSuppressed()
     self.window:SetHidden(hidden)
-    -- Native power/effect/slot events remain active at all times. The recovery
+    -- Native power/effect/slot events remain active while tracking is enabled. The recovery
     -- heartbeat is needed only while the gameplay HUD can actually be seen.
     self:SetHealthSyncActive(not hidden)
     self:UpdateLockState()
@@ -363,6 +365,7 @@ function AOT:SetAutoDormant(dormant)
 end
 
 function AOT:SetAddonEnabled(enabled)
+    if EVENT_MANAGER.SetActive then EVENT_MANAGER:SetActive(enabled==true and not self.loading) end
     self.sv.addonEnabled = enabled == true
     if not self.sv.addonEnabled then self:SetHealthSyncActive(false) end
     self:ApplyVisualSettings()
@@ -377,7 +380,7 @@ function AOT:SetAddonEnabled(enabled)
 end
 
 function AOT:SetHealthSyncActive(enabled)
-    enabled = enabled == true
+    enabled = enabled == true and not self.loading
     if self.healthSyncActive == enabled then return end
     self.healthSyncActive = enabled
     local updateName = ADDON_NAME .. "_HealthSync"
@@ -1140,6 +1143,7 @@ function AOT:CheckReserveCutoff(currentUltimate)
 end
 
 function AOT:RefreshOverloadState(reason)
+    if self.loading then return end
     if not self.window or not self.sv or not self.sv.addonEnabled then return end
 
     -- Slot presence is the master context switch. Do not class-gate this addon:
@@ -1379,7 +1383,7 @@ function AOT:CreateTrackerWindow()
     icon:SetTextureCoords(0.05, 0.95, 0.05, 0.95)
     window.icon = icon
 
-    local brand = CreateLabel(window, "AlphaSquadOverloadTrackerBrand", "ZoFontGameSmall", "ĄLPHA ŞQUAD", COLORS.cyan)
+    local brand = CreateLabel(window, "AlphaSquadOverloadTrackerBrand", "ZoFontGameSmall", (AlphaSquadUI.Theme and AlphaSquadUI.Theme.Brand and AlphaSquadUI.Theme.Brand() or "Ąlpha Şquad UI"), COLORS.cyan)
     brand:SetDimensions(128, 17)
     brand:SetAnchor(TOPLEFT, window, TOPLEFT, 82, 8)
     brand:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
@@ -1493,6 +1497,7 @@ end
 function AOT:RefreshSettingsWindow()
     if not self.settingsWindow or self.settingsWindow:IsHidden() then return end
     self:ApplySettingsGeometry()
+    self:RefreshNavigation()
     for _, refresher in ipairs(self.settingsRefreshers) do
         refresher()
     end
@@ -1500,10 +1505,9 @@ end
 
 function AOT:ApplySettingsGeometry()
     if not self.settingsWindow or not GuiRoot then return end
-    local scale = math.min(1, math.max(0.25, (GuiRoot:GetWidth() - 40) / 900),
-        math.max(0.25, (GuiRoot:GetHeight() - 40) / 420))
-    local height = math.min(720, math.max(420, (GuiRoot:GetHeight() - 40) / scale))
-    self.settingsWindow:SetDimensions(900, height)
+    local scale=math.max(0.1,math.min(1,(GuiRoot:GetWidth()-40)/1350,(GuiRoot:GetHeight()-40)/720))
+    local height=720
+    self.settingsWindow:SetDimensions(1350, height)
     self.settingsWindow:SetScale(scale)
     if self.settingsSidebar then self.settingsSidebar:SetHeight(height - 64) end
     if self.settingsSaveNote then self.settingsSaveNote:SetHidden(height < 490) end
@@ -1529,7 +1533,7 @@ end
 
 function AOT:ShowSettingsPage(pageId)
     if not self.settingsPages then return end
-    if not self.settingsPages[pageId] then pageId = "overload" end
+    if not self.settingsPages[pageId] or (AlphaSquadUI.Settings.modulePages[pageId] and not AlphaSquadUI.Settings.IsModuleEnabled(pageId)) then pageId = "dashboard" end
     if self.activeSettingsPage ~= pageId and self.settingsScroll then
         self.settingsScroll.offset = 0
         self.settingsScroll:SetVerticalScroll(0)
@@ -1542,7 +1546,7 @@ function AOT:ShowSettingsPage(pageId)
     end
     if self.settingsContent then
         local page = self.settingsPages[pageId]
-        local height = math.max(640, tonumber(page.contentHeight) or 640)
+        local height = math.max(self.settingsScroll and self.settingsScroll:GetHeight() or 590, tonumber(page.contentHeight) or 640)
         self.settingsContent:SetHeight(height)
         page:SetHeight(height)
     end
@@ -1562,6 +1566,21 @@ function AOT:ShowSettingsPage(pageId)
             button.label:SetColor(color[1], color[2], color[3], 1)
         end
     end
+end
+
+function AOT:RefreshNavigation()
+    if not self.settingsNavButtons then return end
+    local y=50
+    for _,id in ipairs({"dashboard","overload","ulttracker","supportcoverage","libraries","community"}) do
+        local button=self.settingsNavButtons[id]
+        local visible=not AlphaSquadUI.Settings.modulePages[id] or AlphaSquadUI.Settings.IsModuleEnabled(id)
+        if button then
+            button:SetHidden(not visible)
+            if visible then button:ClearAnchors();button:SetAnchor(TOPLEFT,self.settingsSidebar,TOPLEFT,12,y);y=y+44 end
+        end
+    end
+    if self.activeSettingsPage and AlphaSquadUI.Settings.modulePages[self.activeSettingsPage] and not AlphaSquadUI.Settings.IsModuleEnabled(self.activeSettingsPage) then self:ShowSettingsPage("dashboard") end
+    if self.settingsSaveNote then self.settingsSaveNote:ClearAnchors();self.settingsSaveNote:SetAnchor(TOPLEFT,self.settingsSidebar,TOPLEFT,18,y+12) end
 end
 
 function AOT:CreateSettingsWindow()
@@ -1599,8 +1618,15 @@ function AOT:CreateSettingsWindow()
             end
         end
     end
-    win:SetDimensions(900, 720)
+    win:SetDimensions(1350, 720)
     win:SetAnchor(CENTER, GuiRoot, CENTER, 0, 0)
+    if AlphaSquadUI.Preferences then
+        local layout=AlphaSquadUI.Preferences.Open("Shell","AlphaSquadUISettingsSavedVariables",(GetWorldName and GetWorldName() or "Default")..":Layout",{})
+        AlphaSquadUI.Settings.layout=layout
+        if type(layout.x)=="number" and layout.x==layout.x and math.abs(layout.x)<100000 and type(layout.y)=="number" and layout.y==layout.y and math.abs(layout.y)<100000 then
+            win:ClearAnchors();win:SetAnchor(TOPLEFT,GuiRoot,TOPLEFT,layout.x,layout.y)
+        end
+    end
     win:SetClampedToScreen(true)
     win:SetMovable(true)
     win:SetMouseEnabled(true)
@@ -1626,14 +1652,18 @@ function AOT:CreateSettingsWindow()
     SetColor(topLine, COLORS.orange)
 
     local header = WINDOW_MANAGER:CreateControl("AlphaSquadSettingsHeader", win, CT_CONTROL)
-    header:SetDimensions(900, 64)
+    header:SetDimensions(1350, 64)
     header:SetAnchor(TOPLEFT, win, TOPLEFT, 0, 0)
     header:SetMouseEnabled(true)
     header:SetHandler("OnMouseDown", function(_, button)
         if button == MOUSE_BUTTON_INDEX_LEFT or button == MOUSE_BUTTON_INDEX_RIGHT then win:StartMoving() end
     end)
     header:SetHandler("OnMouseUp", function(_, button)
-        if button == MOUSE_BUTTON_INDEX_LEFT or button == MOUSE_BUTTON_INDEX_RIGHT then win:StopMovingOrResizing() end
+        if button == MOUSE_BUTTON_INDEX_LEFT or button == MOUSE_BUTTON_INDEX_RIGHT then
+            win:StopMovingOrResizing()
+            local layout=AlphaSquadUI.Settings.layout
+            if layout then layout.x=win:GetLeft();layout.y=win:GetTop() end
+        end
     end)
 
     local title = CreateLabel(win, "AlphaSquadSettingsTitle", "ZoFontWinH2", SETTINGS_MENU_NAME, COLORS.white)
@@ -1641,14 +1671,10 @@ function AOT:CreateSettingsWindow()
     title:SetAnchor(TOPLEFT, win, TOPLEFT, 20, 10)
     title:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
 
-    local subtitle = CreateLabel(win, "AlphaSquadSettingsSubtitle", "ZoFontGameSmall", "Group preparation & Ultimate tracking  •  by SeRuM1", COLORS.muted)
+    local subtitle = CreateLabel(win, "AlphaSquadSettingsSubtitle", "ZoFontGameSmall", "Group preparation & Ultimate tracking  •  " .. (AlphaSquadUI.Theme and AlphaSquadUI.Theme.authorText or "@SeRuM1"), COLORS.muted)
     subtitle:SetDimensions(520, 20)
     subtitle:SetAnchor(TOPLEFT, win, TOPLEFT, 21, 38)
     subtitle:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
-
-    CreateButton(win, "AlphaSquadSettingsClose", "X", 846, 14, 34, 30, function()
-        AOT:CloseSettingsWindow()
-    end)
 
     local separator = WINDOW_MANAGER:CreateControl("AlphaSquadSettingsSeparator", win, CT_TEXTURE)
     separator:SetAnchor(TOPLEFT, win, TOPLEFT, 0, 63)
@@ -1668,7 +1694,7 @@ function AOT:CreateSettingsWindow()
     sideLine:SetAnchor(BOTTOMRIGHT, sidebar, BOTTOMRIGHT, 0, 0)
     sideLine:SetColor(COLORS.orange[1], COLORS.orange[2], COLORS.orange[3], 0.18)
 
-    local modulesHeader = CreateLabel(sidebar, "AlphaSquadModulesHeader", "ZoFontGameBold", "MODULES", COLORS.orange)
+    local modulesHeader = CreateLabel(sidebar, "AlphaSquadModulesHeader", "ZoFontGameBold", "WORKSPACE", COLORS.orange)
     modulesHeader:SetDimensions(158, 24)
     modulesHeader:SetAnchor(TOPLEFT, sidebar, TOPLEFT, 18, 18)
     modulesHeader:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
@@ -1700,16 +1726,13 @@ function AOT:CreateSettingsWindow()
         return button
     end
 
-    AddNavButton("overload", "Overload", 50)
+    AddNavButton("dashboard", "Dashboard", 50)
+    AddNavButton("overload", "Overload", 94)
     AddNavButton("ulttracker", "ULT Tracker", 94)
     AddNavButton("supportcoverage", "Support Coverage", 138)
     AddNavButton("libraries", "Libraries", 182)
 
-    local communityHeader = CreateLabel(sidebar, "AlphaSquadCommunityNavHeader", "ZoFontGameBold", "COMMUNITY", COLORS.orange)
-    communityHeader:SetDimensions(158, 24)
-    communityHeader:SetAnchor(TOPLEFT, sidebar, TOPLEFT, 18, 240)
-    communityHeader:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
-    AddNavButton("community", "Website & About", 272)
+    AddNavButton("community", "Website & About", 314)
 
     local future = CreateLabel(sidebar, "AlphaSquadFutureModules", "ZoFontGameSmall",
         "Changes are saved\nautomatically.", COLORS.muted)
@@ -1726,10 +1749,10 @@ function AOT:CreateSettingsWindow()
 
     local content
     if AlphaSquadUI.Settings.CreateScrollArea then
-        content, self.settingsScroll = AlphaSquadUI.Settings.CreateScrollArea(win, "AlphaSquadSettingsContent", 200, 70, 690, 640, 640)
+        content, self.settingsScroll = AlphaSquadUI.Settings.CreateScrollArea(win, "AlphaSquadSettingsContent", 200, 70, 1140, 640, 640)
     else
         content = WINDOW_MANAGER:CreateControl("AlphaSquadSettingsContent", win, CT_CONTROL)
-        content:SetDimensions(690, 640)
+        content:SetDimensions(1140, 640)
         content:SetAnchor(TOPLEFT, win, TOPLEFT, 200, 70)
     end
     self.settingsContent = content
@@ -1737,13 +1760,17 @@ function AOT:CreateSettingsWindow()
     local function CreatePage(id)
         local page = WINDOW_MANAGER:CreateControl("AlphaSquadPage_" .. id, content, CT_CONTROL)
         page:SetAnchor(TOPLEFT, content, TOPLEFT, 0, 0)
-        page:SetDimensions(674, 640)
+        page:SetDimensions(1124, 640)
         page:SetHidden(true)
         self.settingsPages[id] = page
         return page
     end
 
     local function CreateCard(parent, name, x, y, w, h, titleText, titleColor)
+        if not parent.responsiveCards then
+            local factor=(parent:GetWidth()-16)/658
+            x=8+(x-8)*factor;w=w*factor
+        end
         local card = WINDOW_MANAGER:CreateControl(name, parent, CT_CONTROL)
         card:SetDimensions(w, h)
         card:SetAnchor(TOPLEFT, parent, TOPLEFT, x, y)
@@ -1853,6 +1880,10 @@ function AOT:CreateSettingsWindow()
         colors = COLORS,
     }
 
+    local dashboard=CreatePage("dashboard")
+    local dashboardBuilder=AlphaSquadUI.Settings.GetPageBuilder("dashboard")
+    if dashboardBuilder then dashboardBuilder(dashboard,pageUI) end
+
     if pageBuilder then
         pageBuilder(ultTrackerPage, pageUI)
     else
@@ -1907,13 +1938,11 @@ function AOT:CreateSettingsWindow()
     overloadSub:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
 
     local general = CreateCard(overload, "AlphaSquadCardGeneral", 8, 68, 322, 190, "GENERAL", COLORS.orange)
-    AddToggleRow(general, "AlphaSquadOptEnabled", "Enable tracking", 42,
-        function() return AOT.sv.addonEnabled end, function(v) AOT:SetAddonEnabled(v) end)
-    AddToggleRow(general, "AlphaSquadOptVisible", "Show tracker HUD", 78,
+    AddToggleRow(general, "AlphaSquadOptVisible", "Show tracker HUD", 42,
         function() return AOT.sv.visible end, function(v) AOT:SetTrackerVisible(v) end)
-    AddToggleRow(general, "AlphaSquadOptLocked", "Lock position", 114,
+    AddToggleRow(general, "AlphaSquadOptLocked", "Lock position", 78,
         function() return AOT.sv.locked end, function(v) AOT:SetLocked(v) end)
-    AddToggleRow(general, "AlphaSquadOptPvP", "Disable in PvP", 150,
+    AddToggleRow(general, "AlphaSquadOptPvP", "Disable in PvP", 114,
         function() return AOT.sv.disableInPvP end,
         function(v)
             AOT.sv.disableInPvP = v == true
@@ -1991,7 +2020,7 @@ function AOT:CreateSettingsWindow()
 
     -- COMMUNITY / ABOUT PAGE
     local community = CreatePage("community")
-    local communityTitle = CreateLabel(community, "AlphaSquadCommunityTitle", "ZoFontWinH2", "ĄLPHA ŞQUAD COMMUNITY", COLORS.white)
+    local communityTitle = CreateLabel(community, "AlphaSquadCommunityTitle", "ZoFontWinH2", SETTINGS_MENU_NAME, COLORS.white)
     communityTitle:SetDimensions(520, 34)
     communityTitle:SetAnchor(TOPLEFT, community, TOPLEFT, 8, 3)
     communityTitle:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
@@ -2019,6 +2048,8 @@ function AOT:CreateSettingsWindow()
         if button == MOUSE_BUTTON_INDEX_LEFT and upInside ~= false then AOT:OpenWebsite() end
     end)
     CreateButton(siteCard, "AlphaSquadSiteButton", "VISIT WEBSITE", 458, 88, 176, 38, function() AOT:OpenWebsite() end)
+    CreateButton(siteCard,"AlphaSquadESOUI","FIND ON ESOUI",650,88,182,38,function() AlphaSquadUI.Settings.OpenLink("https://www.esoui.com/downloads/search.php?search=Alpha%20Squad%20UI") end)
+    CreateButton(siteCard,"AlphaSquadReleases","RELEASES",848,88,168,38,function() AlphaSquadUI.Settings.OpenLink("https://github.com/ALPHASQUADUI/Alpha-Squad-UI/releases") end)
     local confirmNote = CreateLabel(siteCard, "AlphaSquadSiteConfirm", "ZoFontGameSmall",
         "ESO may ask for confirmation before opening an external website.", COLORS.muted)
     confirmNote:SetDimensions(610, 24)
@@ -2026,8 +2057,8 @@ function AOT:CreateSettingsWindow()
     confirmNote:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
 
     local aboutCard = CreateCard(community, "AlphaSquadAboutCard", 8, 276, 658, 174, "ABOUT THIS ADDON", COLORS.cyan)
-    local about = CreateLabel(aboutCard, "AlphaSquadAboutText", "ZoFontGameSmall",
-        "Ąlpha Şquad UI brings together Overload, personal and group Ultimate tracking, and Support Coverage. Each module can be configured separately in this shared settings window.\n\nCreated by SeRuM1  •  English UI  •  Subclassing compatible", COLORS.muted)
+    local aboutText="Ąlpha Şquad UI brings together Overload, personal and group Ultimate tracking, and Support Coverage. Configure modules in Dashboard and sharing in Libraries.\n\nCreated by "..(AlphaSquadUI.Theme and AlphaSquadUI.Theme.authorText or "@SeRuM1").." • English UI • Subclassing compatible"
+    local about = CreateLabel(aboutCard, "AlphaSquadAboutText", "ZoFontGameSmall",aboutText,COLORS.muted)
     about:SetDimensions(620, 126)
     about:SetAnchor(TOPLEFT, aboutCard, TOPLEFT, 16, 40)
     about:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
@@ -2035,13 +2066,13 @@ function AOT:CreateSettingsWindow()
 
     local commandCard = CreateCard(community, "AlphaSquadCommandCard", 8, 466, 658, 152, "USEFUL COMMANDS", COLORS.gold)
     local commands = CreateLabel(commandCard, "AlphaSquadCommandsText", "ZoFontGameSmall",
-        "/assupport builds  •  inspect available group builds\n/assupport food  •  check group food\n/assupport matrix  •  open the coverage list\n/asoverload  •  open all module settings", COLORS.muted)
+        "/assupport builds  •  inspect available group builds\n/assupport matrix  •  open the coverage list\n/asoverload  •  open all module settings", COLORS.muted)
     commands:SetDimensions(620, 104)
     commands:SetAnchor(TOPLEFT, commandCard, TOPLEFT, 16, 40)
     commands:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
     commands:SetVerticalAlignment(TEXT_ALIGN_TOP)
 
-    self:ShowSettingsPage(self.activeSettingsPage or "overload")
+    self:ShowSettingsPage(self.activeSettingsPage or "dashboard")
     self:RefreshSettingsWindow()
 end
 
@@ -2346,9 +2377,19 @@ function AOT:RegisterEvents()
     EVENT_MANAGER:AddFilterForEvent(effectEvent, EVENT_EFFECT_CHANGED, REGISTER_FILTER_UNIT_TAG, "player")
 
     EVENT_MANAGER:RegisterForEvent(ADDON_NAME .. "_PlayerActivated", EVENT_PLAYER_ACTIVATED, function()
+        AOT.loading=false
+        if EVENT_MANAGER.SetActive then EVENT_MANAGER:SetActive(AOT.sv.addonEnabled==true) end
         zo_callLater(function() AOT:RefreshUIObscuredState(); AOT:RefreshOverloadState("player activated") end, 250)
     end)
 
+    if EVENT_PLAYER_DEACTIVATED then
+        EVENT_MANAGER:RegisterForEvent(ADDON_NAME.."_PlayerDeactivated",EVENT_PLAYER_DEACTIVATED,function()
+            AOT.loading=true;AOT:SetHealthSyncActive(false)
+            AOT:SetEmergencyFlashUpdate(false);AOT:SetReadyReminderFlashUpdate(false)
+            if AOT.window then AOT.window:SetHidden(true) end
+            if EVENT_MANAGER.SetActive then EVENT_MANAGER:SetActive(false) end
+        end)
+    end
     EVENT_MANAGER:RegisterForEvent(ADDON_NAME .. "_ActionUsed", EVENT_ACTION_SLOT_ABILITY_USED, function(...)
         AOT:OnActionSlotAbilityUsed(...)
     end)
@@ -2417,7 +2458,8 @@ function AOT:Initialize()
     }
 
     local worldNamespace = GetWorldName and GetWorldName() or nil
-    self.sv = ZO_SavedVars:NewAccountWide("AlphaSquadOverloadTrackerSavedVariables", 1, worldNamespace, defaults)
+    self.sv = AlphaSquadUI.Preferences and AlphaSquadUI.Preferences.Open("Overload", "AlphaSquadOverloadTrackerSavedVariables", worldNamespace, defaults)
+        or ZO_SavedVars:NewAccountWide("AlphaSquadOverloadTrackerSavedVariables", 1, worldNamespace, defaults)
 
     -- Migration from old versions.
     if self.sv.enabled ~= nil then
@@ -2445,6 +2487,7 @@ function AOT:Initialize()
     self:RegisterHUDSceneVisibility()
     self:RegisterSlashCommands()
     self:RegisterEvents()
+    if EVENT_MANAGER.SetActive then EVENT_MANAGER:SetActive(self.sv.addonEnabled) end
 
     zo_callLater(function()
         AOT:RefreshUIObscuredState()
