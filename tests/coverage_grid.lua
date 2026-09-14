@@ -59,6 +59,14 @@ for _,size in ipairs({{1920,1080},{1366,768},{1280,720},{800,600}})do
     check(inside,'Every compact tile fits inside its grid at the current viewport')
     check(win.list.y+win.list.height<=win.height-48,'Coverage grid never overlaps its footer')
     check(win.width*win.scale<=size[1]-24+.01 and win.height*win.scale<=size[2]-24+.01,'Full page fits within the current display')
+    local panelsFit=true
+    for index,panel in ipairs(win.categoryPanels)do
+        panelsFit=panelsFit and panel.x>=0 and panel.x+panel.width<=win.width and panel.y+panel.height<=win.height-48
+        if index>1 then local previous=win.categoryPanels[index-1];panelsFit=panelsFit and previous.x+previous.width<panel.x end
+    end
+    check(panelsFit,'Each category keeps a separate panel inside the page without footer overlap')
+    check(win.legend.hidden or win.legend.y>=win.list.y+layout.rows[4]*layout.pitch and win.legend.y+win.legend.height<=win.height-48,
+        'The status legend uses free mythic space without hiding entries or footer text')
     if pool then check(created==pool,'Viewport changes reanchor pooled controls without new allocation')end
     pool=created
 end

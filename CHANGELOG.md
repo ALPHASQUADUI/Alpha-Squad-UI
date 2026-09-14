@@ -2,6 +2,10 @@
 
 All notable changes to Ąlpha Şquad UI are documented here.
 
+## 3.0.0 — 2026-09-14
+
+Unified personal Ultimate and optional Overload behavior in one HUD, added three saved interface styles, moved the settings shell into Core, and expanded MOVE HUD with proportional corner scaling, edge reflow and centralized opacity/reset controls. Group Ultimate and Support panels resize through the same placement workflow. Community and Discord use native pages and external-link confirmation. Existing display modes and supported preferences migrate. See [complete release notes](releases/3.0.0.md).
+
 ## 2.9.0 — 2026-09-14
 
 Restored extended brand characters, added global HUD placement, configured sharing automatically on new installations with truthful native switches, and kept link dialogs in front. Coverage now fits on one compact page. Build set totals use effective per-bar counts with native excess-piece warnings, alongside a larger equipment silhouette. Remote equipment and Champion-source validation are stricter. See [complete release notes](releases/2.9.0.md).

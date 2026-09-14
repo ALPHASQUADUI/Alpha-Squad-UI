@@ -51,11 +51,14 @@ end
 function P.SetCrossSync(enabled)
     P.Initialize();enabled=enabled==true
     if P.sv.crossSync==enabled then return end
+    local appearance
     for module,entry in pairs(P.entries) do
         if not enabled and not entry.character then entry.character=ZO_SavedVars:NewCharacterIdSettings(entry.name,1,entry.namespace,entry.defaults) end
         local target=enabled and entry.account or entry.character
         Transfer(entry.current,target);target.crossSyncSeeded=true;entry.current=target
-        if module=="Shell" then ASUI.Settings.layout=target
+        if module=="Appearance" then
+            appearance=target
+        elseif module=="Shell" then ASUI.Settings.layout=target
         else
             local instance=ASUI.Modules[module]
             if instance then
@@ -65,4 +68,6 @@ function P.SetCrossSync(enabled)
         end
     end
     P.sv.crossSync=enabled
+    -- Repaint only after every module points at the committed profile set.
+    if appearance and ASUI.Theme and ASUI.Theme.RebindProfile then ASUI.Theme.RebindProfile(appearance) end
 end

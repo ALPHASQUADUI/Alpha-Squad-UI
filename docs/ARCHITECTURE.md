@@ -4,20 +4,20 @@
 
 `AlphaSquadUI/` is the full ESO suite. The **AlphaSquadBuildShare** companion is a separate sharing-only installation for group members who do not want the UI suite; it uses the same compatible build format.
 
-Core owns identity/version (`Core.lua`), theme tokens (`Theme.lua`), shared helpers (`Utils.lua`), module event scopes (`Events.lua`) and account/character preferences (`Preferences.lua`), the settings-page bridge (`Settings.lua`) centralized library preferences (`Sharing.lua`), temporary global placement (`Layout.lua`) and shared foreground tooltip routing (`Tooltips.lua`). New pages register through:
+Core owns identity/version (`Core.lua`), saved theme presets (`Theme.lua`), shared helpers (`Utils.lua`), module event scopes (`Events.lua`), account/character preferences (`Preferences.lua`), the settings-page bridge (`Settings.lua`), the standalone settings shell (`Shell.lua`), library preferences (`Sharing.lua`), global placement/resizing (`Layout.lua`) and foreground tooltip routing (`Tooltips.lua`). New pages register through:
 
 ```lua
 AlphaSquadUI.Settings.RegisterPage(id, builder)
 ```
 
-The settings shell implementation is hosted by Overload. Other modules use the Core bridge rather than relying on that ownership detail. The shared product label is **Ąlpha Şquad UI**, rendered with ESO's standard UI font.
+`Core/Shell.lua` creates and registers the settings shell independently of gameplay tracking. It remains accessible when ULT Tracker and Support Coverage are both disabled. The shared product label is **Ąlpha Şquad UI**, rendered with ESO's standard UI font.
 
 ## Module boundaries
 
 | Component | Responsibility |
 | --- | --- |
-| Overload | Overload/morph state, reserve warnings, optional cancellation, ready reminder and HUD |
-| Personal ULT | Actual MAIN/BACK slot data, charge/readiness, HUD and settings |
+| Personal ULT | Actual slot data, AUTO/FRONT/BACK/BOTH display, charge/readiness and the shared personal HUD |
+| Integrated Overload | `ULTOverload.lua`: optional morph state, reserve warnings, native cancellation and ready reminder within the personal ULT lifecycle |
 | Group ULT | LibGroupCombatStats ULT-only integration, ability filters, cached player state and compact HUD |
 | Support catalog/sources | Patch-specific effects, source identities, descriptions and build-source matching |
 | Support scanner/build | Local equipment, separate skill bars, Champion/mastery and consumable evidence |
@@ -76,23 +76,25 @@ Maintainer review and the ESO acceptance checklist are required before release.
 
 ## Independent tracking, sharing and profiles
 
-Dashboard invokes each module's lifecycle setter and hides disabled navigation entries. Core event scopes unregister gameplay callbacks and restore their exact filters on enable. The settings shell stays accessible when Overload is disabled. Loading transitions stop local timers and defer scan/transfer work until activation.
+Dashboard invokes each module's lifecycle setter and hides disabled navigation entries. Core event scopes unregister gameplay callbacks and restore their exact filters on enable. The settings shell stays accessible when every gameplay module is disabled. Loading transitions stop local timers and defer scan/transfer work until activation.
 
 Support Coverage runs its scanner and sender without HUD/coverage evaluation when sharing is enabled and the player is grouped. That mode uses a sixty-second recovery check; relevant local build changes still coalesce through native events. Library preferences remain separate from module activation. Group Ultimate reception and sending have separate LibGroupCombatStats registrations.
 
 The Libraries bridge verifies the matching protocol identity and uses the library's native setting getters/setters. Supported option data can be read without opening or switching settings pages. First-install defaults are applied once; afterward, actual native settings and saved OFF choices are respected. Missing or incompatible controls remain unavailable. Only matching disabled messages are pruned; unrelated transports, incognito choices and shared library event registrations are preserved.
 
-Core Preferences opens existing account namespaces by default and native character-ID namespaces when Cross-sync is off. Switching deep-copies the current values into the selected destination and updates the live module/Group ULT references. Core sharing choices remain account/server scoped. The settings shell also retains its position.
+Core Preferences opens existing account namespaces by default and native character-ID namespaces when Cross-sync is off. Switching deep-copies the current values into the selected destination and updates the live module/Group ULT references. Core sharing choices remain account/server scoped. The settings shell also retains its position. Appearance is stored in the shared preferences system and follows Cross-sync. Ember Classic, Tactical Compact and default Obsidian Studio repaint registered native controls when selected or when the profile changes; they preserve fonts, geometry, icon identities, branding and semantic status/quality/discipline colors.
 
 
 ## Placement, compact grids and foreground dialogs
 
-Core Layout opens a temporary placement state for enabled modules only. It closes suite configuration windows, returns to the native base game scene and temporarily shows eligible HUD panels without changing their normal visibility preference. Completion saves positions and restores locked interaction. Combat, loading and non-gameplay scene transitions end placement. It owns no animation or heartbeat loop.
+Core Layout opens a temporary placement state for enabled modules only. It closes suite configuration windows, returns to the native base game scene and temporarily shows eligible HUD panels without changing their normal visibility preference. Completion saves positions and restores locked interaction. Combat, loading and non-gameplay scene transitions end placement. It owns no recurring idle heartbeat. While an edge or corner is actively dragged, a temporary mouse-position callback applies the resize and is removed on completion/cancellation.
 
-Overload's cached slotted-morph state determines whether the dedicated Overload panel replaces the personal ULT view. No skill scan runs from layout checks or rendering. Group ULT remains independent.
+The personal ULT view owns a single HUD and shared resource state. AUTO follows the active weapon bar; optional Overload behavior uses cached slotted-morph state to take priority outside BOTH mode. BOTH preserves both cards. Existing display modes are retained, and supported legacy Overload options migrate into the personal ULT settings. No skill scan runs from layout checks or rendering. Group ULT remains independent.
+
+Core Layout distinguishes corner scaling from edge reshaping. Corners preserve proportions; edges change saved logical width/height and invoke each panel's layout function. The shared toolbar owns scale, background opacity, reset and fitting to screen. Personal BOTH cards can stack, Group ULT rows adapt to the panel, and Support HUD elements reflow without stretching icons. Placement preserves module activation and normal visibility.
 
 Coverage groups the current catalog into four categories and gives dense categories additional compact lanes. Layout is computed from category counts and the viewport; controls are pooled and filtering reuses them. Native icons, switches and contributor counts remain on one page. Effect hover explains conditions; contributor hover lists every available provider with source names and bar availability.
 
-Native item, skill and Champion tooltips stay above the suite. External links use ESO's own confirmation dialog, with suite layering managed so the confirmation is visible. Sharing switches never navigate to another addon's configuration.
+Native item, skill and Champion tooltips stay above the suite. External links use ESO's own confirmation dialog, with suite layering managed so the confirmation is visible. Sharing switches never navigate to another addon's configuration. The Website & About/Discord pages contain native ESO controls; Discord opens the configured widget URL through the native external-link confirmation. No HTML browser, member-count polling or generated invitation endpoint is embedded in the addon.
 
 Incoming build data must satisfy both structural limits and consistency checks. Claimed complete equipment is reconciled with native slot identities and linked items, including two-handed weights and set-family totals. Contradictions cannot certify completeness. A consistent report remains sender-supplied information, not protection against a modified client deliberately reporting a different build.

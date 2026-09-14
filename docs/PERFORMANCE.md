@@ -13,15 +13,11 @@ Performance is a design constraint for **Ąlpha Şquad UI**. The design reduces 
 7. Guard missing optional libraries and malformed values at integration boundaries.
 8. Do not parse combat logs for a precombat readiness question.
 
-## Overload
+## Personal ULT and Overload
 
-Effect, power, slot, hotbar and player-activation events drive tracking. Its one-second recovery sync runs only while enabled, visible, unobscured, not PvP-suppressed and not dormant. Hidden/dormant states rely on native wake-up events.
+Native events drive shared personal slot/resource changes and relevant Overload effects. A single 1.5-second fallback refresh runs only while the personal tracker is enabled, visible and unobscured. READY, reserve and reminder animation runs only while visible and needed. Overload uses the same HUD, resource state and lifecycle; it has no separate recovery heartbeat.
 
-Reserve and ready-reminder animations register only while their alerts are active and visible.
-
-## Personal ULT
-
-Native events drive slot/resource changes. A 1.5-second fallback refresh runs only while enabled, visible and unobscured. The READY animation exists only while a visible tracked Ultimate needs it.
+The optional Overload effect subscription is filtered to the player and relevant morphs. Cached slot/effect state handles presentation; layout checks do not rescan skills. Placement and loading suppress alerts and cancellation.
 
 ## Group ULT
 
@@ -60,6 +56,12 @@ Dashboard and Libraries use static controls. Libraries fits its two columns and 
 
 The Coverage grid creates its controls once and reanchors them for filtering or viewport changes. A fixed single page replaces tall repeated provider rows; contributor descriptions are assembled on hover. Set-bonus thresholds use a bounded cache of 256 successful native lookups. Incomplete or unavailable native lookups are not cached as proof of absence.
 
-Global MOVE HUD is a short-lived placement state with no heartbeat or frame callback. Only Dashboard-enabled modules participate. Placement previews suspend normal alert animation work and preserve normal visibility settings; closing the placement state saves and locks the panels. Personal ULT presentation yields to a qualifying active Overload module using cached slot state, without another skill scan.
+Global MOVE HUD is a short-lived placement state without an idle heartbeat. Only Dashboard-enabled modules participate. A mouse-position callback exists only during an active edge/corner drag, reflows changed dimensions and stops on release or cancellation. Placement previews suspend normal alert animation work and preserve normal visibility settings; closing saves and locks the panels. Personal ULT and Overload share one HUD, with cached slot state choosing the display and no extra skill scan.
 
 Sharing defaults are applied once, and actual native library states remain authoritative afterward. Missing libraries and unsupported controls do not trigger polling or repeated navigation. Sharing controls do not create a second library-settings window.
+
+## Appearance and community pages
+
+Theme changes repaint registered settings/HUD surfaces once; profile changes rebind the saved preset. The themes add no animation, recurring repaint or build scan. Tactical Compact changes framing and background fill, not the geometric layout or icon sizes. Status, quality, Champion colors and branding remain stable.
+
+Core Shell initializes independently of disabled gameplay modules. Website & About and Discord pages use native static controls. Opening the Discord widget is an explicit external-browser action after ESO confirmation; there is no embedded web renderer or live member-count polling.

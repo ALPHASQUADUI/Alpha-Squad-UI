@@ -33,19 +33,19 @@ function SC:BuildIntegratedSettingsPage(page,ui)
         "Flag known missing armor enchantments. Open Builds and hover an item to inspect its exact enchantment and trait. Unavailable equipment data remains Unknown.")
     Toggle("HideMenus","Hide HUD in menus",200,function() return SC.sv.hideInMenus end,function(v) SC.sv.hideInMenus=v; SC:ApplyVisibility() end,
         "Hide the preparation HUD while inventory, Champion Points and other ESO menus are open.")
-    local appearance=ui.CreateCard(page,"AlphaSquadSupportAppearance",344,218,322,354,"HUD APPEARANCE",C.gold)
-    local function Step(id,label,y,key,step,min,max,suffix)
-        ui.AddStepperRow(appearance,"AlphaSquadSupport"..id,label,y,function() return SC.sv[key] end,function(v)
-            SC.sv[key]=v; SC:ApplyAppearance(); SC:RefreshHUD(); SC:ClampToScreen(true)
-        end,step,min,max,suffix,C.gold)
-    end
-    Step("Scale","Scale",40,"scale",5,60,180,"%")
-    Step("Width","Width",80,"width",10,300,680,"")
-    Step("RowHeight","Row height",120,"rowHeight",2,24,48,"")
-    Step("Opacity","Background",160,"opacity",5,30,100,"%")
-    ui.CreateButton(appearance,"AlphaSquadSupportResetPosition","RESET POSITION",14,256,140,32,function() SC:ResetPosition() end)
-    local saved=ui.CreateLabel(appearance,"AlphaSquadSupportSaved","ZoFontGameSmall","Changes are saved automatically.",C.muted)
-    saved:SetAnchor(TOPLEFT,appearance,TOPLEFT,14,304); saved:SetDimensions(292,28)
+    local appearance=ui.CreateCard(page,"AlphaSquadSupportAppearance",344,218,322,354,"YOUR HUD",C.accent or C.gold)
+    local help=ui.CreateLabel(appearance,"AlphaSquadSupportLayoutHelp","ZoFontGameSmall",
+        "Arrange and resize every enabled panel in Move HUD. Drag an edge to change its space, or a corner to scale the whole panel.",C.muted)
+    help:SetAnchor(TOPLEFT,appearance,TOPLEFT,14,42);help:SetDimensions(appearance:GetWidth()-28,66)
+    ui.CreateButton(appearance,"AlphaSquadSupportGlobalMove","MOVE HUD",14,122,190,32,function()
+        if AlphaSquadUI.Layout and AlphaSquadUI.Layout.Start then AlphaSquadUI.Layout.Start() end
+    end)
+    local placement=ui.CreateLabel(appearance,"AlphaSquadSupportPlacementNote","ZoFontGameSmall",
+        "Done saves and locks your panels. Dashboard choices and shared group data stay unchanged.",C.muted)
+    placement:SetAnchor(TOPLEFT,appearance,TOPLEFT,14,170);placement:SetDimensions(appearance:GetWidth()-28,62)
+    local native=ui.CreateLabel(appearance,"AlphaSquadSupportNativeNote","ZoFontGameSmall",
+        "Equipment, skills and Champion stars use the game's own icons. Choose the suite design in Dashboard.",C.muted)
+    native:SetAnchor(TOPLEFT,appearance,TOPLEFT,14,250);native:SetDimensions(appearance:GetWidth()-28,70)
     ui.RegisterRefresher(function()
         local coverage=SC.coverage or {}
         status:SetText(string.format("%d / %d covered  •  %d missing  •  %d players with limited data",coverage.coveredCount or 0,coverage.requiredCount or 0,coverage.missingCount or 0,coverage.limitedPlayers or 0))
@@ -124,13 +124,29 @@ function SC:CreateMatrixWindow()
     end
     win.builds=UI.Button(win,"AlphaSquadMatrixBuilds","BUILDS",106,28,function() SC:OpenInspector("BUILD") end)
     win.builds:SetAnchor(TOPRIGHT,win,TOPRIGHT,-18,82)
-    win.columns={}
+    win.columns={};win.categoryPanels={}
     for index,label in ipairs(categoryNames) do
+        local panel=WINDOW_MANAGER:CreateControl("AlphaSquadCoverageCategory"..index,win,CT_CONTROL)
+        panel.bg=UI.Solid(panel,"AlphaSquadCoverageCategoryBG"..index,C.surface or C.panel)
+        if UI.Surface then UI.Surface(panel,panel.bg,"card") end
+        win.categoryPanels[index]=panel
         win.columns[index]=UI.Label(win,"AlphaSquadCoverageColumn"..index,label,"ZoFontGameBold",C.orange)
     end
     win.list=WINDOW_MANAGER:CreateControl("AlphaSquadSupportCoverageGrid",win,CT_CONTROL)
     win.list:SetAnchor(TOPLEFT,win,TOPLEFT,18,144);win.list.rows={}
-    win.footer:SetText("Green: covered • Red: missing • Gold: unknown / duplicate • Grey: optional. Hover names for sources; hover counts for all contributors. Click a count to open Builds.")
+    win.legend=WINDOW_MANAGER:CreateControl("AlphaSquadCoverageLegend",win,CT_CONTROL)
+    win.legend.bg=UI.Solid(win.legend,"AlphaSquadCoverageLegendBG",C.surface or C.panel)
+    if UI.Surface then UI.Surface(win.legend,win.legend.bg,"card") end
+    win.legend.title=UI.Label(win.legend,"AlphaSquadCoverageLegendTitle","STATUS","ZoFontGameBold",C.accent or C.orange)
+    win.legend.title:SetAnchor(TOPLEFT,win.legend,TOPLEFT,10,5);win.legend.title:SetHeight(24)
+    win.legend.rows={}
+    for index,data in ipairs({{"Covered",C.green},{"Missing",C.red},{"Unknown / duplicate",C.gold},{"Optional",C.muted}}) do
+        local marker=WINDOW_MANAGER:CreateControl("AlphaSquadCoverageLegendMarker"..index,win.legend,CT_TEXTURE)
+        marker:SetAnchor(TOPLEFT,win.legend,TOPLEFT,10,36+(index-1)*32);marker:SetDimensions(12,12);UI.Color(marker,data[2])
+        local label=UI.Label(win.legend,"AlphaSquadCoverageLegendLabel"..index,data[1],"ZoFontGameSmall",C.white)
+        label:SetAnchor(TOPLEFT,win.legend,TOPLEFT,30,29+(index-1)*32);win.legend.rows[index]=label
+    end
+    win.footer:SetText("Hover names for sources and conditions • Hover counts for every contributor • Click a count to inspect its named build")
 end
 function SC:RefreshMatrix()
     local win=self.matrixWindow;if not win or win:IsHidden() then return end
@@ -141,13 +157,26 @@ function SC:RefreshMatrix()
     win.list:SetDimensions(layout.width-36,layout.height-198)
     local coverage=self.coverage or {}
     win.subtitle:SetText(string.format("%s  •  %d / %d covered  •  %d missing  •  %d players with limited data",coverage.profileLabel or "Group preparation",coverage.coveredCount or 0,coverage.requiredCount or 0,coverage.missingCount or 0,coverage.limitedPlayers or 0))
+    if UI.SetButtonSelected then
+        UI.SetButtonSelected(win.trial,self.sv.activeProfile=="trial");UI.SetButtonSelected(win.dungeon,self.sv.activeProfile=="dungeon")
+        for key,button in pairs(win.filterButtons) do UI.SetButtonSelected(button,(self.matrixFilter or "ALL")==key) end
+    end
     UI.Color(win.trial.label,self.sv.activeProfile=="trial" and C.orange or C.muted)
     UI.Color(win.dungeon.label,self.sv.activeProfile=="dungeon" and C.orange or C.muted)
     for key,b in pairs(win.filterButtons) do UI.Color(b.label,(self.matrixFilter or "ALL")==key and C.orange or C.muted) end
     for index,label in ipairs(win.columns) do
         label:ClearAnchors();label:SetAnchor(TOPLEFT,win,TOPLEFT,18+layout.starts[index],116)
-        label:SetDimensions(layout.lanes[index]*layout.laneWidth+(layout.lanes[index]-1)*5,24)
+        local width=layout.lanes[index]*layout.laneWidth+(layout.lanes[index]-1)*5
+        label:SetDimensions(width,24)
+        local panel=win.categoryPanels[index]
+        panel:ClearAnchors();panel:SetAnchor(TOPLEFT,win,TOPLEFT,14+layout.starts[index],112)
+        panel:SetDimensions(width+8,layout.height-160)
     end
+    local legendY=144+layout.rows[4]*layout.pitch+18
+    local legendWidth=layout.lanes[4]*layout.laneWidth+(layout.lanes[4]-1)*5
+    win.legend:SetHidden(layout.height-48-legendY<168)
+    win.legend:ClearAnchors();win.legend:SetAnchor(TOPLEFT,win,TOPLEFT,18+layout.starts[4],legendY);win.legend:SetDimensions(legendWidth,166)
+    for _,label in ipairs(win.legend.rows) do label:SetDimensions(legendWidth-38,32) end
     local byKey={};for _,row in ipairs(coverage.entries or {}) do byKey[row.key]=row end
     local selected={};for _,key in ipairs(Catalog:GetRequirements(self.sv.activeProfile,self.sv)) do selected[key]=true end
     local positions={0,0,0,0};local count=0
@@ -164,7 +193,8 @@ function SC:RefreshMatrix()
             if not row then
                 local name="AlphaSquadSupportCoverageEntry"..count
                 row=WINDOW_MANAGER:CreateControl(name,win.list,CT_CONTROL)
-                row.bg=UI.Solid(row,name.."BG",C.panel)
+                row.bg=UI.Solid(row,name.."BG",C.surface or C.panel)
+                if UI.Separator then row.divider=UI.Separator(row,name.."Divider",0,0,1) end
                 row.marker=WINDOW_MANAGER:CreateControl(name.."Marker",row,CT_TEXTURE)
                 row.marker:SetAnchor(TOPLEFT,row,TOPLEFT,0,0)
                 row.icon=WINDOW_MANAGER:CreateControl(name.."Icon",row,CT_TEXTURE)
@@ -196,6 +226,7 @@ function SC:RefreshMatrix()
             else row.icon:SetHandler("OnMouseEnter",function() UI.Tooltip(row.icon,Catalog:GetEffectTooltip(row.data.key)) end) end
             row.name:SetText(UI.Text(effect.label));UI.Color(row.name,tracked and C.white or C.muted)
             row.toggle.label:SetText(tracked and "ON" or "OFF");UI.Color(row.toggle.label,tracked and C.green or C.muted)
+            if UI.SetButtonSelected then UI.SetButtonSelected(row.toggle,tracked) end
             local status,color=UI.Status(data)
             if not tracked then status="OPTIONAL";color=C.muted elseif duplicate then status="DUPLICATE";color=C.gold end
             row.status=status;UI.Color(row.marker,color)
@@ -206,6 +237,7 @@ function SC:RefreshMatrix()
             local lane=math.floor(index/layout.rows[category]);local y=(index%layout.rows[category])*layout.pitch
             row:ClearAnchors();row:SetAnchor(TOPLEFT,win.list,TOPLEFT,layout.starts[category]+lane*(layout.laneWidth+5),y)
             row:SetDimensions(layout.laneWidth,layout.pitch-1)
+            if row.divider then row.divider:ClearAnchors();row.divider:SetAnchor(BOTTOMLEFT,row,BOTTOMLEFT,0,0);row.divider:SetWidth(layout.laneWidth) end
             row.marker:SetDimensions(2,layout.pitch-1)
             row.name:SetDimensions(layout.laneWidth-87,layout.pitch-1)
             row.toggle:SetHeight(layout.pitch-1);row.contributors:SetHeight(layout.pitch-1)

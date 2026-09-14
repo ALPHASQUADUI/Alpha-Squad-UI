@@ -1,6 +1,6 @@
 # Support Coverage
 
-Precombat group preparation and visual build inspection for **Ąlpha Şquad UI 2.9.0** (`20900`).
+Precombat group preparation and visual build inspection for **Ąlpha Şquad UI 3.0.0** (`30000`).
 
 ## Prepare your group
 
@@ -55,7 +55,7 @@ Full build transport identifiers are provisional pending formal registration and
 
 Dashboard controls tracking independently of Libraries sharing. Turning Support Coverage off stops local HUD/coverage work; an enabled grouped sender can still answer valid build requests. Combat and loading suspend build scans/transfers.
 
-Use **MOVE HUD** in the sidebar or `/asmove` outside combat. Arrange enabled panels against the normal game UI, then choose **DONE** or Escape to save and lock. Disabled modules stay disabled. Cross-sync shares the current layout/settings across characters on the same account and server; OFF keeps character profiles separate.
+Use **MOVE HUD** in the sidebar or `/asmove` outside combat. Move the Support panel, drag its corners to scale proportionally or its edges to reshape the content. The same toolbar controls background opacity, scale and panel reset. Choose **DONE** or Escape to save and lock. Disabled modules stay disabled. Dashboard's three interface styles also apply to Support Coverage windows and HUD controls. Cross-sync shares the current layout/settings across characters on the same account and server; OFF keeps character profiles separate.
 
 Existing `AlphaSquadSupportCoverageSavedVariables` settings are preserved. Remote snapshots are bounded, transient group data. The addon does not change another player's equipment or role, consume a potion or post group messages automatically.
 

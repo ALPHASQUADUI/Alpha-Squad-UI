@@ -160,7 +160,10 @@ function Group:EnsureSavedVariables()
 
     -- Persistent per-account HUD geometry. Existing users keep their saved values.
     ULT.sv.group.scale = ULT.Clamp(FiniteOr(ULT.sv.group.scale, defaults.scale), 60, 180)
-    ULT.sv.group.hudWidth = ULT.Clamp(FiniteOr(ULT.sv.group.hudWidth, defaults.hudWidth), 240, 520)
+    ULT.sv.group.hudWidth = ULT.Clamp(FiniteOr(ULT.sv.group.hudWidth, defaults.hudWidth), 240, 960)
+    if ULT.sv.group.hudHeight~=nil then
+        ULT.sv.group.hudHeight=ULT.Clamp(FiniteOr(ULT.sv.group.hudHeight,90),52,1080)
+    end
     ULT.sv.group.rowHeight = ULT.Clamp(FiniteOr(ULT.sv.group.rowHeight, defaults.rowHeight), 28, 56)
     ULT.sv.group.opacity = ULT.Clamp(FiniteOr(ULT.sv.group.opacity, defaults.opacity), 30, 100)
     ULT.sv.group.x = ULT.Clamp(FiniteOr(ULT.sv.group.x, defaults.x), -100000, 100000)

@@ -6,6 +6,12 @@ local function Text(value,fallback)
     if type(value)=="string" and value~="" then return (value:gsub("%^.*$","")) end
     return fallback or "Unknown"
 end
+local function ClassIcon(player)
+    local id=player and player.classId
+    if type(id)~="number" or id~=id or id<1 or id>255 or id%1~=0 or type(ZO_GetClassIcon)~="function" then return nil end
+    local ok,icon=pcall(ZO_GetClassIcon,id)
+    return ok and type(icon)=="string" and icon~="" and icon or nil
+end
 local function PlayerKey(player) return player and (player.key or player.displayName) end
 local function FoodText(food)
     if not food or not food.verified then return "FOOD UNKNOWN",C.muted,"Food information is unavailable." end
@@ -57,16 +63,21 @@ function SC:CreateInspectorWindow()
     local win=UI.Window("AlphaSquadSupportInspector","Ąlpha Şquad UI  •  Builds",function()SC:CloseInspector()end)
     self.inspectorWindow=win;UI.RegisterWindow("supportBuilds",win,function()SC:CloseInspector()end)
     win.coverage=UI.Button(win,"AlphaSquadInspectorCoverage","COVERAGE",124,30,function()SC:OpenMatrix()end)
-    win.coverage:SetAnchor(TOPRIGHT,win,TOPRIGHT,-18,96)
+    win.coverage:SetAnchor(TOPRIGHT,win,TOPRIGHT,-104,14)
+    win.title:ClearAnchors();win.title:SetAnchor(TOPLEFT,win,TOPLEFT,18,12);win.title:SetDimensions(580,32)
     win.request=UI.Button(win,"AlphaSquadInspectorRequest","REFRESH BUILD",144,30,function()
         if SC.inspectorPlayerKey then SC:RequestInspectedBuild(SC.inspectorPlayerKey);SC:RefreshInspector() end
     end)
     win.request:SetAnchor(TOPRIGHT,win.coverage,TOPLEFT,-8,0)
     win.playerHeader=UI.Label(win,"AlphaSquadInspectorGroupHeader","GROUP","ZoFontGameBold",C.orange)
-    win.playerHeader:SetAnchor(TOPLEFT,win,TOPLEFT,18,146);win.playerHeader:SetDimensions(176,24)
-    win.playerList=UI.Scroll(win,"AlphaSquadInspectorPlayers")
-    win.playerList:SetAnchor(TOPLEFT,win,TOPLEFT,18,174);win.playerList:SetDimensions(180,474)
-    win.buildSheet=self.BuildView.Create(win);win.buildSheet:SetAnchor(TOPLEFT,win,TOPLEFT,212,146)
+    win.playerHeader:SetAnchor(TOPLEFT,win,TOPLEFT,18,92);win.playerHeader:SetDimensions(176,24)
+    win.playerPanel=WINDOW_MANAGER:CreateControl("AlphaSquadInspectorPlayerPanel",win,CT_CONTROL)
+    win.playerPanel:SetAnchor(TOPLEFT,win,TOPLEFT,18,120);win.playerPanel:SetDimensions(180,492)
+    win.playerBG=UI.Solid(win.playerPanel,"AlphaSquadInspectorPlayerBG",C.surface or C.panel)
+    if UI.Surface then UI.Surface(win.playerPanel,win.playerBG,"card") end
+    win.playerList=UI.Scroll(win.playerPanel,"AlphaSquadInspectorPlayers")
+    win.playerList:SetAnchor(TOPLEFT,win.playerPanel,TOPLEFT,0,0);win.playerList:SetDimensions(180,492)
+    win.buildSheet=self.BuildView.Create(win);win.buildSheet:SetAnchor(TOPLEFT,win,TOPLEFT,212,92)
     win.footer:SetText("Hover any item, skill or Champion star for details. ? means unavailable; an empty slot is shown as —. Front and back set totals are counted separately.")
 end
 function SC:RefreshInspectorRoster()
@@ -74,40 +85,47 @@ function SC:RefreshInspectorRoster()
     for index,player in ipairs(roster) do
         local row=win.playerList.rows[index]
         if not row then
-            row=UI.Button(win.playerList.content,"AlphaSquadInspectorPlayer"..index,"",158,58,function(button)
+            row=UI.Button(win.playerList.content,"AlphaSquadInspectorPlayer"..index,"",158,38,function(button)
                 UI.ClearTooltip();SC.inspectorPlayerKey=PlayerKey(button.player)
                 SC:RequestInspectedBuild(SC.inspectorPlayerKey);SC:RefreshInspector()
             end)
-            row.label:ClearAnchors();row.label:SetAnchor(TOPLEFT,row,TOPLEFT,7,4);row.label:SetDimensions(146,24)
+            row.label:ClearAnchors();row.label:SetAnchor(TOPLEFT,row,TOPLEFT,37,0);row.label:SetDimensions(117,21)
             row.label:SetFont("ZoFontGameBold");row.label:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
             if row.label.SetWrapMode then row.label:SetWrapMode(TEXT_WRAP_MODE_ELLIPSIS) end
             row.detail=UI.Label(row,"AlphaSquadInspectorPlayerDetail"..index,"","ZoFontGameSmall",C.muted)
-            row.detail:SetAnchor(TOPLEFT,row,TOPLEFT,7,30);row.detail:SetDimensions(146,22)
+            row.detail:SetAnchor(TOPLEFT,row,TOPLEFT,37,20);row.detail:SetDimensions(117,18)
+            row.classIcon=WINDOW_MANAGER:CreateControl("AlphaSquadInspectorPlayerClass"..index,row,CT_TEXTURE)
+            row.classIcon:SetAnchor(TOPLEFT,row,TOPLEFT,7,7);row.classIcon:SetDimensions(24,24)
             row.marker=WINDOW_MANAGER:CreateControl("AlphaSquadInspectorPlayerMarker"..index,row,CT_TEXTURE)
-            row.marker:SetAnchor(TOPLEFT,row,TOPLEFT,0,0);row.marker:SetDimensions(3,58);UI.Color(row.marker,C.orange)
+            row.marker:SetAnchor(TOPLEFT,row,TOPLEFT,0,0);row.marker:SetDimensions(3,38)
+            if UI.BindColor then UI.BindColor(row.marker,C.accent or C.orange) else UI.Color(row.marker,C.orange) end
             row:SetHandler("OnMouseEnter",function()
                 local p=row.player;if not p then return end
-                row.bg:SetColor(0.16,0.10,0.045,1)
+                row.hovered=true
+                if UI.SetButtonSelected then UI.SetButtonSelected(row,row.selected) else UI.Color(row.bg,C.hover or C.panelActive or C.panel) end
                 UI.Tooltip(row,Text(p.displayName).."\n"..Text(p.characterName,p.name or "").."\n"..ClassName(p).."\n\nClick to inspect this player's shared build.")
             end)
             win.playerList.rows[index]=row
         end
-        row.player=player;row:SetHidden(false);row:ClearAnchors();row:SetAnchor(TOPLEFT,win.playerList.content,TOPLEFT,0,(index-1)*63)
+        row.player=player;row:SetHidden(false);row:ClearAnchors();row:SetAnchor(TOPLEFT,win.playerList.content,TOPLEFT,0,(index-1)*40)
         local selected=PlayerKey(player)==self.inspectorPlayerKey
         row.label:SetText(AlphaSquadUI.Theme.PlayerName and AlphaSquadUI.Theme.PlayerName(player.displayName) or UI.Text(Text(player.displayName,"Unknown player")));UI.Color(row.label,selected and C.orange or C.white)
         row.marker:SetHidden(not selected)
+        if UI.SetButtonSelected then UI.SetButtonSelected(row,selected) end
+        local icon=ClassIcon(player)
+        row.classIcon:SetTexture(icon or "");row.classIcon:SetHidden(not icon)
         local status,color=FoodText(player.food)
         row.detail:SetText(player.connected==false and "OFFLINE" or player.dead and "DEAD" or status)
         UI.Color(row.detail,player.connected==false and C.muted or player.dead and C.gold or color)
     end
     for index=#roster+1,#win.playerList.rows do win.playerList.rows[index]:SetHidden(true);win.playerList.rows[index].player=nil end
     win.playerHeader:SetText("GROUP  •  "..#roster)
-    UI.FinishScroll(win.playerList,#roster*63,158)
+    UI.FinishScroll(win.playerList,#roster*40,158)
 end
 function SC:RefreshInspector()
     local win=self.inspectorWindow;if not win or win:IsHidden() then return end
     -- A stable logical canvas keeps the complete character sheet on one page at all UI scales.
-    win:SetDimensions(1060,700);win:SetScale(math.max(0.1,math.min(1,(GuiRoot:GetWidth()-24)/1060,(GuiRoot:GetHeight()-24)/700)))
+    win:SetDimensions(1060,660);win:SetScale(math.max(0.1,math.min(1,(GuiRoot:GetWidth()-24)/1060,(GuiRoot:GetHeight()-24)/660)))
     win.title:SetText(AlphaSquadUI.Theme.Brand and AlphaSquadUI.Theme.Brand("Builds") or "Ąlpha Şquad UI  •  Builds")
     local player=self:GetInspectedPlayer()
     win.request:SetHidden(not player)
@@ -123,7 +141,10 @@ function SC:RefreshInspector()
     win.subtitle:SetText((UI.Text(subtitle):gsub("@SeRuM1",function() return AlphaSquadUI.Theme.authorText or "@SeRuM1" end)))
     win.footer:SetText("Hover equipment, skills and Champion stars for their details. ? = unavailable • — = empty. Set headline = highest bar total; FRONT / BACK = exact set pieces.")
     self.BuildView.Bind(win.buildSheet,player,details,status)
-    local height=math.max(700,win.buildSheet:GetHeight()+198)
+    local height=math.max(660,win.buildSheet:GetHeight()+144)
+    win.playerPanel:SetHeight(height-168)
+    win.playerList:SetHeight(height-168)
+    UI.FinishScroll(win.playerList,#(self.roster or {})*40,158)
     win:SetDimensions(1060,height)
     win:SetScale(math.max(0.1,math.min(1,(GuiRoot:GetWidth()-24)/1060,(GuiRoot:GetHeight()-24)/height)))
 end

@@ -230,7 +230,7 @@ before = #delayed
 ULT:OnUltimateUsed(ULT.ULTIMATE_SLOT)
 check(#delayed == before, "Disabled personal tracking queues no settle callbacks")
 
--- Ownership and preview use the actual UI paths, without a duplicate Ultimate scan.
+-- One personal HUD stays available; layout has no cross-module suppression.
 local moving, suppressed = false, true
 AlphaSquadUI.Layout = {
     ShouldHidePersonalULT=function() return suppressed end,
@@ -240,11 +240,14 @@ ULT.sv.enabled, ULT.sv.visible, ULT.uiObscured = true, true, false
 ULT.sv.hideInMenus, Group.sv.hideInMenus = true, true
 Group.sv.enabled, Group.sv.visible = true, true
 ULT:ApplyVisibility()
-check(ULT.window:IsHidden() and not Group.window:IsHidden(), "Overload ownership suppresses only the personal Ultimate HUD")
-check(updates.AlphaSquadUI_ULTTracker_Safety==nil, "A duplicate personal Ultimate HUD has no recovery timer")
+check(not ULT.window:IsHidden() and not Group.window:IsHidden(), "Legacy suppression cannot hide the unified personal HUD")
+check(updates.AlphaSquadUI_ULTTracker_Safety~=nil, "One personal recovery timer serves the unified HUD")
 slotReads=0
-ULT:Refresh("overload owns personal HUD")
-check(slotReads==0, "Suppressed personal tracking skips both hotbar scans")
+local unifiedRefreshHUD=ULT.RefreshHUD
+ULT.RefreshHUD=function(self) self:ApplyVisibility() end
+ULT:Refresh("unified personal HUD")
+ULT.RefreshHUD=unifiedRefreshHUD
+check(slotReads==2, "The unified refresh scans exactly the two native Ultimate slots")
 suppressed=false
 ULT:ApplyVisibility()
 check(not ULT.window:IsHidden() and updates.AlphaSquadUI_ULTTracker_Safety~=nil, "Releasing Overload ownership restores personal ULT presentation")

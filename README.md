@@ -7,25 +7,44 @@ A modular **The Elder Scrolls Online** addon by **@SeRuM1** for group preparatio
 ## Get started
 
 1. Install the `AlphaSquadUI` folder in ESO's `live/AddOns` directory and enable it in the Add-Ons menu.
-2. Open **Settings → Ąlpha Şquad UI**, or use `/asoverload`.
-3. All tracking modules start enabled. In **Dashboard**, switch off any module you do not need. Its navigation entry and tracking work stop.
+2. Open **Settings → Ąlpha Şquad UI**, or use `/asui`.
+3. In **Dashboard**, choose **ULT Tracker** and **Support Coverage**, then pick an **Interface Style**. Tracking starts enabled; you can switch either module off.
 4. Open **Libraries** to check dependencies and sharing. New installations configure supported sharing **ON** automatically; saved OFF choices are preserved.
-5. Use **MOVE HUD** at the bottom of the sidebar, drag your panels, then click **DONE** or press Escape.
+5. Use **MOVE HUD** to move, resize and adjust your panels. Drag corners to scale, edges to reshape, then click **DONE** or press Escape.
 6. Open **Support Coverage → Builds** or **Coverage** to prepare your group.
 
 Use [Minion](https://minion.mmoui.com/) to install and update published ESO addons and libraries. Install the full suite or the lightweight Build Share companion according to the features you need; do not nest either folder inside another addon directory.
 
 ## Dashboard and Cross-sync
 
-**Overload**, **ULT Tracker** and **Support Coverage** have independent module switches. Turning a module off removes its gameplay subscriptions, recovery updates and visual work. **Libraries stays accessible**, and its sharing choices are independent of module switches.
+**ULT Tracker** and **Support Coverage** have independent module switches. Overload is optional behavior inside the personal Ultimate tracker, with its own settings page and **Use Overload behavior** switch. Turning ULT Tracker off also stops its Overload behavior. **Libraries stays accessible**, and its sharing choices are independent of module switches.
 
 **Cross-sync ON** saves module preferences and HUD positions across characters on the same account and server. **OFF** gives the current character its own settings. Switching keeps the current layout, requires no reload, and preserves the existing SavedVariables namespaces. Sharing choices remain account-wide.
 
+## Choose your style
+
+Select **Dashboard → Interface Style** to apply one saved appearance across the settings and HUD panels:
+
+| Style | Appearance |
+| --- | --- |
+| **Obsidian Studio** — default | Soft dark cards, quiet borders and clearly separated sections |
+| **Ember Classic** | Warm panels with Alpha Squad orange borders and accent lines |
+| **Tactical Compact** | Flatter surfaces, fine dividers and reduced background fill |
+
+Styles change immediately without a reload. Readiness colors, item quality and Champion discipline colors keep their meaning. Appearance follows Cross-sync, alongside your other saved interface preferences.
+
 ## Arrange your HUD
 
-Click **MOVE HUD** in the settings sidebar or enter `/asmove` outside combat. Settings close and the normal game view remains visible, including the action bar and other gameplay interfaces. Drag the enabled panels into place. **DONE** or Escape saves the positions and locks the panels. The placement view ends automatically when combat, loading or another menu begins.
+Click **MOVE HUD** in the settings sidebar or enter `/asmove` outside combat. Settings close and the normal game view remains visible, including the action bar. Select the personal Ultimate, Group Ultimate or Support Coverage panel, then:
 
-Placement never enables a module you disabled in Dashboard. Temporarily shown placement panels do not change your normal visibility preferences. When an enabled, applicable Overload panel handles a slotted Overload morph, the personal ULT panel stays hidden to avoid duplicate displays; group Ultimate tracking remains independent.
+- Drag the panel to move it.
+- Drag a **corner** to scale the whole panel proportionally.
+- Drag an **edge** to change its shape; the contents rearrange and icons stay square.
+- Use **SCALE**, **OPACITY**, **RESET PANEL** and **FIT** in the placement toolbar for the selected panel. Opacity changes the background without fading icons or text.
+
+**DONE** or Escape saves and locks the panels. Combat, loading or another menu ends placement safely.
+
+Placement preserves disabled modules and normal visibility preferences. Personal Ultimate and Overload use the same panel, position and size. Group Ultimate tracking keeps its own panel and selection.
 
 ## Builds
 
@@ -87,17 +106,29 @@ ESOUI, website and Minion links use ESO's native confirmation dialog, which appe
 
 The companion needs LibGroupBroadcast. Use `/asbuildshare on`, `/asbuildshare off` and `/asbuildshare status`. It starts ON on a new installation, preserves an existing OFF setting and yields to the full suite when both are installed. Installing a transport library alone cannot expose another player's complete build.
 
-## Ultimate modules
+## Ultimate tracking
 
-**Overload** follows the actual Sorcerer Overload morph and provides reserve warnings, optional safe cancellation and a ready reminder. Automatic cancellation uses `CancelBuff` only when ESO marks the effect as removable; it never simulates a protected key press.
+The personal Ultimate HUD handles normal Ultimates and optional Overload behavior in one panel.
 
-**ULT Tracker** reads the actual Ultimates on both weapon bars. The group view lets you choose abilities to follow, sorts ready players first and dims recent spends. Tracking and library sharing have independent lifecycles. The personal view yields to Overload when its dedicated panel is handling the slotted morph, then resumes when that condition ends.
+- **AUTO** follows the active weapon bar. When enabled and applicable, Overload behavior prioritizes an Overload morph slotted on either bar.
+- **FRONT** or **BACK** selects a weapon bar; enabled Overload behavior can still take priority.
+- **BOTH** keeps both Ultimate cards visible and does not collapse the view into an Overload-only card.
+
+New installations use AUTO. Existing FRONT, BACK and BOTH choices are preserved. **ULT Tracker → OVERLOAD SETTINGS** controls the specialized reserve warnings, ready reminder, optional safe cancellation and PvP preference. Turn **Use Overload behavior** OFF to retain standard Ultimate tracking. **Reserve alerts and auto-stop** controls the warnings and native cancellation together and starts enabled on new installations. Auto-stop runs only when ESO marks the active effect as removable; it never simulates an Ultimate key press.
+
+The group view lets you choose abilities to follow, sorts ready players first and dims recent spends. Group tracking and library sharing remain independent of the personal display mode.
+
+## Community
+
+Open **Website & About** for the Alpha Squad website or **Discord** for the community page. **OPEN DISCORD COMMUNITY** opens the configured Discord widget in your browser after ESO's confirmation. Use the invitation there if Discord makes one available. The addon does not embed a web page, invent live member counts or send group/build data when you open the link.
 
 ## Commands
 
 | Command | Opens or controls |
 | --- | --- |
-| `/asoverload` | Main settings and Dashboard |
+| `/asui` or `/alphasquad` | Main settings |
+| `/asoverload` | Legacy alias for main settings |
+| `/asoverload settings` | Optional Overload behavior settings |
 | `/asult` | ULT settings |
 | `/asult group` | Group Ultimate configuration |
 | `/assupport builds` | Group build inspection |
@@ -107,4 +138,4 @@ The companion needs LibGroupBroadcast. Use `/asbuildshare on`, `/asbuildshare of
 
 Shared snapshots are bounded reports from compatible senders, not proof against a modified client. Invalid or contradictory equipment data cannot certify a complete build, and unknown fields remain unknown. The addon never executes received code or automatically equips items, consumes potions or posts group messages.
 
-See [architecture](docs/ARCHITECTURE.md), [performance](docs/PERFORMANCE.md), [validation](docs/SUPPORT_COVERAGE_TESTING.md) and [contributing](CONTRIBUTING.md) for development details. Screenshots and bug reports should omit private chats, unrelated account information and SavedVariables containing group data.
+See [architecture](docs/ARCHITECTURE.md), [performance](docs/PERFORMANCE.md), [validation](docs/SUPPORT_COVERAGE_TESTING.md) and [contributing](CONTRIBUTING.md) for technical details. Screenshots and bug reports should omit private chats, unrelated account information and SavedVariables containing group data.

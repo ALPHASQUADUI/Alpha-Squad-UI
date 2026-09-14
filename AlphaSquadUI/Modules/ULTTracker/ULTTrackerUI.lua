@@ -30,6 +30,7 @@ local function Solid(parent, name, color)
     local control = WINDOW_MANAGER:CreateControl(name, parent, CT_TEXTURE)
     control:SetAnchorFill(parent)
     SetColor(control, color)
+    if AlphaSquadUI.Theme and AlphaSquadUI.Theme.BindColor then AlphaSquadUI.Theme.BindColor(control,color) end
     return control
 end
 
@@ -38,6 +39,7 @@ local function Label(parent, name, font, text, color)
     control:SetFont(font)
     control:SetText(text or "")
     SetColor(control, color or COLORS.white)
+    if AlphaSquadUI.Theme and AlphaSquadUI.Theme.BindColor then AlphaSquadUI.Theme.BindColor(control,color or COLORS.white) end
     control:SetVerticalAlignment(TEXT_ALIGN_CENTER)
     return control
 end
@@ -48,6 +50,7 @@ local function CreateCard(parent, key, x)
     card:SetAnchor(TOPLEFT, parent, TOPLEFT, x, 36)
 
     card.bg = Solid(card, "AlphaSquadULTTracker_" .. key .. "_BG", COLORS.panel)
+    if AlphaSquadUI.Theme and AlphaSquadUI.Theme.RegisterSurface then AlphaSquadUI.Theme.RegisterSurface(card,card.bg,"card") end
 
     card.activeAccent = WINDOW_MANAGER:CreateControl("AlphaSquadULTTracker_" .. key .. "_ActiveAccent", card, CT_TEXTURE)
     card.activeAccent:SetAnchor(TOPLEFT, card, TOPLEFT, 0, 0)
@@ -115,69 +118,78 @@ local function CreateCard(parent, key, x)
     card.progress:SetAnchor(LEFT, card.progressBG, LEFT, 0, 0)
     SetColor(card.progress, COLORS.cyan)
 
+    card:SetMouseEnabled(true)
+    card:SetHandler("OnMouseEnter",function()
+        local bar=ULT.bars[key]
+        local tooltips=AlphaSquadUI.Tooltips
+        if tooltips and bar and bar.abilityId>0 then
+            if bar.overload and bar.overloadState=="critical" then
+                tooltips.ShowText(card,"Low Ultimate reserve. Click to request native Overload cancellation, or press your Ultimate key.")
+            elseif tooltips.ShowSkill then tooltips.ShowSkill(card,{id=bar.abilityId,name=bar.name},false) end
+        end
+    end)
+    card:SetHandler("OnMouseExit",function() if AlphaSquadUI.Tooltips then AlphaSquadUI.Tooltips.Hide() end end)
+    card:SetHandler("OnMouseUp",function(_,button,inside)
+        if button==MOUSE_BUTTON_INDEX_LEFT and inside~=false and ULT.sv.locked then
+            local bar=ULT.bars[key]
+            if bar.overload and bar.overloadState=="critical" and ULT.Overload then ULT.Overload:TryCancel("manual") end
+        end
+    end)
     return card
 end
 
+ULT.layoutName="Personal Ultimate"
+ULT.layoutBounds={minWidth=320,minHeight=142,maxWidth=1500,maxHeight=700}
 function ULT:GetWindowWidth()
-    if not self.sv then return 610 end
-    -- A single-card layout keeps enough header room for brand, counter and drag hint.
-    return self.sv.trackMode == "both" and 610 or 360
+    return self.sv and self.sv.trackMode=="both" and 610 or 360
 end
-
 function ULT:ApplyLayout()
     if not self.window or not self.sv then return end
-
-    local both = self.sv.trackMode == "both"
-    self.window:SetDimensions(self:GetWindowWidth(), 142)
-
-    local p = self.window.cards.primary
-    local b = self.window.cards.backup
-
-    if both then
-        p:SetHidden(false)
-        b:SetHidden(false)
-        p:ClearAnchors()
-        p:SetAnchor(TOPLEFT, self.window, TOPLEFT, 18, 36)
-        b:ClearAnchors()
-        b:SetAnchor(TOPLEFT, self.window, TOPLEFT, 316, 36)
-    elseif self.sv.trackMode == "main" then
-        p:SetHidden(false)
-        b:SetHidden(true)
-        p:ClearAnchors()
-        p:SetAnchor(TOPLEFT, self.window, TOPLEFT, 20, 36)
-    else
-        p:SetHidden(true)
-        b:SetHidden(false)
-        b:ClearAnchors()
-        b:SetAnchor(TOPLEFT, self.window, TOPLEFT, 20, 36)
+    local layout=AlphaSquadUI.Layout
+    local width,height=self:GetWindowWidth(),142
+    self.layoutBounds.minHeight=142
+    if layout and layout.GetDimensions then width,height=layout.GetDimensions(self,width,height)
+    else width=self.sv.hudWidth or width;height=self.sv.hudHeight or height end
+    width=self.Clamp(width,320,1500);height=self.Clamp(height,142,700)
+    local keys={}
+    for _,key in ipairs({"primary","backup"}) do if self:ShouldTrackBar(key) then keys[#keys+1]=key end end
+    local stacked=#keys==2 and width<580
+    self.layoutBounds.minHeight=stacked and 248 or 142
+    if stacked then height=math.max(height,248) end
+    self.window:SetDimensions(width,height)
+    local count=math.max(1,#keys)
+    local cardW=stacked and width-24 or (width-24-((count-1)*10))/count
+    local cardH=stacked and (height-48-10)/2 or height-48
+    for _,card in pairs(self.window.cards) do card:SetHidden(true) end
+    for index,key in ipairs(keys) do
+        local card=self.window.cards[key]
+        card:SetHidden(false);card:ClearAnchors()
+        card:SetAnchor(TOPLEFT,self.window,TOPLEFT,12+(stacked and 0 or (index-1)*(cardW+10)),36+(stacked and (index-1)*(cardH+10) or 0))
+        card:SetDimensions(cardW,cardH);card.activeAccent:SetHeight(cardH)
+        local icon=math.max(40,math.min(68,cardH-30))
+        card.iconBorder:SetDimensions(icon+8,icon+8);card.iconBG:SetDimensions(icon+4,icon+4)
+        card.icon:SetDimensions(icon,icon);card.readyGlow:SetDimensions(icon+16,icon+16)
+        local textX=icon+32;local textW=math.max(120,cardW-textX-10)
+        for _,entry in ipairs({{card.barLabel,8,18},{card.nameLabel,27,23},{card.statusLabel,52,22}}) do
+            entry[1]:ClearAnchors();entry[1]:SetAnchor(TOPLEFT,card,TOPLEFT,textX,entry[2]);entry[1]:SetDimensions(textW,entry[3])
+        end
+        card.barLabel:SetWidth(math.max(60,textW-60));card.activeLabel:SetWidth(54)
+        card.costLabel:SetHidden(cardW<365)
+        card.statusLabel:SetWidth(cardW<365 and textW or math.max(70,textW-74))
+        card.progressBG:ClearAnchors();card.progressBG:SetAnchor(BOTTOMLEFT,card,BOTTOMLEFT,textX,-10)
+        card.progressBG:SetWidth(textW);card.progressWidth=textW
+        local cost=self.bars[key].cost or 0
+        card.progress:SetWidth(cost>0 and textW*math.max(0,math.min(1,(self.currentUltimate or 0)/cost)) or 0)
     end
-
-    self.window.ultCounter:ClearAnchors()
-    self.window.moveHint:ClearAnchors()
-
-    if both then
-        self.window.brand:SetFont("ZoFontGameBold")
-        self.window.brand:SetText((AlphaSquadUI.Theme and AlphaSquadUI.Theme.Brand and AlphaSquadUI.Theme.Brand("ULT") or "Ąlpha Şquad UI • ULT"))
-        self.window.brand:SetDimensions(300, 24)
-        self.window.ultCounter:SetAnchor(TOPRIGHT, self.window, TOPRIGHT, -15, 10)
-        self.window.moveHint:SetText("CLICK + DRAG")
-        self.window.moveHint:SetDimensions(105, 22)
-        self.window.moveHint:SetAnchor(TOPRIGHT, self.window, TOPRIGHT, -96, 10)
-    else
-        -- Compact header for MAIN-only / BACK-only mode. Avoids text collisions
-        -- and keeps the window readable at smaller resolutions/UI scales.
-        self.window.brand:SetFont("ZoFontGameSmall")
-        self.window.brand:SetText((AlphaSquadUI.Theme and AlphaSquadUI.Theme.Brand and AlphaSquadUI.Theme.Brand("ULT") or "Ąlpha Şquad UI • ULT"))
-        self.window.brand:SetDimensions(188, 22)
-        self.window.ultCounter:SetAnchor(TOPRIGHT, self.window, TOPRIGHT, -14, 9)
-        self.window.moveHint:SetText("DRAG")
-        self.window.moveHint:SetDimensions(48, 20)
-        self.window.moveHint:SetAnchor(TOPRIGHT, self.window, TOPRIGHT, -104, 9)
-    end
-
-    -- Never re-apply the saved position here. ApplyLayout runs on every HUD refresh;
-    -- re-anchoring here would snap a freshly dragged window back to its old location.
-    self:ClampToScreen(true)
+    self.window.brand:SetFont(width<460 and "ZoFontGameSmall" or "ZoFontGameBold")
+    self.window.brand:SetDimensions(math.max(140,width-164),24)
+    self.window.brand:SetText(AlphaSquadUI.Theme and AlphaSquadUI.Theme.Brand and AlphaSquadUI.Theme.Brand("ULT") or "Alpha Squad UI • ULT")
+    self.window.ultCounter:ClearAnchors();self.window.ultCounter:SetAnchor(TOPRIGHT,self.window,TOPRIGHT,-14,8)
+    self.window.moveHint:ClearAnchors();self.window.moveHint:SetAnchor(TOPRIGHT,self.window,TOPRIGHT,-98,10)
+    self.window.moveHint:SetDimensions(48,20);self.window.moveHint:SetText("DRAG")
+    self:ApplyAppearance()
+    self:UpdateLockState()
+    self:ApplyVisibility()
 end
 
 function ULT:ApplyPosition()
@@ -253,10 +265,8 @@ function ULT:ApplyVisibility()
         sharedSettingsVisible = sharedSettingsVisible or settings.AnyExclusiveWindowVisible()
     end
     local moving = AlphaSquadUI.Layout and AlphaSquadUI.Layout.IsMoving(self)
-    local suppressed = AlphaSquadUI.Layout and AlphaSquadUI.Layout.ShouldHidePersonalULT()
     local hidden =
         self.loading == true
-        or suppressed
         or not self.sv.enabled
         or (not self.sv.visible and not moving)
         or settingsVisible
@@ -269,10 +279,7 @@ function ULT:ApplyVisibility()
     if hidden then
         self:SetFlashUpdate(false)
     else
-        local anyReady =
-            (self:ShouldTrackBar("primary") and self.bars.primary.ready)
-            or (self:ShouldTrackBar("backup") and self.bars.backup.ready)
-        self:SetFlashUpdate(anyReady and self.sv.readyFlash and not moving)
+        self:SetFlashUpdate(self:NeedsPulse() and not moving)
     end
 
     if self.Group and self.Group.ApplyVisibility then
@@ -281,6 +288,7 @@ function ULT:ApplyVisibility()
 end
 
 function ULT:GetEffectiveScale()
+    if AlphaSquadUI.Layout and AlphaSquadUI.Layout.GetScale then return AlphaSquadUI.Layout.GetScale(self) end
     if not self.window or not self.sv or not GuiRoot then
         return (self.sv and self.sv.scale or 100) / 100
     end
@@ -332,11 +340,18 @@ function ULT:RefreshCard(card, bar)
     card.nameLabel:SetText(zo_strformat("<<C:1>>", bar.name ~= "" and bar.name or "Ultimate"))
     card.costLabel:SetText(bar.cost > 0 and ("COST " .. tostring(bar.cost)) or "COST ?")
 
-    local state = bar.state or "charging"
+    local state = bar.overload and bar.overloadState or bar.state or "charging"
     local color = COLORS.cyan
     local statusText = "CHARGING"
 
-    if state == "ready" then
+    if bar.overload then
+        if state=="critical" then statusText="TURN OFF!";color=COLORS.red
+        elseif state=="warning" then statusText="LOW RESERVE";color=COLORS.red
+        elseif state=="active" then statusText="OVERLOAD ON";color=COLORS.green
+        elseif state=="ready" then statusText="READY TO ACTIVATE";color=COLORS.gold
+        else statusText="OVERLOAD OFF";color=COLORS.muted end
+        card.costLabel:SetText("RESERVE "..tostring(self.sv.overload.reserveThreshold))
+    elseif state == "ready" then
         statusText = "READY"
         color = COLORS.green
     elseif state == "active" then
@@ -359,7 +374,7 @@ function ULT:RefreshCard(card, bar)
     if bar.cost > 0 then
         progress = math.min(1, math.max(0, (self.currentUltimate or 0) / bar.cost))
     end
-    card.progress:SetWidth(math.floor(180 * progress))
+    card.progress:SetWidth(math.floor((card.progressWidth or 180) * progress))
     SetColor(card.progress, color)
 end
 
@@ -367,16 +382,13 @@ function ULT:RefreshHUD()
     if not self.window or not self.sv then return end
 
     self.window.ultCounter:SetText(string.format("ULT %d", tonumber(self.currentUltimate) or 0))
+    self:ApplyLayout()
     self:RefreshCard(self.window.cards.primary, self.bars.primary)
     self:RefreshCard(self.window.cards.backup, self.bars.backup)
-    self:ApplyLayout()
-    self:ApplyAppearance()
-    self:UpdateLockState()
-    self:ApplyVisibility()
 end
 
 function ULT:UpdateReadyPulse()
-    if not self.window or not self.sv or not self.sv.readyFlash or self.window:IsHidden() then return end
+    if not self.window or not self.sv or self.window:IsHidden() then return end
 
     local t = (GetGameTimeMilliseconds and GetGameTimeMilliseconds() or 0) / 1000
     -- Slow, restrained breathing pulse: readable without a fluorescent/neon effect.
@@ -386,7 +398,14 @@ function ULT:UpdateReadyPulse()
 
     for key, card in pairs(self.window.cards) do
         local bar = self.bars[key]
-        if self:ShouldTrackBar(key) and bar and bar.ready then
+        if self:ShouldTrackBar(key) and bar and bar.overload and (bar.overloadState=="critical" or bar.overloadState=="warning" or bar.overloadState=="ready") then
+            local danger=bar.overloadState~="ready"
+            local rate=bar.overloadState=="critical" and 17 or danger and 10 or 3
+            local wave=(math.sin(t*rate)+1)*0.5
+            local color=danger and COLORS.red or COLORS.gold
+            card.readyGlow:SetColor(color[1],color[2],color[3],0.08+wave*0.46)
+            card.iconBorder:SetColor(color[1],color[2],color[3],0.65+wave*0.35)
+        elseif self:ShouldTrackBar(key) and bar and bar.ready and self.sv.readyFlash then
             card.readyGlow:SetColor(0.24, 0.78, 0.46, alpha)
             card.iconBorder:SetColor(0.32, 0.90, 0.55, borderAlpha)
             card.icon:SetScale(1)
@@ -419,6 +438,7 @@ function ULT:CreateHUD()
     if AlphaSquadUI.Settings and AlphaSquadUI.Settings.ApplyWindowLayer then AlphaSquadUI.Settings.ApplyWindowLayer(win, true) end
 
     win.bg = Solid(win, "AlphaSquadULTTrackerBG", COLORS.bg)
+    if AlphaSquadUI.Theme and AlphaSquadUI.Theme.RegisterSurface then AlphaSquadUI.Theme.RegisterSurface(win,win.bg,"window") end
 
     local topLine = WINDOW_MANAGER:CreateControl("AlphaSquadULTTrackerTopLine", win, CT_TEXTURE)
     topLine:SetAnchor(TOPLEFT, win, TOPLEFT, 0, 0)
@@ -470,4 +490,6 @@ function ULT:CreateHUD()
     self:ApplyAppearance()
     self:UpdateLockState()
     self:ApplyVisibility()
+    if AlphaSquadUI.Layout and AlphaSquadUI.Layout.Attach then AlphaSquadUI.Layout.Attach(self) end
+    if AlphaSquadUI.Theme and AlphaSquadUI.Theme.OnChanged then AlphaSquadUI.Theme.OnChanged(function() ULT:RefreshHUD() end) end
 end

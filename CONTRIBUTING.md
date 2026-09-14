@@ -19,7 +19,10 @@ Update the README, module documentation and changelog when behavior changes. Use
 - Keep native tooltips and link-confirmation dialogs above addon windows and restore their state when closed.
 - Keep HUD placement centralized: preserve disabled modules and normal visibility, save on completion, and stop placement at combat/loading/menu boundaries.
 - Count set pieces per weapon bar, using two-handed weights and native bonus thresholds. Unknown data must not create an excess warning.
-- Register pages through Core and reuse controls. Put module switches in Dashboard and sharing switches in Libraries.
+- Register pages through Core and reuse controls. `Core/Shell.lua` owns the shell independently of tracking modules. Put module switches in Dashboard and sharing switches in Libraries.
+- Keep Overload inside the shared personal ULT lifecycle and HUD. Preserve existing FRONT/BACK/BOTH modes; fresh installations use AUTO.
+- Resize through Core Layout: corners preserve proportions, edges reflow contents, and opacity affects background surfaces only. Stop the temporary resize callback on every completion or cancellation path.
+- Repaint themes only on selection/profile changes; preserve semantic status, quality and discipline colors. Community links use native URL confirmation; no embedded HTML or invented Discord data.
 - Use only the targeted native library protocol settings after verifying their option section and identity; reject ambiguous duplicate controls. An unsupported integration must degrade safely.
 
 ## Local validation
@@ -34,7 +37,7 @@ The validator runs every regression suite with Lua 5.1 and 5.4, checks Lua synta
 
 Meaningful regressions should cover the affected boundary: exact item traits/enchantments, CP allocation, profile isolation, module lifecycle, tooltip ownership or malformed/stale packets. Avoid tests that only duplicate implementation details.
 
-For client validation, use the [ESO checklist](docs/SUPPORT_COVERAGE_TESTING.md). Include enabled/disabled states, initial sharing setup, later OFF choices, global placement, both weapon bars, character changes, `/reloadui`, travel and instance transitions. Reproduce a defect with the smallest relevant addon/library combination and attach the exact error and steps.
+For client validation, use the [ESO checklist](docs/SUPPORT_COVERAGE_TESTING.md). Include enabled/disabled states, initial sharing setup, later OFF choices, global placement/resizing, all three themes, unified Ultimate/Overload migration, both weapon bars, character changes, `/reloadui`, travel and instance transitions. Reproduce a defect with the smallest relevant addon/library combination and attach the exact error and steps.
 
 ## Release preparation
 

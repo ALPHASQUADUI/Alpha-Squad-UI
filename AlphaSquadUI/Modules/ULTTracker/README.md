@@ -4,11 +4,13 @@ Personal and group Ultimate readiness for **Ąlpha Şquad UI**.
 
 ## Personal view
 
-Choose MAIN, BACK or BOTH to follow the actual Ultimate and morph slotted on either weapon bar. Class, guild, weapon and subclassed abilities use their native identity; there is no fixed list of supported personal Ultimates.
+Choose AUTO, FRONT, BACK or BOTH to follow the actual Ultimate and morph slotted on either weapon bar. Class, guild, weapon and subclassed abilities use their native identity; there is no fixed list of supported personal Ultimates.
 
 The panel shows the ability icon/name, cost, current Ultimate resource, active bar and charging/READY/ACTIVE state. Crossing into READY can play a sound and show a pulse. Spending Ultimate clears readiness while native resource state settles. Toggle Ultimates use their actual toggled state instead of continuing to flash READY while active.
 
-If an enabled, applicable Overload panel already handles a slotted Overload morph, the personal ULT panel yields to it. Removing that condition restores the personal view. Group Ultimate tracking stays independent.
+**AUTO**, the new-installation default, follows the active weapon bar. Enabled, applicable Overload behavior can prioritize a slotted Overload morph on either bar in AUTO, FRONT or BACK. **BOTH** always retains both cards. Existing saved display choices are preserved.
+
+Overload now uses this same personal HUD and lifecycle. Open **OVERLOAD SETTINGS** for the **Use Overload behavior** toggle, reserve warnings, optional safe cancellation, ready reminder and PvP preference. Disabling that behavior retains standard Ultimate tracking; disabling ULT Tracker stops both. Group Ultimate tracking stays independent of personal display mode.
 
 ## Group view
 
@@ -28,15 +30,15 @@ Open **Libraries** for dependency status and **Share group Ultimates**. A new in
 
 ## Placement and saved settings
 
-Use **MOVE HUD** in the main sidebar or `/asmove` outside combat. Position the enabled personal/group panels against the normal game interface, then click **DONE** or press Escape to save and lock. Disabled modules stay disabled and normal visibility choices are preserved. Group placement remains possible with no current matching members by showing its placement guide.
+Use **MOVE HUD** in the main sidebar or `/asmove` outside combat. Position the personal and group panels against the normal game interface. Drag corners to scale proportionally and edges to reshape content; BOTH cards stack when the personal panel becomes narrow. The placement toolbar controls scale, background opacity, fit and reset for the selected panel. Click **DONE** or press Escape to save and lock. Disabled modules stay disabled and normal visibility choices are preserved. Group placement remains possible with no current matching members by showing its placement guide.
 
-Group configuration retains scale, list width, row height and background opacity controls, with reset actions. Row height also scales the icon. Cross-sync ON shares settings and positions across characters on the same account/server; OFF keeps native character profiles separate. Existing SavedVariables and group selections survive reloads and travel.
+Sizing and opacity are centralized in MOVE HUD. Group rows adapt to the available panel space while keeping their icons square. Cross-sync ON shares settings and positions across characters on the same account/server; OFF keeps native character profiles separate. Existing SavedVariables and group selections survive reloads and travel. Dashboard's Ember Classic, Tactical Compact and Obsidian Studio styles update both personal and group panels without changing status meanings.
 
 Dashboard owns the module switch. Disabling tracking releases its gameplay work while Libraries sharing remains independent. The group view also respects its own enabled/visible settings and the parent's state.
 
 ## Performance
 
-Native events drive personal slot/resource changes. A 1.5-second safety refresh runs only while the tracker is enabled, visible and unobscured. READY animation exists only while its output is visible and needed.
+Native events drive personal slot/resource and Overload effect changes. A shared 1.5-second safety refresh runs only while the tracker is enabled, visible and unobscured. Alert animation exists only while its output is visible and needed. Overload does not create a second personal HUD, resource poll or recovery heartbeat.
 
 Incoming group updates affect the relevant cached player. Membership changes and a two-second visible-state safety check rebuild the roster as needed. Up to twelve pooled rows are reused. Hidden/disabled group panels do not rebuild continuously; alerts and safety timers stop during placement or loading. No combat-log parsing is required.
 
@@ -46,8 +48,10 @@ LibGroupCombatStats owns its shared callbacks and sender timer. Disabling the ma
 
 | Command | Action |
 | --- | --- |
+| `/asui` or `/alphasquad` | Main settings |
 | `/asult` | ULT settings |
-| `/asult main`, `/asult back`, `/asult both` | Select the personal bars |
+| `/asult auto`, `/asult main`, `/asult back`, `/asult both` | Select the personal display mode |
+| `/asoverload settings` | Optional Overload behavior settings |
 | `/asult group` | Group Ultimate configuration |
 | `/asmove` | Position all enabled HUD panels |
 | `/asult show`, `/asult hide` | Change personal visibility |

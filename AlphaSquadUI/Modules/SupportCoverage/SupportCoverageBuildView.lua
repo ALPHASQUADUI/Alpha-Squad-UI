@@ -27,14 +27,16 @@ end
 local function Panel(parent,name,x,y,w,h,title)
     local panel=WINDOW_MANAGER:CreateControl(name,parent,CT_CONTROL);At(panel,parent,x,y,w,h)
     panel.bg=UI.Solid(panel,name.."BG",C.panel)
+    if UI.Surface then UI.Surface(panel,panel.bg,"card") end
     panel.title=Label(panel,name.."Title",title,12,5,w-24,22,"ZoFontGameBold",C.orange)
     return panel
 end
 local function Icon(parent,name,x,y,size,label)
     local tile=WINDOW_MANAGER:CreateControl(name,parent,CT_CONTROL);At(tile,parent,x,y,size,size)
-    tile.frame=UI.Solid(tile,name.."Frame",C.muted)
+    tile.frame=UI.Solid(tile,name.."Frame",C.muted,true)
     tile.inner=WINDOW_MANAGER:CreateControl(name.."Inner",tile,CT_TEXTURE)
-    At(tile.inner,tile,2,2,size-4,size-4);tile.inner:SetColor(0.035,0.04,0.05,1)
+    At(tile.inner,tile,2,2,size-4,size-4)
+    if UI.BindColor then UI.BindColor(tile.inner,C.surface or C.bg or C.panel) else UI.Color(tile.inner,C.panel) end
     tile.icon=WINDOW_MANAGER:CreateControl(name.."Icon",tile,CT_TEXTURE)
     At(tile.icon,tile,3,3,size-6,size-6)
     tile.empty=Label(tile,name.."Empty","?",2,2,size-4,size-4,"ZoFontGameBold",C.muted)
@@ -227,6 +229,10 @@ function View.Create(parent)
         local caption=index>10 and (index%2==1 and "Main" or "Off") or def[2]
         gear.slots[def[1]]=Icon(gear,"AlphaSquadBuildSlot"..def[1],def[3],def[4],44,caption)
     end
+    if UI.Separator then
+        UI.Separator(gear,"AlphaSquadBuildJewelryDivider",12,296,242)
+        UI.Separator(gear,"AlphaSquadBuildWeaponsDivider",12,384,242)
+    end
     Label(gear,"AlphaSquadBuildJewelry","JEWELRY",12,298,242,24,"ZoFontGameBold",C.orange)
     Label(gear,"AlphaSquadBuildFrontWeapons","FRONT WEAPONS",12,389,121,24,"ZoFontGameSmall",C.orange)
     Label(gear,"AlphaSquadBuildBackWeapons","BACK WEAPONS",142,389,118,24,"ZoFontGameSmall",C.orange)
@@ -239,6 +245,8 @@ function View.Create(parent)
     for i=1,14 do
         local row=WINDOW_MANAGER:CreateControl("AlphaSquadBuildSetRow"..i,canvas.sets,CT_CONTROL)
         At(row,canvas.sets,12,27+(i-1)*22,526,22)
+        row.bg=UI.Solid(row,"AlphaSquadBuildSetRowBG"..i,C.surface or C.panel)
+        if UI.Separator then row.divider=UI.Separator(row,"AlphaSquadBuildSetRowDivider"..i,0,21,526) end
         row.name=Label(row,"AlphaSquadBuildSetName"..i,"",0,0,374,22)
         row.warning=Label(row,"AlphaSquadBuildSetWarning"..i,"",24,19,350,18,"ZoFontGameSmall",C.gold)
         UI.Hover(row.name,function()return row.tooltip end)
@@ -258,11 +266,13 @@ function View.Create(parent)
     canvas.skills.bars={}
     for row,bar in ipairs({{"primary","FRONT"},{"backup","BACK"},{"werewolf","WEREWOLF"}}) do
         local group=WINDOW_MANAGER:CreateControl("AlphaSquadBuildBar"..row,canvas.skills,CT_CONTROL)
-        At(group,canvas.skills,12,30+(row-1)*39,526,38)
-        group.title=Label(group,"AlphaSquadBuildBarTitle"..row,bar[2],0,0,92,38,nil,C.muted)
+        At(group,canvas.skills,12,30+(row-1)*62,526,60)
+        group.title=Label(group,"AlphaSquadBuildBarTitle"..row,bar[2],0,0,92,44,nil,C.muted)
+        if UI.Separator and row>1 then group.divider=UI.Separator(group,"AlphaSquadBuildBarDivider"..row,0,-3,526) end
         group.icons={}
-        for i=1,6 do group.icons[i]=Icon(group,"AlphaSquadBuildSkill"..row.."_"..i,98+(i-1)*68,0,36)
-            group.icons[i].slotNumber=Label(group,"AlphaSquadBuildSkillSlot"..row.."_"..i,i==6 and "ULT" or tostring(i),137+(i-1)*68,8,27,22,nil,i==6 and C.orange or C.muted)
+        for i=1,6 do group.icons[i]=Icon(group,"AlphaSquadBuildSkill"..row.."_"..i,98+(i-1)*68,0,44)
+            group.icons[i].slotNumber=Label(group,"AlphaSquadBuildSkillSlot"..row.."_"..i,i==6 and "ULT" or tostring(i),98+(i-1)*68,44,44,16,nil,i==6 and C.orange or C.muted)
+            group.icons[i].slotNumber:SetHorizontalAlignment(TEXT_ALIGN_CENTER)
         end
         canvas.skills.bars[bar[1]]=group
     end
@@ -363,7 +373,8 @@ function View.Bind(canvas,player,details,status)
             local col=math.floor((i-1)/rowCount)
             local width=columns==2 and 258 or 526
             At(row,canvas.sets,12+col*270,29+data.y,width,data.height)
-            At(row.icon,row,0,1,20,20)
+            if row.divider then row.divider:ClearAnchors();row.divider:SetAnchor(BOTTOMLEFT,row,BOTTOMLEFT,0,0);row.divider:SetWidth(width) end
+            At(row.icon,row,1,1,20,20)
             local icon=data.item and (data.item.icon or Try(GetItemLinkIcon,data.item.link))
             row.icon:SetTexture(icon or "");row.icon:SetHidden(not icon or icon=="")
             At(row.name,row,24,0,width-(columns==2 and 120 or 164),22)
@@ -391,7 +402,7 @@ function View.Bind(canvas,player,details,status)
     local curse=details and details.curse or {}
     local showWerewolf=(skills.werewolfKnown==true and #(skills.werewolf or {})>0) or curse.kind=="WEREWOLF"
     local skillsY=setHeight+12
-    local skillsHeight=showWerewolf and 150 or 112
+    local skillsHeight=showWerewolf and 216 or 154
     At(canvas.skills,canvas,278,skillsY,552,skillsHeight)
     local cpY=skillsY+skillsHeight+12
     At(canvas.champion,canvas,278,cpY,552,84)

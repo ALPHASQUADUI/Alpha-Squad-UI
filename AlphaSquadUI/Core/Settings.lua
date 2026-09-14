@@ -105,9 +105,7 @@ function Settings.GetPageBuilder(id)
     return id and Settings.pages[id] or nil
 end
 
--- The visual shell is currently created by the proven Overload UI.
--- Modules talk only to this Core bridge so the shell can move later without
--- changing module APIs or slash commands.
+-- Modules communicate with the independent Core shell through this bridge.
 function Settings.AttachShell(mainWindow, showPageCallback, refreshCallback)
     Settings.mainWindow = mainWindow
     Settings.showPageCallback = showPageCallback
@@ -149,17 +147,23 @@ local function OpenLink(url)
     return true
 end
 Settings.OpenLink=OpenLink
-Settings.modulePages={overload="Overload",ulttracker="ULTTracker",supportcoverage="SupportCoverage"}
+Settings.modulePages={ulttracker="ULTTracker",ultoverload="ULTTracker",supportcoverage="SupportCoverage"}
+-- Native menu artwork, as used by ESO's own keyboard main menu.
+Settings.icons={dashboard="EsoUI/Art/MainMenu/menuBar_map_up.dds",
+    ulttracker="EsoUI/Art/MainMenu/menuBar_skills_up.dds",
+    supportcoverage="EsoUI/Art/MainMenu/menuBar_social_up.dds",
+    libraries="EsoUI/Art/MainMenu/menuBar_collections_up.dds",
+    community="EsoUI/Art/MenuBar/menuBar_help_up.dds",
+    discord="EsoUI/Art/MainMenu/menuBar_social_up.dds"}
 function Settings.IsModuleEnabled(id)
     local module=ASUI.Modules[Settings.modulePages[id]]
     if not module or not module.sv then return false end
-    if id=="overload" then return module.sv.addonEnabled==true end
     return module.sv.enabled==true
 end
 function Settings.SetModuleEnabled(id,enabled)
     local module=ASUI.Modules[Settings.modulePages[id]]
     if not module or not module.sv then return end
-    if id=="overload" then module:SetAddonEnabled(enabled) else module:SetEnabled(enabled) end
+    module:SetEnabled(enabled)
     Settings.RefreshMain()
 end
 local function Label(ui,parent,name,text,x,y,w,h,color,font)
@@ -168,31 +172,60 @@ local function Label(ui,parent,name,text,x,y,w,h,color,font)
     control:SetHorizontalAlignment(TEXT_ALIGN_LEFT);control:SetVerticalAlignment(TEXT_ALIGN_TOP)
     return control
 end
+local function Icon(parent,name,texture,x,y,size)
+    local icon=WINDOW_MANAGER:CreateControl(name,parent,CT_TEXTURE)
+    icon:SetDimensions(size,size);icon:SetAnchor(TOPLEFT,parent,TOPLEFT,x,y);icon:SetTexture(texture)
+    return icon
+end
+local function PresetDropdown(parent,ui,width)
+    local theme=ASUI.Theme
+    local container=WINDOW_MANAGER:CreateControlFromVirtual("AlphaSquadThemeChoice",parent,"ZO_ComboBox")
+    container:SetAnchor(TOPLEFT,parent,TOPLEFT,14,47);container:SetDimensions(width-28,32)
+    local combo=ZO_ComboBox_ObjectFromContainer(container)
+    combo:SetSortsItems(false)
+    local description=Label(ui,parent,"AlphaSquadThemeDescription","",14,88,width-28,50)
+    for _,preset in ipairs(theme.GetPresets()) do
+        local id=preset.id
+        local entry=combo:CreateItemEntry(preset.name,function() theme.SetPreset(id) end)
+        entry.id=id;entry.description=preset.description
+        combo:AddItem(entry)
+    end
+    ui.RegisterRefresher(function()
+        local id=theme.GetPresetId()
+        combo:SetSelectedItemByEval(function(entry)return entry.id==id end,true)
+        for _,preset in ipairs(theme.GetPresets()) do if preset.id==id then description:SetText(preset.description) end end
+    end)
+    return container
+end
 Settings.RegisterPage("dashboard",function(page,ui)
     page.responsiveCards=true;page.contentHeight=590
     local width=page:GetWidth()-16;local half=(width-16)/2
     Label(ui,page,"AlphaSquadDashboardTitle","DASHBOARD",8,2,width,34,ui.colors.orange,"ZoFontWinH2")
-    Label(ui,page,"AlphaSquadDashboardIntro","Choose your tools. Disabled modules stop tracking and disappear from the menu.",8,40,width,26)
+    Label(ui,page,"AlphaSquadDashboardIntro","Your tools, your layout. Choose what you need and make it yours.",8,40,width,26)
     local entries={
-        {"overload","Overload","Reserve alerts and a compact HUD for Sorcerer Overload."},
-        {"ulttracker","ULT Tracker","Watch your front and back Ultimates, plus selected group Ultimates."},
-        {"supportcoverage","Support Coverage","Prepare the group: buffs, debuffs, useful sets and equipped builds."},
+        {"ulttracker","ULT TRACKER","Personal and group Ultimates, with specialized Sorcerer Overload support."},
+        {"supportcoverage","SUPPORT COVERAGE","Prepare group support and inspect the equipped builds behind it."},
     }
     for index,data in ipairs(entries) do
-        local id=data[1];local x=8+((index-1)%2)*(half+16);local y=82+math.floor((index-1)/2)*174
-        local card=ui.CreateCard(page,"AlphaSquadDashboardModule"..index,x,y,half,158,data[2],ui.colors.orange)
-        Label(ui,card,"AlphaSquadDashboardHelp"..index,data[3],14,38,half-28,42)
-        ui.AddToggleRow(card,"AlphaSquadDashboardToggle"..index,"Enable module",104,function() return Settings.IsModuleEnabled(id) end,
+        local id=data[1];local x=8+(index-1)*(half+16)
+        local card=ui.CreateCard(page,"AlphaSquadDashboardModule"..index,x,82,half,180,data[2],ui.colors.orange)
+        Icon(card,"AlphaSquadDashboardIcon"..index,Settings.icons[id],14,40,52)
+        Label(ui,card,"AlphaSquadDashboardHelp"..index,data[3],80,43,half-98,65,ui.colors.muted,"ZoFontGame")
+        ui.AddToggleRow(card,"AlphaSquadDashboardToggle"..index,"Enable module",132,function() return Settings.IsModuleEnabled(id) end,
             function(v) Settings.SetModuleEnabled(id,v) end,"Stops this module's HUD, tracking events and timers. Sharing choices in Libraries are kept.")
     end
-    local sync=ui.CreateCard(page,"AlphaSquadDashboardSync",8+half+16,256,half,158,"CROSS-SYNC",ui.colors.cyan)
-    Label(ui,sync,"AlphaSquadDashboardSyncHelp","Keep the same layout and module preferences on every character on this server. Turn off for character-specific settings.",14,38,half-28,58)
-    ui.AddToggleRow(sync,"AlphaSquadCrossSync","Across characters",104,function() return not ASUI.Preferences or not ASUI.Preferences.sv or ASUI.Preferences.sv.crossSync~=false end,
+    local appearance=ui.CreateCard(page,"AlphaSquadDashboardAppearance",8,280,half,172,"INTERFACE STYLE",ui.colors.orange)
+    PresetDropdown(appearance,ui,half)
+    Label(ui,appearance,"AlphaSquadThemeScope","Applies to every menu and HUD. Gameplay colors stay consistent.",14,136,half-28,24)
+    local sync=ui.CreateCard(page,"AlphaSquadDashboardSync",8+half+16,280,half,172,"CROSS-SYNC",ui.colors.cyan)
+    Label(ui,sync,"AlphaSquadDashboardSyncHelp","Keep your theme, HUD sizes, positions and preferences across characters on this server.",14,44,half-28,60,ui.colors.muted,"ZoFontGame")
+    ui.AddToggleRow(sync,"AlphaSquadCrossSync","Across characters",124,function() return not ASUI.Preferences or not ASUI.Preferences.sv or ASUI.Preferences.sv.crossSync~=false end,
         function(value) if ASUI.Preferences then ASUI.Preferences.SetCrossSync(value) end end,
-        "Your current layout is kept when switching. ON saves future changes across characters; OFF saves them for this character. Sharing choices always remain account-wide. No reload is needed.")
-    local help=ui.CreateCard(page,"AlphaSquadDashboardSharing",8,434,width,106,"GROUP DATA",ui.colors.green)
-    Label(ui,help,"AlphaSquadDashboardSharingHelp","Configure all sharing and required add-ons in Libraries. Sharing remains available even when a tracking module is disabled.",14,36,width-244,54)
-    ui.CreateButton(help,"AlphaSquadDashboardLibraries","LIBRARIES",width-206,42,190,32,function() Settings.OpenPage("libraries") end)
+        "Your current appearance and layout are kept when switching. ON saves future changes across characters; OFF saves them for this character. Sharing remains account-wide. No reload is needed.")
+    local help=ui.CreateCard(page,"AlphaSquadDashboardSharing",8,470,width,108,"GROUP DATA",ui.colors.green)
+    Icon(help,"AlphaSquadDashboardGroupIcon",Settings.icons.libraries,14,38,48)
+    Label(ui,help,"AlphaSquadDashboardSharingHelp","Manage dependencies and sharing in Libraries. Your sharing choices remain independent of tracking modules.",78,40,width-330,56,ui.colors.muted,"ZoFontGame")
+    ui.CreateButton(help,"AlphaSquadDashboardLibraries","LIBRARIES",width-206,44,190,36,function() Settings.OpenPage("libraries") end)
 end)
 Settings.RegisterPage("libraries",function(page,ui)
     page.responsiveCards=true;page.contentHeight=590
@@ -225,6 +258,8 @@ Settings.RegisterPage("libraries",function(page,ui)
                 switch.help=baseHelp..(reason and ("\n\n"..reason) or "")
                 if not available then
                     switch.label:SetText("N/A")
+                    if switch.thumb then switch.thumb:SetHidden(true) end
+                    switch.label:ClearAnchors();switch.label:SetAnchorFill(switch)
                     switch.label:SetColor(c.red[1],c.red[2],c.red[3],1)
                 end
             end)
@@ -242,4 +277,46 @@ Settings.RegisterPage("libraries",function(page,ui)
     local footer=ui.CreateCard(page,"AlphaSquadMinion",8,518,width,70,"MINION • ADDON MANAGER",c.green)
     Label(ui,footer,"AlphaSquadMinionHelp","Install and update ESO addons and libraries, then /reloadui.",14,34,width-180,26)
     ui.CreateButton(footer,"AlphaSquadMinionLink","GET MINION",width-152,24,136,30,function() OpenLink("https://minion.mmoui.com/") end)
+end)
+
+Settings.RegisterPage("community",function(page,ui)
+    page.responsiveCards=true;page.contentHeight=590
+    local width=page:GetWidth()-16;local half=(width-16)/2
+    Label(ui,page,"AlphaSquadCommunityTitle",ASUI.Theme.Brand(),8,2,width,36,ui.colors.white,"ZoFontWinH2")
+    Label(ui,page,"AlphaSquadCommunityIntro","Endgame ESO PvE • Hard Modes • Trifectas • Guides • Community",8,44,width,26)
+    local site=ui.CreateCard(page,"AlphaSquadCommunitySite",8,88,width,180,"EXPLORE ALPHA SQUAD",ui.colors.orange)
+    Icon(site,"AlphaSquadCommunitySiteIcon",Settings.icons.community,18,48,64)
+    Label(ui,site,"AlphaSquadCommunitySiteText","Build guides, roster information and resources for your next challenge.",100,48,width-124,56,ui.colors.white,"ZoFontGame")
+    ui.CreateButton(site,"AlphaSquadSiteButton","VISIT WEBSITE",100,116,190,36,function()OpenLink(ASUI.website)end)
+    ui.CreateButton(site,"AlphaSquadESOUI","FIND ON ESOUI",310,116,190,36,function()OpenLink("https://www.esoui.com/downloads/search.php?search=Alpha%20Squad%20UI")end)
+    ui.CreateButton(site,"AlphaSquadReleases","RELEASE NOTES",520,116,190,36,function()OpenLink("https://github.com/ALPHASQUADUI/Alpha-Squad-UI/releases")end)
+    local about=ui.CreateCard(page,"AlphaSquadCommunityAbout",8,286,half,210,"ABOUT THE ADDON",ui.colors.cyan)
+    Label(ui,about,"AlphaSquadAboutText","Clear group preparation and one unified Ultimate tracker. Built around native ESO information and controls.\n\nCreated by "..ASUI.Theme.authorText,16,46,half-32,130,ui.colors.muted,"ZoFontGame")
+    local discord=ui.CreateCard(page,"AlphaSquadCommunityDiscord",8+half+16,286,half,210,"JOIN THE COMMUNITY",ui.colors.orange)
+    Label(ui,discord,"AlphaSquadCommunityDiscordText","Find the Alpha Squad Discord, meet the roster and connect with other players.",16,46,half-32,80,ui.colors.muted,"ZoFontGame")
+    ui.CreateButton(discord,"AlphaSquadCommunityDiscordButton","DISCORD",16,148,190,36,function()Settings.OpenPage("discord")end)
+    Label(ui,page,"AlphaSquadCommunityCommands","/asui  Settings     /asmove  Arrange HUD     /assupport builds  Inspect builds",8,522,width,30,ui.colors.muted,"ZoFontGame")
+end)
+Settings.RegisterPage("discord",function(page,ui)
+    page.responsiveCards=true;page.contentHeight=590
+    local width=page:GetWidth()-16;local left=math.floor(width*0.55)
+    Label(ui,page,"AlphaSquadDiscordTitle","ALPHA SQUAD • DISCORD",8,2,width,36,ui.colors.orange,"ZoFontWinH2")
+    Label(ui,page,"AlphaSquadDiscordIntro","The community behind your next clear.",8,44,width,28,ui.colors.muted,"ZoFontGame")
+    local invite=ui.CreateCard(page,"AlphaSquadDiscordInvite",8,94,left,418,"ALPHA SQUAD",ui.colors.cyan)
+    Icon(invite,"AlphaSquadDiscordNativeIcon",Settings.icons.discord,24,56,92)
+    Label(ui,invite,"AlphaSquadDiscordTagline","PLAY TOGETHER.\nPROGRESS TOGETHER.",136,68,left-156,76,ui.colors.white,"ZoFontWinH3")
+    Label(ui,invite,"AlphaSquadDiscordInviteText","Meet the roster, discuss builds and plan your next raid. Open our Discord community to view the server invitation.",24,186,left-48,112,ui.colors.muted,"ZoFontGame")
+    local join=ui.CreateButton(invite,"AlphaSquadDiscordJoin","OPEN DISCORD COMMUNITY",24,332,left-48,46,function()
+        OpenLink("https://discord.com/widget?id=1524092356696084690&theme=dark")
+    end)
+    join.help="Opens the supplied Alpha Squad Discord widget in your browser after ESO's confirmation. Use the invitation shown there to join the server."
+    local about=ui.CreateCard(page,"AlphaSquadDiscordActivities",left+24,94,width-left-16,418,"INSIDE THE COMMUNITY",ui.colors.orange)
+    local w=about:GetWidth()-36
+    Label(ui,about,"AlphaSquadDiscordRaids","RAIDS & PROGRESSION",18,54,w,28,ui.colors.orange,"ZoFontGameBold")
+    Label(ui,about,"AlphaSquadDiscordRaidsInfo","Hard Modes, trifectas and coordinated PvE.",18,88,w,54,ui.colors.muted,"ZoFontGame")
+    Label(ui,about,"AlphaSquadDiscordBuilds","BUILDS & DISCUSSION",18,168,w,28,ui.colors.orange,"ZoFontGameBold")
+    Label(ui,about,"AlphaSquadDiscordBuildsInfo","Share ideas, compare setups and learn together.",18,202,w,62,ui.colors.muted,"ZoFontGame")
+    Label(ui,about,"AlphaSquadDiscordWelcome","WELCOME TO ALPHA SQUAD",18,298,w,28,ui.colors.orange,"ZoFontGameBold")
+    Label(ui,about,"AlphaSquadDiscordWelcomeInfo","Connect with players who enjoy working as a team.",18,332,w,62,ui.colors.muted,"ZoFontGame")
+    Label(ui,page,"AlphaSquadDiscordPrivacy","Opening Discord shares no build, character or group data through this addon.",8,540,width,30)
 end)

@@ -1,6 +1,6 @@
 # ESO acceptance checklist
 
-Version **2.9.0** / **20900**. This checklist is not a record of completed in-game tests.
+Version **3.0.0** / **30000**. This checklist is not a record of completed in-game tests.
 
 ## Automated validation
 
@@ -36,9 +36,16 @@ Check a fresh installation separately from migrated preferences. Fresh supported
 | Empty group placement | Group HUD can be positioned with no matching players without inventing actual group evidence |
 | Cross-sync ON | Move panels and change settings, then reload and change character on the same account/server: positions/settings remain shared |
 | Cross-sync OFF | Two character profiles remain separate; switching mode keeps the active layout without requiring reload |
-| Overload handoff | A slotted Overload morph uses its applicable dedicated panel and suppresses the redundant personal ULT view; removal/disable restores it; group ULT remains independent |
+| Unified Ultimate migration | Existing FRONT/BACK/BOTH preferences survive; new settings default to AUTO; supported Overload options and applicable legacy placement migrate into the one personal HUD |
+| AUTO and Overload | AUTO follows the active bar; optional applicable Overload takes priority outside BOTH mode; toggling specialized behavior OFF restores normal Ultimate behavior without a second panel |
+| BOTH mode | Both cards remain visible with an Overload morph; narrow side-resized layouts stack cards without stretching icons |
+| Independent shell | Main settings, Libraries, Website & About and Discord remain usable with every gameplay module disabled |
+| Theme selection | Ember Classic, Tactical Compact and default Obsidian Studio repaint existing menu/HUD surfaces immediately, preserve status/quality/discipline colors, and survive reload/profile changes |
+| Resize corners | Drag every corner proportionally with icons/text intact; release, Escape, combat and loading remove temporary resize callbacks |
+| Resize edges | Edge drags reshape personal/group/Support HUD contents without stretching icons; minimum/maximum bounds and screen fitting remain correct |
+| Placement toolbar | Selected-panel scale/background opacity/reset/fit affect only that panel; icons/text stay opaque and all changes persist |
 | Branding | Ą and Ş render fully in the static orange gradient; UI stays white; @SeRuM1 uses the blue gradient |
-| External links | Website, ESOUI and Minion confirmations appear above addon windows and can be accepted or cancelled normally |
+| External links | Website, ESOUI, Minion and Discord confirmations appear above addon windows and can be accepted or cancelled normally; Discord opens only the configured widget externally, without sending build data |
 | Viewport | At 720p, 1080p and ultrawide UI scales, Libraries stays on one page, the main settings shell has no close cross, and long text remains available on hover |
 
 ## Builds and Coverage
@@ -82,9 +89,9 @@ Check a fresh installation separately from migrated preferences. Fresh supported
 | Group lifecycle | Late join, leave/rejoin, disband, reconnect and character change invalidate inappropriate cached state |
 | Combat | No Support scan or detailed build send during combat; queued invalidation is handled after combat ends; no uptime/report sampler appears |
 | Loading/travel | Overland, housing, dungeon, trial and PvP transitions pause local work during loading, then resume without changing preferences |
-| Personal ULT | MAIN/BACK/BOTH, swap, spend, ready sound/pulse, hide/disable and saved positions remain functional |
+| Personal ULT | AUTO/FRONT/BACK/BOTH, swap, spend, ready sound/pulse, hide/disable, shared Overload behavior and saved geometry remain functional |
 | Group ULT | Filters, readiness sorting, dead/offline players, rejoin and missing-library states remain correct |
-| Overload | All morphs, dormant wake-up, reserve behavior, PvP suppression and global placement remain functional |
+| Overload | All morphs, optional behavior OFF, reserve/reminder behavior, PvP suppression and placement remain functional in the shared personal tracker; hidden/loading/placement states never cancel effects or play alerts |
 | Performance/coexistence | Compare frame time/memory and traffic ON/OFF in four- and twelve-player groups alongside the group's existing addons |
 
 ## Release requirements and references

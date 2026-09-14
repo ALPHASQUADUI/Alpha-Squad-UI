@@ -151,6 +151,7 @@ function ULT:ReadBar(bar)
 
     if boundId <= 0 then
         bar.abilityId = 0
+        bar.isOverload = false
         bar.name = ""
         bar.icon = ""
         bar.cost = 0
@@ -173,19 +174,33 @@ function ULT:ReadBar(bar)
     bar.abilityId = effectiveId
     bar.name = name or ""
     bar.icon = icon or ""
+    bar.isOverload = self.Overload and self.Overload:IsAbility(effectiveId, name, icon) or false
     bar.cost = self:GetUltimateCost(category, effectiveId)
     bar.toggled = IsSlotToggled and IsSlotToggled(ULTIMATE_SLOT, category) == true or false
 end
 
 function ULT:ShouldTrackBar(key)
-    local mode = self.sv and self.sv.trackMode or "both"
+    local mode = self.sv and self.sv.trackMode or "auto"
+    if mode == "both" then return true end
+    local priority = self.Overload and self.Overload:GetPriorityBar()
+    if priority then return key == priority end
     if mode == "main" then return key == "primary" end
     if mode == "back" then return key == "backup" end
-    return true
+    return key == (self:GetActiveBarCategory() == HOTBAR_CATEGORY_BACKUP and "backup" or "primary")
+end
+function ULT:NeedsPulse()
+    for key,bar in pairs(self.bars) do
+        if self:ShouldTrackBar(key) then
+            if bar.overload and (bar.overloadState == "warning" or bar.overloadState == "critical" or bar.overloadState == "ready") then return true end
+            if not bar.overload and bar.ready and self.sv.readyFlash then return true end
+        end
+    end
+    return false
 end
 
 function ULT:ComputeBarState(bar, current)
     bar.activeBar = self:GetActiveBarCategory() == bar.category
+    if bar.overload then bar.ready=false;return bar.overloadState or "off" end
 
     if bar.abilityId <= 0 then
         bar.ready = false
@@ -213,7 +228,7 @@ end
 
 function ULT:PlayReadySound()
     local layout = AlphaSquadUI.Layout
-    if layout and (layout.IsMoving(self) or layout.ShouldHidePersonalULT()) then return end
+    if layout and layout.IsMoving(self) then return end
     if not self.sv or not self.sv.readySound or not PlaySound or not SOUNDS then return end
     if self.uiObscured then return end
 
@@ -231,7 +246,7 @@ function ULT:PlayReadySound()
 end
 
 function ULT:SetFlashUpdate(enabled)
-    enabled = enabled == true and not (AlphaSquadUI.Layout and (AlphaSquadUI.Layout.IsMoving(self) or AlphaSquadUI.Layout.ShouldHidePersonalULT()))
+    enabled = enabled == true and not (AlphaSquadUI.Layout and AlphaSquadUI.Layout.IsMoving(self))
     if self.flashRunning == enabled then return end
     self.flashRunning = enabled
 
@@ -254,12 +269,6 @@ function ULT:Refresh(reason, observedUltimate)
         return
     end
 
-    if AlphaSquadUI.Layout and AlphaSquadUI.Layout.ShouldHidePersonalULT() then
-        self:SetFlashUpdate(false)
-        if self.ApplyVisibility then self:ApplyVisibility() end
-        return
-    end
-
     local currentUltimate = FiniteOr(observedUltimate, nil)
     if currentUltimate == nil then currentUltimate = self:GetUltimatePower() end
     self.currentUltimate = math.min(1000000, math.max(0, currentUltimate))
@@ -269,6 +278,7 @@ function ULT:Refresh(reason, observedUltimate)
 
     self:ReadBar(self.bars.primary)
     self:ReadBar(self.bars.backup)
+    if self.Overload then self.Overload:Update(self.currentUltimate, reason) end
 
     local primaryState = self:ComputeBarState(self.bars.primary, self.currentUltimate)
     local backupState = self:ComputeBarState(self.bars.backup, self.currentUltimate)
@@ -293,7 +303,7 @@ function ULT:Refresh(reason, observedUltimate)
     if hudVisible and self.window and self.window.IsHidden then
         hudVisible = not self.window:IsHidden()
     end
-    self:SetFlashUpdate(anyReady and self.sv.readyFlash and hudVisible)
+    self:SetFlashUpdate(self:NeedsPulse() and hudVisible)
 
     if self.RefreshHUD then self:RefreshHUD() end
     if self.RefreshSettings then self:RefreshSettings() end
@@ -302,6 +312,7 @@ end
 function ULT:OnUltimateUsed(slotNum)
     if slotNum ~= ULTIMATE_SLOT or not self.sv or not self.sv.enabled then return end
 
+    if self.Overload then self.Overload:OnUsed(slotNum) end
     local activeCategory = self:GetActiveBarCategory()
     local now = NowMs()
 
@@ -323,6 +334,7 @@ end
 function ULT:SetEnabled(enabled)
     if EM.SetActive then EM:SetActive(enabled==true and not self.loading) end
     self.sv.enabled = enabled == true
+    if self.Overload then self.Overload:UpdateRuntime() end
     if self.Group and self.Group.SetTrackingEventsActive then self.Group:SetTrackingEventsActive() end
     if not self.sv.enabled then self:SetFlashUpdate(false) end
     self:SetSafetyUpdateActive(self.sv.enabled and not self.uiObscured)
@@ -349,7 +361,7 @@ function ULT:SetLocked(locked)
 end
 
 function ULT:SetTrackMode(mode)
-    if mode ~= "main" and mode ~= "back" and mode ~= "both" then return end
+    if mode ~= "main" and mode ~= "back" and mode ~= "both" and mode ~= "auto" then return end
     self.sv.trackMode = mode
     if self.ApplyLayout then self:ApplyLayout() end
     self:Refresh("track mode")
@@ -375,7 +387,7 @@ function ULT:RefreshUIObscured()
 end
 
 function ULT:SetSafetyUpdateActive(enabled)
-    enabled = enabled == true and not self.loading and not (AlphaSquadUI.Layout and (AlphaSquadUI.Layout.IsMoving(self) or AlphaSquadUI.Layout.ShouldHidePersonalULT()))
+    enabled = enabled == true and not self.loading and not (AlphaSquadUI.Layout and AlphaSquadUI.Layout.IsMoving(self))
     if self.safetyUpdateActive == enabled then return end
     self.safetyUpdateActive = enabled
     local name = "AlphaSquadUI_ULTTracker_Safety"
@@ -455,9 +467,18 @@ function ULT:RegisterEvents()
 
     EM:RegisterForEvent(prefix .. "_Activated", EVENT_PLAYER_ACTIVATED, function()
         ULT.loading=false
+        if ULT.Overload then ULT.Overload:UpdateRuntime() end
         if EM.SetActive then EM:SetActive(ULT.sv.enabled==true) end
         zo_callLater(function()
             if ULT then
+                if ULT.Overload and ULT.sv.unifiedUltimateVersion~=1 then
+                    ULT:ReadBar(ULT.bars.primary);ULT:ReadBar(ULT.bars.backup)
+                    local adopted=ULT.Overload:Migrate()
+                    if adopted then
+                        ULT:SetEnabled(ULT.sv.enabled)
+                        if ULT.ApplyPosition then ULT:ApplyPosition() end
+                    end
+                end
                 ULT:RefreshUIObscured()
                 ULT:Refresh("player activated")
             end
@@ -466,7 +487,9 @@ function ULT:RegisterEvents()
 
     if EVENT_PLAYER_DEACTIVATED then
         EM:RegisterForEvent(prefix.."_Deactivated",EVENT_PLAYER_DEACTIVATED,function()
-            ULT.loading=true;ULT:RefreshUIObscured()
+            ULT.loading=true
+            if ULT.Overload then ULT.Overload:UpdateRuntime() end
+            ULT:RefreshUIObscured()
             if EM.SetActive then EM:SetActive(false) end
             if ULT.Group and ULT.Group.SetReadyPulseActive then ULT.Group:SetReadyPulseActive(false) end
         end)
@@ -520,6 +543,8 @@ function ULT:RegisterSlashCommands()
             ULT:SetEnabled(true)
         elseif lower == "disable" or lower == "off" then
             ULT:SetEnabled(false)
+        elseif lower == "auto" or lower == "mode auto" then
+            ULT:SetTrackMode("auto")
         elseif lower == "main" or lower == "mode main" then
             ULT:SetTrackMode("main")
         elseif lower == "back" or lower == "mode back" then
@@ -568,7 +593,7 @@ function ULT:Initialize()
         enabled = true,
         visible = true,
         locked = true,
-        trackMode = "both",
+        trackMode = "auto",
         readySound = true,
         readyFlash = true,
         hideInMenus = true,
@@ -589,14 +614,16 @@ function ULT:Initialize()
         end
     end
     self.sv.locked = true -- Global placement never resumes across reloads.
-    self.sv.scale = Clamp(FiniteOr(self.sv.scale, defaults.scale), 70, 150)
+    self.sv.scale = Clamp(FiniteOr(self.sv.scale, defaults.scale), 60, 180)
     self.sv.opacity = Clamp(FiniteOr(self.sv.opacity, defaults.opacity), 30, 100)
     self.sv.x = Clamp(FiniteOr(self.sv.x, defaults.x), -100000, 100000)
     self.sv.y = Clamp(FiniteOr(self.sv.y, defaults.y), -100000, 100000)
-    if self.sv.trackMode ~= "main" and self.sv.trackMode ~= "back" and self.sv.trackMode ~= "both" then
-        self.sv.trackMode = "both"
+    if self.sv.trackMode ~= "main" and self.sv.trackMode ~= "back" and self.sv.trackMode ~= "both" and self.sv.trackMode ~= "auto" then
+        self.sv.trackMode = "auto"
     end
 
+    self:ReadBar(self.bars.primary);self:ReadBar(self.bars.backup)
+    if self.Overload then self.Overload:Migrate(false);self.Overload:RegisterCommands() end
     if self.CreateHUD then self:CreateHUD() end
     -- ULT settings are provided exclusively by the shared Ąlpha Şquad settings shell.
     if self.InitializeGroup then self:InitializeGroup() end
@@ -607,6 +634,7 @@ function ULT:Initialize()
     self:RegisterSlashCommands()
 
     self.initialized = true
+    if self.Overload then self.Overload:UpdateRuntime() end
     self:SetSafetyUpdateActive(self.sv.enabled and not self.uiObscured)
 
     zo_callLater(function()

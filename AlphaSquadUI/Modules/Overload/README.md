@@ -1,38 +1,37 @@
-# Overload Module
+# Overload behavior
 
-Current gameplay module for Ąlpha Şquad UI.
+Overload is an optional part of the **ULT Tracker** personal HUD. It follows Overload, Energy Overload and Power Overload, including a morph available through subclassing, using the actual slotted ability identity.
 
-Tracks:
+## Settings
 
-- Overload
-- Energy Overload
-- Power Overload
-- subclassed builds using an Overload morph
+Open **ULT Tracker → OVERLOAD SETTINGS**, or `/asoverload settings`.
 
-Features include the movable HUD, Ultimate counter, emergency reserve alerts,
-ready reminder, PvP suppression option, menu auto-hide and dormant behavior
-when no Overload morph is slotted.
+- **Use Overload behavior** enables the specialized reserve and ready-reminder behavior. OFF retains the standard personal Ultimate tracker.
+- **Disable specialized behavior in PvP** uses normal Ultimate tracking there while retaining the Overload options for PvE.
+- **Reserve alerts and auto-stop**, enabled by default, controls reserve warnings and native cancellation together. Threshold and sound options refine that behavior.
+- Ready-reminder options control the reminder threshold and sound while Overload is off.
 
-Tracking is event-first. Its 1-second recovery sync exists only while the HUD is
-enabled, visible, unobscured, not PvP-suppressed and not dormant; hidden and
-dormant states keep no polling update alive.
+Overload and normal Ultimates share one panel, position, scale and background opacity. In AUTO, FRONT or BACK mode, an applicable Overload morph can take priority even on the other weapon bar. **BOTH** retains both cards. All display modes preserve the actual ability icons and morphs.
 
-The gameplay implementation intentionally remains consolidated in `Overload.lua`
-to minimize regression risk. Any future file split should preserve gameplay
-behavior and SavedVariables exactly.
+Automatic cancellation calls ESO's native cancellation only when the active effect is marked removable. It does not simulate an Ultimate key press. If cancellation is unavailable, use your normal Ultimate key. Placement previews do not play alerts or cancel effects.
 
-Open **ESC > Settings > Ąlpha Şquad UI > Overload** or `/asoverload`.
-Personal Overload tracking does not require LibGroupBroadcast, LibGroupCombatStats
-or the build-sharing companion. The shared **Libraries** page explains
-optional integrations used by other modules.
+## Migration and runtime
 
-## Dashboard and sharing
+Existing supported Overload options migrate into the personal ULT settings. An applicable previously enabled Overload HUD can provide the shared panel's previous position and scale. Existing ULT display modes, including BOTH, are preserved; new installations use AUTO. Old SavedVariables are retained for migration.
 
-Enable or disable this module from Dashboard. Disabled tracking removes its own gameplay subscriptions and recovery/animation timers. Libraries remains available and its sharing settings are independent. Cross-sync keeps HUD positions and module settings across characters by default; switch it off for character-specific layouts. Loading transitions pause tracking until activation.
+The implementation is `../ULTTracker/ULTOverload.lua`. It uses the personal Ultimate tracker's events, resource state, safety update and animation lifecycle. There is no separate Overload HUD or standalone recovery timer. Disabling ULT Tracker stops its specialized Overload work too; changing library sharing remains independent.
 
+Use **MOVE HUD** or `/asmove` to move and resize the shared panel. Corners scale it proportionally, edges rearrange its contents, and the toolbar controls background opacity and reset. The three Dashboard interface styles apply to this same HUD.
 
-## Placement and personal ULT visibility
+## Commands
 
-Use **MOVE HUD** at the bottom of the settings sidebar or `/asmove` outside combat. Drag enabled panels against the normal game UI, then click **DONE** or press Escape to save and lock. Dashboard-disabled modules remain disabled; placement does not permanently change visibility settings.
+| Command | Action |
+| --- | --- |
+| `/asui` or `/alphasquad` | Main settings |
+| `/asoverload` | Legacy alias for main settings |
+| `/asoverload settings` | Overload behavior options |
+| `/asoverload on` or `/asoverload off` | Enable or disable specialized behavior |
+| `/asoverload cancel` | Request safe native cancellation of an active removable effect |
+| `/asmove` | Arrange enabled HUD panels |
 
-When this enabled, applicable module handles a slotted Overload morph, the personal ULT panel is hidden to avoid a duplicate display. It resumes when the dedicated Overload panel no longer applies. The group Ultimate view is unaffected. Existing OFF preferences, character layouts and library sharing remain independent.
+Personal Ultimate and Overload tracking do not require sharing libraries. See the shared **Libraries** page for optional group integrations.

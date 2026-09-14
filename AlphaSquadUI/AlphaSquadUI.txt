@@ -1,7 +1,7 @@
 ## Title: |cFF6F0CĄ|cFF7712l|cFF7F17p|cFF871Dh|cFF8F22a |cFF9828Ş|cFFA02Dq|cFFA833u|cFFB038a|cFFB83Ed |cFFFFFFUI|r
 ## APIVersion: 101050 101051
-## Version: 2.9.0
-## AddOnVersion: 20900
+## Version: 3.0.0
+## AddOnVersion: 30000
 ## Author: |c4E9EFF@|c57A9FFS|c60B4FFe|c69BFFFR|c72CAFFu|c7BD5FFM|c84E0FF1|r
 ## Description: Modular Alpha Squad UI with pre-combat group readiness and voluntary build inspection.
 ## SavedVariables: AlphaSquadOverloadTrackerSavedVariables AlphaSquadULTTrackerSavedVariables AlphaSquadSupportCoverageSavedVariables AlphaSquadUISettingsSavedVariables
@@ -18,6 +18,7 @@ Core/Settings.lua
 Core/Layout.lua
 
 Modules/ULTTracker/ULTTracker.lua
+Modules/ULTTracker/ULTOverload.lua
 Modules/ULTTracker/ULTTrackerUI.lua
 Modules/ULTTracker/ULTGroup.lua
 Modules/ULTTracker/ULTGroupUI.lua
@@ -40,4 +41,4 @@ Modules/SupportCoverage/SupportCoverageBuildView.lua
 Modules/SupportCoverage/SupportCoverageInspector.lua
 Modules/SupportCoverage/SupportCoverageSettings.lua
 
-Modules/Overload/Overload.lua
+Core/Shell.lua

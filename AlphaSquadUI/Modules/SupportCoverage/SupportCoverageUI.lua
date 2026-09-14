@@ -1,7 +1,8 @@
 -- Event-driven preparation HUD and shared native ESO control helpers.
 local SC = AlphaSquadUI and AlphaSquadUI.Modules and AlphaSquadUI.Modules.SupportCoverage
 if not SC then return end
-local C = AlphaSquadUI.Theme.colors
+local Theme = AlphaSquadUI.Theme
+local C = Theme.colors
 local UI = {}; SC.UI = UI
 UI.colors = C
 
@@ -11,14 +12,28 @@ end
 function UI.Color(control, color)
     control:SetColor(color[1], color[2], color[3], color[4] or 1)
 end
-function UI.Solid(parent, name, color)
+function UI.BindColor(control,color)
+    if Theme.BindColor then Theme.BindColor(control,color) else UI.Color(control,color) end
+end
+function UI.Surface(parent,background,kind)
+    if Theme.RegisterSurface then Theme.RegisterSurface(parent,background,kind) end
+end
+function UI.Separator(parent,name,x,y,width)
+    local line=WINDOW_MANAGER:CreateControl(name,parent,CT_TEXTURE)
+    line:SetAnchor(TOPLEFT,parent,TOPLEFT,x,y);line:SetDimensions(width,1)
+    UI.BindColor(line,C.border or C.muted)
+    return line
+end
+function UI.Solid(parent, name, color, dynamic)
     local t = WINDOW_MANAGER:CreateControl(name, parent, CT_TEXTURE)
-    t:SetAnchorFill(parent); UI.Color(t, color or C.panel); return t
+    t:SetAnchorFill(parent)
+    if dynamic then UI.Color(t,color or C.panel) else UI.BindColor(t,color or C.panel) end
+    return t
 end
 function UI.Label(parent, name, text, font, color)
     local label = WINDOW_MANAGER:CreateControl(name, parent, CT_LABEL)
     label:SetFont(font or "ZoFontGameSmall"); label:SetText(text or "")
-    label:SetVerticalAlignment(TEXT_ALIGN_CENTER); UI.Color(label, color or C.white)
+    label:SetVerticalAlignment(TEXT_ALIGN_CENTER); UI.BindColor(label, color or C.white)
     return label
 end
 function UI.Tooltip(control, text)
@@ -56,15 +71,22 @@ function UI.Hover(control, text)
         UI.ClearTooltip()
     end)
 end
+function UI.SetButtonSelected(button,selected)
+    button.selected=selected==true
+    local color=button.hovered and (C.hover or C.panelActive) or button.selected and (C.selected or C.panelActive) or C.panel
+    UI.BindColor(button.bg,color or C.panel)
+end
 function UI.Button(parent, name, caption, width, height, action)
     local b = WINDOW_MANAGER:CreateControl(name, parent, CT_CONTROL)
     b:SetDimensions(width, height or 30); b:SetMouseEnabled(true)
     b:SetHandler("OnMouseWheel",function(c,delta) UI.ForwardWheel(c,delta) end)
     b.bg = UI.Solid(b, name .. "BG", C.panel)
+    -- Tiny grid switches keep a simple fill instead of four extra edge textures each.
+    if width>=60 then UI.Surface(b,b.bg,"button") end
     b.label = UI.Label(b, name .. "Label", caption, "ZoFontGameBold")
     b.label:SetAnchorFill(b); b.label:SetHorizontalAlignment(TEXT_ALIGN_CENTER)
-    b:SetHandler("OnMouseEnter", function() b.bg:SetColor(0.16,0.10,0.045,1) end)
-    b:SetHandler("OnMouseExit", function() UI.Color(b.bg,C.panel); UI.ClearTooltip() end)
+    b:SetHandler("OnMouseEnter", function() b.hovered=true;UI.SetButtonSelected(b,b.selected) end)
+    b:SetHandler("OnMouseExit", function() b.hovered=false;UI.SetButtonSelected(b,b.selected);UI.ClearTooltip() end)
     b:SetHandler("OnMouseUp", function(_, button, inside)
         if button == MOUSE_BUTTON_INDEX_LEFT and inside ~= false and action then action(b) end
     end)
@@ -108,9 +130,12 @@ function UI.Window(name, title, close)
     if AlphaSquadUI.Settings.ApplyWindowLayer then AlphaSquadUI.Settings.ApplyWindowLayer(win) end
     win:SetMouseEnabled(true); win:SetMovable(true)
     win.bg = UI.Solid(win, name .. "BG", C.bg)
-    local accent = WINDOW_MANAGER:CreateControl(name .. "Accent",win,CT_TEXTURE)
-    accent:SetAnchor(TOPLEFT,win,TOPLEFT,0,0); accent:SetAnchor(TOPRIGHT,win,TOPRIGHT,0,0)
-    accent:SetHeight(3); UI.Color(accent,C.orange)
+    UI.Surface(win,win.bg,"window")
+    if not Theme.RegisterSurface then
+        local accent = WINDOW_MANAGER:CreateControl(name .. "Accent",win,CT_TEXTURE)
+        accent:SetAnchor(TOPLEFT,win,TOPLEFT,0,0); accent:SetAnchor(TOPRIGHT,win,TOPRIGHT,0,0)
+        accent:SetHeight(2); UI.BindColor(accent,C.accent or C.orange)
+    end
     win.title=UI.Label(win,name .. "Title",title,"ZoFontWinH2",C.orange)
     win.title:SetAnchor(TOPLEFT,win,TOPLEFT,18,12); win.title:SetHeight(32)
     win.title:SetAnchor(TOPRIGHT,win,TOPRIGHT,-106,12)
@@ -179,11 +204,25 @@ function UI.Status(row)
     return "MISSING",C.red
 end
 
+SC.layoutName="Support Coverage"
+SC.layoutBounds={minWidth=300,minHeight=210,maxWidth=1000,maxHeight=900}
+function SC:GetHUDDimensions()
+    local width=self.Clamp(self.sv and self.sv.width or 410,300,680)
+    local height=398
+    local layout=AlphaSquadUI.Layout
+    if layout and layout.GetDimensions then width,height=layout.GetDimensions(self,width,height) end
+    return self.Clamp(width,300,1000),self.Clamp(height,210,900)
+end
 function SC:GetEffectiveScale()
+    local layout=AlphaSquadUI.Layout
+    if layout and layout.GetScale then return layout.GetScale(self) end
     local scale=self.Clamp(self.sv.scale or 100,60,180)/100
-    local width=self.Clamp(self.sv.width or 410,300,680)
-    local height=154+8*self.Clamp(self.sv.rowHeight or 30,24,48)
+    local width,height=self:GetHUDDimensions()
     return math.min(scale,(GuiRoot:GetWidth()-24)/width,(GuiRoot:GetHeight()-24)/height)
+end
+function SC:ApplyLayout()
+    if not self.window or not self.sv then return end
+    self:ApplyAppearance();self:RefreshHUD();self:ClampToScreen(true)
 end
 function SC:ApplyPosition()
     if not self.window or not self.sv then return end
@@ -209,9 +248,17 @@ function SC:UpdateLockState()
 end
 function SC:ApplyAppearance()
     if not self.window or not self.sv then return end
-    self.window:SetWidth(self.Clamp(self.sv.width or 410,300,680))
+    local width,height=self:GetHUDDimensions()
+    self.window:SetDimensions(width,height)
     self.window:SetScale(self:GetEffectiveScale())
     self.window.bg:SetAlpha(self.Clamp(self.sv.opacity or 94,30,100)/100)
+    if self.window.actions then
+        local actionWidth=(width-28)/2
+        for index,button in ipairs(self.window.actions) do
+            button:ClearAnchors();button:SetAnchor(TOPLEFT,self.window,TOPLEFT,12+(index-1)*(actionWidth+4),91)
+            button:SetWidth(actionWidth)
+        end
+    end
     self:UpdateLockState()
 end
 function SC:ApplyVisibility()
@@ -244,20 +291,24 @@ function SC:RefreshHUD()
     self:ApplyVisibility(); if self.window:IsHidden() then return end
     local win,coverage=self.window,self.coverage or {}
     local rows=self:GetHUDIssues(); local rowHeight=self.Clamp(self.sv.rowHeight or 30,24,48)
-    local width=self.Clamp(self.sv.width or 410,300,680)
-    win:SetHeight(158+math.max(1,math.min(8,#rows))*rowHeight)
+    local width,height=self:GetHUDDimensions()
+    win:SetDimensions(width,height)
     win.status:SetText(string.format("%d / %d covered",coverage.coveredCount or 0,coverage.requiredCount or 0))
     UI.Color(win.status,coverage.ready and C.green or C.gold)
     win.summary:SetText((coverage.profileLabel or "Group preparation") .. "  •  " .. tostring(#(self.roster or {})) .. " players")
-    win.note:SetText(#rows==0 and "No preparation issues to display." or "Scroll to review • open Coverage for sources and switches")
+    win.note:SetText(#rows==0 and "No preparation issues to display." or #rows*rowHeight>height-158 and "Scroll for more • Coverage has every source" or "Hover for details • open Coverage for sources")
     for index,data in ipairs(rows) do
         local row=win.list.rows[index]
         if not row then
             local name="AlphaSquadSupportHUDRow" .. index
             row=WINDOW_MANAGER:CreateControl(name,win.list.content,CT_CONTROL)
-            row.bg=UI.Solid(row,name .. "BG",C.panel)
+            row.bg=UI.Solid(row,name .. "BG",C.surface or C.panel)
+            row.icon=WINDOW_MANAGER:CreateControl(name.."Icon",row,CT_TEXTURE)
+            row.icon:SetAnchor(TOPLEFT,row,TOPLEFT,6,3);row.icon:SetDimensions(22,22)
+            row.divider=UI.Separator(row,name.."Divider",0,0,1)
             row.name=UI.Label(row,name .. "Name","","ZoFontGameSmall")
-            row.name:SetAnchor(TOPLEFT,row,TOPLEFT,8,0)
+            row.name:SetAnchor(TOPLEFT,row,TOPLEFT,34,0)
+            if row.name.SetWrapMode then row.name:SetWrapMode(TEXT_WRAP_MODE_ELLIPSIS) end
             row.value=UI.Label(row,name .. "Value","","ZoFontGameSmall")
             row.value:SetAnchor(TOPRIGHT,row,TOPRIGHT,-6,0); row.value:SetHorizontalAlignment(TEXT_ALIGN_RIGHT)
             UI.Hover(row,function()
@@ -273,7 +324,13 @@ function SC:RefreshHUD()
         row.data=data; row:SetHidden(false); row:ClearAnchors()
         row:SetAnchor(TOPLEFT,win.list.content,TOPLEFT,0,(index-1)*rowHeight)
         row:SetDimensions(width-42,rowHeight-2)
-        row.name:SetDimensions(width-166,rowHeight-2); row.value:SetDimensions(112,rowHeight-2)
+        row.name:SetDimensions(width-198,rowHeight-2); row.value:SetDimensions(112,rowHeight-2)
+        local iconSize=math.min(22,rowHeight-6)
+        row.icon:ClearAnchors();row.icon:SetAnchor(TOPLEFT,row,TOPLEFT,6,2);row.icon:SetDimensions(iconSize,iconSize)
+        row.divider:ClearAnchors();row.divider:SetAnchor(BOTTOMLEFT,row,BOTTOMLEFT,0,0);row.divider:SetWidth(width-42)
+        local visual=self.Catalog and self.Catalog.GetEffectVisual and self.Catalog:GetEffectVisual(data.key)
+        local icon=visual and visual.icon
+        row.icon:SetTexture(icon or "");row.icon:SetHidden(type(icon)~="string" or icon=="")
         row.name:SetText(UI.Text(data.effect.label))
         local status,color=UI.Status(data)
         if #(data.duplicatePlayers or {})>1 then status="DUPLICATE " .. #data.duplicatePlayers; color=C.gold end
@@ -295,6 +352,7 @@ function SC:CreateHUD()
     win:SetDrawLayer(DL_OVERLAY); win:SetDrawLevel(60); win:SetMouseEnabled(true)
     if AlphaSquadUI.Settings.ApplyWindowLayer then AlphaSquadUI.Settings.ApplyWindowLayer(win,true) end
     win.bg=UI.Solid(win,"AlphaSquadSupportHUDBG",C.bg)
+    UI.Surface(win,win.bg,"window")
     win.title=UI.Label(win,"AlphaSquadSupportHUDTitle",(AlphaSquadUI.Theme.Brand and AlphaSquadUI.Theme.Brand() or "Ąlpha Şquad UI"),"ZoFontGameBold",C.orange)
     win.title:SetAnchor(TOPLEFT,win,TOPLEFT,12,8); win.title:SetDimensions(240,24)
     win.status=UI.Label(win,"AlphaSquadSupportHUDStatus","","ZoFontGameBold")
@@ -308,13 +366,24 @@ function SC:CreateHUD()
     local close=UI.Button(win,"AlphaSquadSupportHUDClose","×",28,24,function() SC:SetVisible(false) end)
     close:SetAnchor(TOPRIGHT,win,TOPRIGHT,-8,8)
     local actions={{"Coverage",function() SC:OpenMatrix() end},{"Builds",function() SC:OpenInspector("BUILD") end}}
+    win.actions={}
     for index,data in ipairs(actions) do
         local b=UI.Button(win,"AlphaSquadSupportHUDAction" .. index,data[1],88,28,data[2])
-        b:SetAnchor(TOPLEFT,win,TOPLEFT,12+(index-1)*92,91)
+        b:SetAnchor(TOPLEFT,win,TOPLEFT,12+(index-1)*92,91);win.actions[index]=b
     end
     win.list=UI.Scroll(win,"AlphaSquadSupportHUDList")
     win.list:SetAnchor(TOPLEFT,win,TOPLEFT,12,126); win.list:SetAnchor(BOTTOMRIGHT,win,BOTTOMRIGHT,-8,-30)
     win.note=UI.Label(win,"AlphaSquadSupportHUDNote","","ZoFontGameSmall",C.muted)
     win.note:SetAnchor(BOTTOMLEFT,win,BOTTOMLEFT,12,-5); win.note:SetAnchor(BOTTOMRIGHT,win,BOTTOMRIGHT,-12,-5); win.note:SetHeight(22)
+    if AlphaSquadUI.Layout and AlphaSquadUI.Layout.Attach then AlphaSquadUI.Layout.Attach(self) end
     self:ApplyPosition(); self:ApplyAppearance(); self:RefreshHUD()
 end
+
+
+-- Repaint only cached visible presentation. Theme changes never scan or request builds.
+if Theme.OnChanged then Theme.OnChanged(function()
+    UI.ClearTooltip()
+    if SC.window and not SC.window:IsHidden() then SC:RefreshHUD() end
+    if SC.RefreshMatrix then SC:RefreshMatrix() end
+    if SC.RefreshInspector then SC:RefreshInspector() end
+end) end

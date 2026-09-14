@@ -22,11 +22,17 @@ local BASE_WINDOW_W = 312
 local BASE_ROW_H = 36
 local HEADER_H = 16
 local GAP = 1
+Group.layoutName="Group Ultimates"
+Group.layoutBounds={minWidth=240,minHeight=60,maxWidth=960,maxHeight=1080}
 
 local READY_ORANGE = {1.00, 0.46, 0.05, 1.00}
 local READY_GOLD = {1.00, 0.82, 0.18, 1.00}
 local READY_WHITE = {1.00, 0.98, 0.88, 1.00}
 
+local function Palette(role,fallback)
+    local theme=AlphaSquadUI.Theme
+    return theme and theme.colors and theme.colors[role] or COLORS[role] or fallback or COLORS.bg
+end
 local function SetColor(control, color, alpha)
     if not control or not color then return end
     control:SetColor(color[1], color[2], color[3], alpha or color[4] or 1)
@@ -36,6 +42,7 @@ local function Solid(parent, name, color)
     local texture = WINDOW_MANAGER:CreateControl(name, parent, CT_TEXTURE)
     texture:SetAnchorFill(parent)
     SetColor(texture, color)
+    if AlphaSquadUI.Theme and AlphaSquadUI.Theme.BindColor then AlphaSquadUI.Theme.BindColor(texture,color) end
     return texture
 end
 
@@ -44,16 +51,24 @@ local function Label(parent, name, font, text, color)
     label:SetFont(font)
     label:SetText(text or "")
     SetColor(label, color or COLORS.white)
+    if AlphaSquadUI.Theme and AlphaSquadUI.Theme.BindColor then AlphaSquadUI.Theme.BindColor(label,color or COLORS.white) end
     label:SetVerticalAlignment(TEXT_ALIGN_CENTER)
     return label
 end
 
-function Group:GetListWidth()
-    return ULT.Clamp(self.sv and self.sv.hudWidth or BASE_WINDOW_W, 240, 520)
+function Group:GetHUDDimensions(count)
+    local rows=math.max(1,math.min(12,count or self.layoutEntryCount or 0))
+    local naturalRow=ULT.Clamp(self.sv and self.sv.rowHeight or BASE_ROW_H,28,56)
+    local naturalHeight=math.max(70,HEADER_H+8+rows*naturalRow+(rows-1)*GAP)
+    self.layoutBounds.minHeight=math.max(70,HEADER_H+8+rows*28+(rows-1)*GAP)
+    local layout=AlphaSquadUI.Layout
+    if layout and layout.GetDimensions then return layout.GetDimensions(self,BASE_WINDOW_W,naturalHeight) end
+    return ULT.Clamp(self.sv and self.sv.hudWidth or BASE_WINDOW_W,240,960),
+        ULT.Clamp(self.sv and self.sv.hudHeight or naturalHeight,self.layoutBounds.minHeight,1080)
 end
-
+function Group:GetListWidth() return (self:GetHUDDimensions()) end
 function Group:GetRowHeight()
-    return ULT.Clamp(self.sv and self.sv.rowHeight or BASE_ROW_H, 28, 56)
+    return self.layoutRowHeight or ULT.Clamp(self.sv and self.sv.rowHeight or BASE_ROW_H,28,56)
 end
 
 function Group:GetIconSize()
@@ -72,7 +87,8 @@ local function CreateRow(parent, index)
     local row = WINDOW_MANAGER:CreateControl("AlphaSquadULTGroupListRow" .. index, parent, CT_CONTROL)
     row:SetDimensions(BASE_WINDOW_W - 12, BASE_ROW_H)
 
-    row.bg = Solid(row, "AlphaSquadULTGroupListRow" .. index .. "BG", {0.016, 0.024, 0.042, 0.92})
+    row.bg = Solid(row, "AlphaSquadULTGroupListRow" .. index .. "BG", Palette("surface"))
+    if AlphaSquadUI.Theme and AlphaSquadUI.Theme.RegisterSurface then AlphaSquadUI.Theme.RegisterSurface(row,row.bg,"tile") end
 
     row.readyOverlay = WINDOW_MANAGER:CreateControl("AlphaSquadULTGroupListRow" .. index .. "ReadyOverlay", row, CT_TEXTURE)
     row.readyOverlay:SetAnchorFill(row)
@@ -165,6 +181,7 @@ function Group:ApplyListGeometry()
     local width = self:GetListWidth()
     self.window:SetWidth(width)
 
+    if self.window.title then self.window.title:SetWidth(math.max(100,width-66)) end
     if self.window.dragSurface then
         self.window.dragSurface:SetWidth(width)
     end
@@ -185,6 +202,7 @@ function Group:GetDefaultPosition()
 end
 
 function Group:GetEffectiveScale()
+    if AlphaSquadUI.Layout and AlphaSquadUI.Layout.GetScale then return AlphaSquadUI.Layout.GetScale(self) end
     if not self.window or not self.sv or not GuiRoot then
         return (self.sv and self.sv.scale or 100) / 100
     end
@@ -195,8 +213,8 @@ function Group:GetEffectiveScale()
     local baseW = self.window:GetWidth() or self:GetListWidth()
     local baseH = self.window:GetHeight() or 100
 
-    local fitX = math.max(0.50, (rootW - 20) / math.max(1, baseW))
-    local fitY = math.max(0.50, (rootH - 20) / math.max(1, baseH))
+    local fitX = math.max(0.001, (rootW - 20) / math.max(1, baseW))
+    local fitY = math.max(0.001, (rootH - 20) / math.max(1, baseH))
     return math.min(requested, fitX, fitY)
 end
 
@@ -268,6 +286,7 @@ function Group:ResetSize()
 
     self.sv.scale = 100
     self.sv.hudWidth = BASE_WINDOW_W
+    self.sv.hudHeight = nil
     self.sv.rowHeight = BASE_ROW_H
 
     self:ApplyListGeometry()
@@ -383,14 +402,14 @@ function Group:RefreshRow(row, entry)
         SetColor(row.iconBorder, COLORS.muted, 0.18)
         SetColor(row.percent, COLORS.muted, 0.60)
         SetColor(row.progress, COLORS.muted, 0.25)
-        row.bg:SetColor(0.010, 0.014, 0.022, 0.30)
+        SetColor(row.bg,Palette("surface"),0.30)
     elseif row.recentlyUsed then
         row:SetAlpha(0.20)
         SetColor(row.accent, COLORS.muted, 0.16)
         SetColor(row.iconBorder, COLORS.muted, 0.18)
         SetColor(row.percent, COLORS.muted, 0.45)
         SetColor(row.progress, COLORS.muted, 0.25)
-        row.bg:SetColor(0.010, 0.014, 0.022, 0.30)
+        SetColor(row.bg,Palette("surface"),0.30)
     elseif row.ready then
         row:SetAlpha(1)
         SetColor(row.accent, READY_ORANGE, 1)
@@ -404,7 +423,7 @@ function Group:RefreshRow(row, entry)
         SetColor(row.iconBorder, COLORS.cyan, 0.40)
         SetColor(row.percent, COLORS.white, 0.82)
         SetColor(row.progress, COLORS.cyan, 0.72)
-        row.bg:SetColor(0.016, 0.024, 0.042, 0.72)
+        SetColor(row.bg,Palette("surface"),0.72)
     end
 
     return row.ready
@@ -465,15 +484,15 @@ end
 function Group:RefreshHUD()
     if not self.window or not self.sv then return end
 
+    local entries=self:GetTrackedEntries()
+    local count=math.min(12,#entries)
+    self.layoutEntryCount=count
+    local visibleRows=math.max(1,count)
+    local width,height=self:GetHUDDimensions(count)
+    self.layoutRowHeight=math.max(28,(height-HEADER_H-8-(visibleRows-1)*GAP)/visibleRows)
+    local rowHeight=self:GetRowHeight()
+    self.window:SetDimensions(width,height)
     self:ApplyListGeometry()
-
-    local entries = self:GetTrackedEntries()
-    local count = #entries
-    local rowHeight = self:GetRowHeight()
-    local visibleRows = math.max(1, count)
-    local height = HEADER_H + 4 + (visibleRows * rowHeight) + ((visibleRows - 1) * GAP) + 4
-
-    self.window:SetDimensions(self:GetListWidth(), height)
 
     for index, row in ipairs(self.window.rows) do
         local entry = entries[index]
@@ -496,13 +515,15 @@ function Group:RefreshHUD()
     self:ApplyVisibility()
 end
 
+function Group:ApplyLayout() self:RefreshHUD() end
+
 function Group:ApplyConfigWindowScale()
     if not self.configWindow or not GuiRoot then return end
 
     local rootW = GuiRoot:GetWidth() or 1920
     local rootH = GuiRoot:GetHeight() or 1080
-    local fitX = math.max(0.65, (rootW - 30) / 780)
-    local fitY = math.max(0.65, (rootH - 30) / 720)
+    local fitX = math.max(0.001, (rootW - 30) / 780)
+    local fitY = math.max(0.001, (rootH - 30) / 630)
 
     self.configWindow:SetScale(math.min(1, fitX, fitY))
 end
@@ -527,6 +548,15 @@ function Group:CreateHUD()
     top:SetAnchor(TOPRIGHT, win, TOPRIGHT, 0, 0)
     top:SetHeight(2)
     SetColor(top, COLORS.orange, 0.55)
+
+    win.title=Label(win,"AlphaSquadULTGroupTitle","ZoFontGameSmall","GROUP ULTIMATES",COLORS.orange)
+    win.title:SetDimensions(200,HEADER_H)
+    win.title:SetAnchor(TOPLEFT,win,TOPLEFT,8,0)
+    if AlphaSquadUI.Theme then
+        AlphaSquadUI.Theme.BindColor(top,"accent",0.55)
+        AlphaSquadUI.Theme.BindColor(win.title,"accent")
+        AlphaSquadUI.Theme.RegisterSurface(win,win.bg,"window")
+    end
 
     win.dragHint = Label(win, "AlphaSquadULTGroupDragHint", "ZoFontGameSmall", "DRAG", COLORS.gold)
     win.dragHint:SetDimensions(42, HEADER_H)
@@ -569,4 +599,13 @@ function Group:CreateHUD()
     self:ApplyAppearance()
     self:UpdateLockState()
     self:ApplyVisibility()
+    if AlphaSquadUI.Layout and AlphaSquadUI.Layout.Attach then AlphaSquadUI.Layout.Attach(self) end
+end
+
+-- A theme change repaints cached rows only; no roster rebuild or network request.
+if AlphaSquadUI.Theme and AlphaSquadUI.Theme.OnChanged then
+    AlphaSquadUI.Theme.OnChanged(function()
+        Group:RefreshHUD()
+        if Group.RefreshConfig then Group:RefreshConfig() end
+    end)
 end
