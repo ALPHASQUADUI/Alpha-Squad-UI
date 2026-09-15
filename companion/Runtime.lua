@@ -5,16 +5,19 @@ local EM=EVENT_MANAGER
 local addon="AlphaSquadBuildShare"
 local heartbeat=addon.."Heartbeat"
 local generation=0
+local Sharing=AlphaSquadBuildShare.Host.Sharing
+local function CanShare() return SC:GetSharingStatus()=="SHARING" end
 -- A sender has no remote roster. Ignore summaries/responses and retain no peer
 -- builds; only addressed requests and acknowledgments are relevant here.
 SC.OnPeerShareData=function() end
 local receiveDetails=SC.OnDetailData
 function SC:OnDetailData(tag,data)
-    if type(data)=="table" and (data.kind==0 or data.kind==3) then return receiveDetails(self,tag,data) end
+    if type(data)=="table" and (data.kind==0 or data.kind==3) and SC.sv and SC.sv.enabled
+        and not SC.inCombat and not SC.loading and SC:IsGrouped() and CanShare() then return receiveDetails(self,tag,data) end
 end
 local function Print(text) if d then d("Ąlpha Şquad Build Share: "..text) end end
 local function Refresh()
-    if not SC.sv or not SC.sv.enabled or not SC:IsGrouped() or SC.inCombat or SC.loading then return end
+    if not SC.sv or not SC.sv.enabled or SC.inCombat or SC.loading or not SC:IsGrouped() or not CanShare() then return end
     if SC.scanDirty or not SC.localSnapshot then
         SC.localSnapshot=SC:ScanLocalPlayer()
         SC.scanDirty=false
@@ -23,7 +26,7 @@ local function Refresh()
 end
 local function ScheduleCapture(buildChanged)
     if buildChanged==true then SC.scanDirty=true end
-    if not SC.sv or not SC.sv.enabled or not SC:IsGrouped() or SC.inCombat or SC.loading or SC.capturePending then return end
+    if not SC.sv or not SC.sv.enabled or SC.inCombat or SC.loading or SC.capturePending or not SC:IsGrouped() or not CanShare() then return end
     SC.capturePending=true
     local token=generation
     zo_callLater(function()
@@ -34,7 +37,7 @@ local function ScheduleCapture(buildChanged)
 end
 local function UpdateHeartbeat()
     EM:UnregisterForUpdate(heartbeat)
-    if SC.sv and SC.sv.enabled and SC:IsGrouped() and not SC.inCombat and not SC.loading then
+    if SC.sv and SC.sv.enabled and not SC.inCombat and not SC.loading and SC:IsGrouped() and CanShare() then
         EM:RegisterForUpdate(heartbeat,60000,Refresh)
     end
 end
@@ -47,8 +50,18 @@ local function SetEnabled(value)
     SC.sv.enabled=value==true
     SC.sv.experimentalSharing=value==true
     SC.sv.shareData=value==true
+    local accepted=Sharing.SetEnabled("builds",value==true)
+    SC.sv.nativeSharingInitialized=true
+    SC.sv.nativeSharingPending=not accepted and (value==true) or nil
+    if not accepted and not value then SC.sv.nativeSharingPending=false end
     Reset()
-    if value then SC:InitializeSharing();ScheduleCapture(true) end
+    if value then ScheduleCapture(true) end
+    return accepted
+end
+local function InitializeSharing()
+    SC:InitializeSharing()
+    if not SC.sv.nativeSharingInitialized then SetEnabled(SC.sv.enabled)
+    elseif type(SC.sv.nativeSharingPending)=="boolean" then SetEnabled(SC.sv.nativeSharingPending) end
 end
 local function Register(event,callback)
     if event then EM:RegisterForEvent(addon,event,callback) end
@@ -68,8 +81,15 @@ local function Loaded(_,name)
         local command=tostring(text or ""):lower():match("^%s*(.-)%s*$")
         if command=="on" then
             SetEnabled(true)
-            Print("Sharing ON. Current group members using compatible sharing can request your equipped items, both skill bars, Champion stars, food, potion, class choices and Werewolf or Vampire status. Protocol IDs are provisional; incompatible registration disables sharing.")
-        elseif command=="off" then SetEnabled(false);Print("Sharing OFF.")
+            local state,reason=SC:GetSharingStatus()
+            if state=="SHARING" then
+                Print("Sharing ON. Current group members using compatible sharing can request your equipped items, both skill bars, Champion stars, food, potion, class choices and Werewolf or Vampire status. Protocol IDs are provisional; incompatible registration disables sharing.")
+            else Print("Sharing unavailable — "..tostring(reason or "Update LibGroupBroadcast and reload the UI")..".") end
+        elseif command=="off" then
+            local accepted=SetEnabled(false)
+            if accepted then Print("Sharing OFF.")
+            elseif SC.share.queueRevokeNeedsGroup then Print("Sharing OFF. Queued data stays blocked until it can be cleared in a group or by reloading the UI.")
+            else Print("Sharing OFF locally. Native queue controls are unavailable; update LibGroupBroadcast and reload the UI.") end
         elseif command=="status" or command=="" then
             local state,reason=SC:GetSharingStatus()
             Print(state..(reason and " — "..reason or "")..". Commands: /asbuildshare on, /asbuildshare off, /asbuildshare status")
@@ -78,7 +98,7 @@ local function Loaded(_,name)
     Register(EVENT_PLAYER_ACTIVATED,function()
         SC.loading=false
         SC.inCombat=IsUnitInCombat("player")==true
-        Reset();SC:InitializeSharing();ScheduleCapture(true)
+        InitializeSharing();Reset();ScheduleCapture(true)
     end)
     Register(EVENT_PLAYER_DEACTIVATED,function()
         SC.loading=true
@@ -91,6 +111,7 @@ local function Loaded(_,name)
         if not SC.inCombat then ScheduleCapture() end
     end)
     local function GroupChanged()
+        if SC:IsGrouped() and type(SC.sv.nativeSharingPending)=="boolean" then InitializeSharing() end
         if not SC:IsGrouped() then Reset()
         elseif SC.PrunePeerSharingData then SC:PrunePeerSharingData() end
         UpdateHeartbeat();ScheduleCapture()
@@ -116,6 +137,6 @@ local function Loaded(_,name)
     if EVENT_EFFECT_CHANGED and REGISTER_FILTER_UNIT_TAG then
         EM:AddFilterForEvent(addon,EVENT_EFFECT_CHANGED,REGISTER_FILTER_UNIT_TAG,"player")
     end
-    SC:InitializeSharing();UpdateHeartbeat();ScheduleCapture()
+    InitializeSharing();UpdateHeartbeat();ScheduleCapture()
 end
 EM:RegisterForEvent(addon,EVENT_ADD_ON_LOADED,Loaded)

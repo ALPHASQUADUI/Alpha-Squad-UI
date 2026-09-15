@@ -2,7 +2,7 @@
 
 A modular **The Elder Scrolls Online** addon by **@SeRuM1** for group preparation, visual build inspection and Ultimate tracking.
 
-[Website](https://alphasquadeso.com/) · [Releases](https://github.com/ALPHASQUADUI/Alpha-Squad-UI/releases) · [Changelog](CHANGELOG.md) · [Downloads and installation](releases/README.md)
+[Website](https://alphasquadeso.com/) · [Releases](https://github.com/ALPHASQUADUI/Alpha-Squad-UI/releases) · [Changelog](CHANGELOG.md) · [Downloads and installation](releases/README.md) · [Security](SECURITY.md)
 
 ## Get started
 
@@ -10,7 +10,7 @@ A modular **The Elder Scrolls Online** addon by **@SeRuM1** for group preparatio
 2. Open **Settings → Ąlpha Şquad UI** in keyboard or gamepad mode, or use `/asui`.
 3. In **Dashboard**, choose **ULT Tracker** and **Support Coverage**, then pick an **Interface Style**. Tracking starts enabled; you can switch either module off.
 4. Open **Libraries** to check dependencies and sharing. New installations configure supported sharing **ON** automatically; saved OFF choices are preserved.
-5. Use **MOVE HUD** to choose horizontal/vertical layouts, preview realistic states and arrange your panels. Drag corners to scale, edges to reshape, then choose **DONE** or Back/Escape to return to your settings.
+5. Use **MOVE HUD** to arrange your panels. Drag to move, drag a corner to resize, then choose **DONE**. Horizontal/vertical layouts and example states help you place panels while solo.
 6. Open **Support Coverage → Builds** or **Coverage** to prepare your group.
 
 Use [Minion](https://minion.mmoui.com/) to install and update published ESO addons and libraries. Install the full suite or the lightweight Build Share companion according to the features you need; do not nest either folder inside another addon directory.
@@ -20,6 +20,8 @@ Use [Minion](https://minion.mmoui.com/) to install and update published ESO addo
 **ULT Tracker** and **Support Coverage** have independent module switches. Overload is optional behavior inside the personal Ultimate tracker, with its own settings page and **Use Overload behavior** switch. Turning ULT Tracker off also stops its Overload behavior. **Libraries stays accessible**, and its sharing choices are independent of module switches.
 
 **Cross-sync ON** saves module preferences and HUD positions across characters on the same account and server. **OFF** gives the current character its own settings. Switching keeps the current layout, requires no reload, and preserves the existing SavedVariables namespaces. Sharing choices remain account-wide.
+
+Settings adapt their cards and navigation to the available screen width while preserving text size. Very small viewports use readable scrolling where needed. Group Ultimate rows retain the size chosen in the twelve-player preview; fewer players reduce the panel's occupied space without enlarging the remaining rows.
 
 ## Choose your style
 
@@ -35,14 +37,14 @@ Styles change immediately without a reload. Readiness colors, item quality and C
 
 ## Arrange your HUD
 
-Click **MOVE HUD** in the settings sidebar or enter `/asmove` outside combat. The editor waits for the native Settings menu to close before opening over the normal game view, including the action bar. Its pending transition cannot start a second editor. Select the personal Ultimate, Group Ultimate or Support Coverage panel, then:
+Click **MOVE HUD** in the settings sidebar or enter `/asmove` outside combat. It opens over the normal game view, including the action bar. Select the panel you want to arrange, then:
 
 - Drag the panel to move it.
 - Drag a **corner** to scale the whole panel proportionally.
 - Drag an **edge** to change its shape; the contents rearrange and icons stay square.
 - Select **HORIZONTAL** or **VERTICAL** for personal and Group Ultimate panels. Resizing preserves this choice; it never switches layout unexpectedly at a width threshold.
-- Use **PREVIEW** to choose mixed, ready, missing/charging, Overload or live states. Group previews contain twelve fictional accounts, so every row can be arranged while solo. Support previews show covered, missing, unknown, duplicate and tracking-off examples.
-- Use **SCALE**, **OPACITY**, **RESET PANEL** and **FIT** in the placement toolbar for the selected panel. Opacity changes the background without fading icons or text.
+- Keep the example states while arranging panels, or choose **Live** to see your current group. Group examples contain twelve fictional accounts; they never affect tracking or sharing.
+- **Size** changes the whole panel. **Background** changes its opacity without fading icons or text. **Reset panel** and **Fit** recover a misplaced panel.
 
 **DONE** or Back/Escape saves and locks the panels, then returns to the addon window you came from. Combat, loading or another game menu ends placement without reopening settings. The normal HUD/cursor-mode transition keeps placement active.
 
@@ -52,7 +54,7 @@ Examples exist only in the editor's presentation. They are never sent, stored as
 
 ## Keyboard and controller
 
-The gamepad Settings menu includes **Ąlpha Şquad UI**. **Open Alpha Squad UI** and **Move Alpha Squad UI HUD** can also be assigned in Controls without replacing gameplay bindings.
+The gamepad Settings menu includes **Ąlpha Şquad UI**. **Open Alpha Squad UI** and **Move Alpha Squad UI HUD** can also be assigned in Controls without replacing gameplay bindings. Opening from gameplay provides the mouse cursor immediately; closing restores the prior input state.
 
 Use arrows or the controller directional input to navigate, Select to activate, and Back to return from a secondary window. The X/CLOSE controls in Group configuration, Coverage and Builds follow the same return path; they restore the previous addon window instead of leaving a blank settings screen. Tab/Shift+Tab cycle keyboard focus. Left/right change a focused dropdown or slider. Focus displays the same explanations as mouse hover, including equipment and Champion details, and scrolls overflowing lists into view.
 
@@ -78,7 +80,7 @@ Tooltips appear above addon windows. For a shared skill, stat-dependent preview 
 
 Choose **Trial** or **Dungeon**, then review **Buffs**, **Debuffs**, **Group Sets** and **Group Mythics** on one page. Larger categories use multiple compact columns, with no scrolling or pagination. Each effect has native artwork, an ON/OFF switch, a status color and a contributor count. When an effect has no verified dedicated image, a native category symbol keeps the tile visible and its tooltip explains the fallback. **All**, **Missing** and **Duplicates** filter the page.
 
-Hover an effect name for its full description, sources and conditions. Hover its contributor count for **every known provider**, their exact reported source names and bar availability. A duplicate shows **×** beside the count. Clicking the count opens the named contributor's build; select any other group member from the Builds roster. Green means covered, red missing, gold unknown or duplicate, and grey optional.
+Hover an effect name for its full description, sources and conditions. Hover its contributor count for **every known provider**, their exact reported source names and bar availability. A duplicate shows **×** beside the count. Click the count to inspect a provider; when several players contribute, choose the player first. Green means covered, red missing, gold unknown or duplicate, and grey optional.
 
 Coverage means a qualifying build source is available before combat. Range, target caps, casts and proc conditions still apply. The addon does not claim that an effect is currently active, and it does not collect pull reports or uptime history. Food and potion checks are integrated into Builds.
 
@@ -118,7 +120,7 @@ ESOUI, website and Minion links use ESO's native confirmation dialog, which appe
 | Alpha Squad UI with sharing enabled | Supported equipment, skills, Champion allocation, masteries and readiness snapshot |
 | **AlphaSquadBuildShare** companion | The same supported build format without installing the tracking UI suite |
 
-The companion needs LibGroupBroadcast. Use `/asbuildshare on`, `/asbuildshare off` and `/asbuildshare status`. It starts ON on a new installation, preserves an existing OFF setting and yields to the full suite when both are installed. Installing a transport library alone cannot expose another player's complete build.
+The companion needs LibGroupBroadcast and its dependencies. Use `/asbuildshare on`, `/asbuildshare off` and `/asbuildshare status`. It starts ON on a new installation, preserves an existing OFF setting and yields to the full suite when both are installed. Its status follows the actual native sending controls; unavailable controls explain the block. Installing a transport library alone cannot expose another player's complete build. The companion shares build snapshots; live group Ultimate charge requires a compatible LibGroupCombatStats sender.
 
 ## Ultimate tracking
 
@@ -154,4 +156,6 @@ Open **About** for the Alpha Squad website, ESOUI, release notes and the **JOIN 
 
 Shared snapshots are bounded reports from compatible senders, not proof against a modified client. Invalid or contradictory equipment data cannot certify a complete build, and unknown fields remain unknown. The addon never executes received code or automatically equips items, consumes potions or posts group messages.
 
-See the [3.2.0 video review](docs/VIDEO_REVIEW_3.2.0.md), [architecture](docs/ARCHITECTURE.md), [performance](docs/PERFORMANCE.md), [validation](docs/SUPPORT_COVERAGE_TESTING.md) and [contributing](CONTRIBUTING.md) for technical details. Screenshots and bug reports should omit private chats, unrelated account information and SavedVariables containing group data.
+See the [release notes](releases/3.3.0.md), [architecture](docs/ARCHITECTURE.md), [performance](docs/PERFORMANCE.md), [client acceptance](docs/CLIENT_ACCEPTANCE.md) and [contributing](CONTRIBUTING.md) for technical details. Screenshots and bug reports should omit private chats, unrelated account information and SavedVariables containing group data.
+
+The addon code is available under the [MIT license](LICENSE). ESO artwork and third-party libraries retain their respective ownership and licenses.

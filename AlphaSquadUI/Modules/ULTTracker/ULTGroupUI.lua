@@ -97,7 +97,7 @@ function Group:SetLayoutOrientation(orientation)
     local previous=self:GetLayoutOrientation()
     if previous==orientation then return false end
     if type(self.sv.hudLayouts)~="table" then self.sv.hudLayouts={} end
-    self.sv.hudLayouts[previous]={width=self.layoutWidth or self.sv.hudWidth,height=self.layoutHeight or self.sv.hudHeight}
+    self.sv.hudLayouts[previous]={width=self.layoutWidth or self.sv.hudWidth,height=self.layoutDesignHeight or self.sv.hudHeight}
     self.sv.hudOrientation=orientation
     local saved=self.sv.hudLayouts[orientation]
     self.sv.hudWidth=type(saved)=="table" and saved.width or nil
@@ -110,16 +110,46 @@ function Group:GetHUDDimensions(count)
     local horizontal=self:GetLayoutOrientation()=="horizontal"
     local columns=horizontal and 4 or 1
     local rows=math.ceil(visible/columns)
+    local capacityRows=math.ceil(12/columns)
     self.layoutColumns=columns
     local naturalRow=ULT.Clamp(self.sv and self.sv.rowHeight or BASE_ROW_H,28,56)
-    local naturalHeight=math.max(70,HEADER_H+8+rows*naturalRow+(rows-1)*GAP)
+    -- Saved height describes the full roster, not whichever players happen to
+    -- match the filter today. A smaller roster must never enlarge its rows.
+    local naturalHeight=HEADER_H+8+capacityRows*naturalRow+(capacityRows-1)*GAP
+    local minimumDesignHeight=HEADER_H+8+capacityRows*28+(capacityRows-1)*GAP
     self.layoutBounds.minWidth=horizontal and 856 or 240
     self.layoutBounds.minHeight=math.max(70,HEADER_H+8+rows*28+(rows-1)*GAP)
     local defaultWidth=horizontal and 1020 or BASE_WINDOW_W
     local layout=AlphaSquadUI.Layout
-    if layout and layout.GetDimensions then return layout.GetDimensions(self,defaultWidth,naturalHeight) end
-    return ULT.Clamp(self.sv and self.sv.hudWidth or defaultWidth,self.layoutBounds.minWidth,1800),
-        ULT.Clamp(self.sv and self.sv.hudHeight or naturalHeight,self.layoutBounds.minHeight,1200)
+    local width,designHeight
+    if layout and layout.GetDimensions then width,designHeight=layout.GetDimensions(self,defaultWidth,naturalHeight)
+    else
+        width=ULT.Clamp(self.sv and self.sv.hudWidth or defaultWidth,self.layoutBounds.minWidth,1800)
+        designHeight=ULT.Clamp(self.sv and self.sv.hudHeight or naturalHeight,minimumDesignHeight,1200)
+    end
+    designHeight=math.max(minimumDesignHeight,designHeight)
+    self.layoutDesignHeight=designHeight
+    self.layoutRowHeight=(designHeight-HEADER_H-8-(capacityRows-1)*GAP)/capacityRows
+    return width,math.max(70,HEADER_H+8+rows*self.layoutRowHeight+(rows-1)*GAP)
+end
+function Group:SetLayoutDimensions(width,height)
+    if not self.sv then return end
+    local columns=self:GetLayoutOrientation()=="horizontal" and 4 or 1
+    local rows=math.max(1,math.ceil(math.min(12,self.layoutEntryCount or 0)/columns))
+    local capacityRows=math.ceil(12/columns)
+    local rowHeight=math.max(28,(height-HEADER_H-8-(rows-1)*GAP)/rows)
+    self.sv.hudWidth=width
+    self.sv.hudHeight=math.min(1200,HEADER_H+8+capacityRows*rowHeight+(capacityRows-1)*GAP)
+end
+function Group:GetLayoutFitDimensions(width,height)
+    return width,self.layoutDesignHeight or height
+end
+function Group:GetLayoutResizeHeightLimit(availableHeight)
+    local columns=self:GetLayoutOrientation()=="horizontal" and 4 or 1
+    local rows=math.max(1,math.ceil(math.min(12,self.layoutEntryCount or 0)/columns))
+    local capacityRows=math.ceil(12/columns)
+    local rowHeight=math.max(28,(math.min(1200,availableHeight)-HEADER_H-8-(capacityRows-1)*GAP)/capacityRows)
+    return math.max(70,HEADER_H+8+rows*rowHeight+(rows-1)*GAP)
 end
 function Group:GetListWidth() return self.layoutWidth or (self:GetHUDDimensions()) end
 function Group:GetRowHeight()
@@ -264,7 +294,7 @@ function Group:GetDefaultPosition()
 end
 
 function Group:GetEffectiveScale()
-    if AlphaSquadUI.Layout and AlphaSquadUI.Layout.GetScale then return AlphaSquadUI.Layout.GetScale(self,self.layoutWidth,self.layoutHeight) end
+    if AlphaSquadUI.Layout and AlphaSquadUI.Layout.GetScale then return AlphaSquadUI.Layout.GetScale(self,self.layoutWidth,self.layoutDesignHeight or self.layoutHeight) end
     if not self.window or not self.sv or not GuiRoot then
         return (self.sv and self.sv.scale or 100) / 100
     end
@@ -554,16 +584,19 @@ function Group:RefreshHUD()
     local width,height=self:GetHUDDimensions(count)
     self.layoutWidth,self.layoutHeight=width,height
     local columns=self.layoutColumns or 1
-    local visibleRows=math.max(1,math.ceil(count/columns))
-    self.layoutRowHeight=math.max(28,(height-HEADER_H-8-(visibleRows-1)*GAP)/visibleRows)
     local rowHeight=self:GetRowHeight()
     local rowWidth=self:GetRowWidth()
-    self.window:SetDimensions(width,height)
-    self:ApplyListGeometry()
+    local geometryChanged=self.geometryWidth~=width or self.geometryHeight~=height
+        or self.geometryRowHeight~=rowHeight or self.geometryColumns~=columns
+    if geometryChanged then
+        self.geometryWidth,self.geometryHeight,self.geometryRowHeight,self.geometryColumns=width,height,rowHeight,columns
+        self.window:SetDimensions(width,height)
+        self:ApplyListGeometry()
+    end
     if self.window.title then self.window.title:SetText(PreviewMode(self)~="live" and "GROUP ULT • 12 EXAMPLES" or "GROUP ULTIMATES") end
     for index, row in ipairs(self.window.rows) do
         local entry = entries[index]
-        if entry then
+        if geometryChanged then
             local column=(index-1)%columns
             local line=math.floor((index-1)/columns)
             row:ClearAnchors()
@@ -577,7 +610,12 @@ function Group:RefreshHUD()
         self.window.empty:SetText(self:GetEmptyMessage())
     end
 
-    self:ApplyAppearance()
+    local scale=self:GetEffectiveScale()
+    local opacity=self.sv.opacity or 92
+    if geometryChanged or self.window:GetScale()~=scale or self.appliedOpacity~=opacity then
+        self.appliedOpacity=opacity
+        self:ApplyAppearance()
+    end
     self:UpdateLockState()
     self:ApplyVisibility()
 end

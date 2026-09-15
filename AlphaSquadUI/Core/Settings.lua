@@ -44,8 +44,11 @@ local function NavigationBlocked()
 end
 
 local function RestoreCursor()
-    -- Closing the placement toolbar can release ESO's last native top-level.
-    -- Restore mouse access only in gameplay; native options keep their scene.
+    -- Every deliberate open needs mouse access, including the first keybind
+    -- from gameplay. Native menus and dialogs keep their own cursor lifecycle.
+    if NavigationBlocked() then return end
+    if (ZO_Dialogs_IsShowingDialog and ZO_Dialogs_IsShowingDialog())
+        or (ZO_GenericGamepadDialog_IsShowing and ZO_GenericGamepadDialog_IsShowing()) then return end
     local manager = SCENE_MANAGER
     local scene = manager and manager.GetCurrentScene and manager:GetCurrentScene()
     local name = scene and scene.GetName and scene:GetName()
@@ -129,6 +132,7 @@ function Settings.ShowExclusiveWindow(id)
         end
     end
     target.control:SetHidden(false)
+    RestoreCursor()
     Settings.RefreshModuleVisibility()
     return true
 end
@@ -157,9 +161,7 @@ function Settings.RestoreReturnTarget(target)
     target = type(target) == "table" and target or {}
     local id = Settings.exclusiveWindows[target.id] and target.id or "settings"
     if id == "settings" then
-        local opened = Settings.OpenPage(target.page or "dashboard")
-        if opened then RestoreCursor() end
-        return opened
+        return Settings.OpenPage(target.page or "dashboard")
     end
     if not Settings.ShowExclusiveWindow(id) then return false end
     Settings.windowHistory = CopyHistory(target.history)
@@ -169,7 +171,6 @@ function Settings.RestoreReturnTarget(target)
     end
     local restore = Settings.exclusiveWindows[id].restore
     if type(restore) == "function" then restore() end
-    RestoreCursor()
     return true
 end
 
@@ -282,7 +283,7 @@ function Settings.OpenPage(id)
         Settings.showPageCallback(id)
     end
     if Settings.exclusiveWindows.settings then Settings.ShowExclusiveWindow("settings")
-    else Settings.mainWindow:SetHidden(false) end
+    else Settings.mainWindow:SetHidden(false); RestoreCursor() end
     Settings.RefreshMain()
     return true
 end
@@ -327,7 +328,22 @@ local function Label(ui,parent,name,text,x,y,w,h,color,font)
     local control=ui.CreateLabel(parent,name,font or "ZoFontGameSmall",text,color or ui.colors.muted)
     control:SetAnchor(TOPLEFT,parent,TOPLEFT,x,y);control:SetDimensions(w,h)
     control:SetHorizontalAlignment(TEXT_ALIGN_LEFT);control:SetVerticalAlignment(TEXT_ALIGN_TOP)
+    parent.layoutLabels=parent.layoutLabels or {}
+    parent.layoutLabels[#parent.layoutLabels+1]={control=control,x=x,y=y,right=LogicalWidth(parent)-x-w,height=h}
     return control
+end
+local function Place(control,parent,x,y,width,height)
+    control:ClearAnchors();control:SetAnchor(TOPLEFT,parent,TOPLEFT,x,y)
+    control:SetDimensions(width,height)
+end
+local function ReflowLabels(parent,width)
+    for _,entry in ipairs(parent.layoutLabels or {}) do
+        Place(entry.control,parent,entry.x,entry.y,math.max(24,width-entry.x-entry.right),entry.height)
+    end
+end
+local function CardLayout(card,parent,x,y,width,height)
+    Place(card,parent,x,y,width,height)
+    ReflowLabels(card,width)
 end
 local function Icon(parent,name,texture,x,y,size)
     local icon=WINDOW_MANAGER:CreateControl(name,parent,CT_TEXTURE)
@@ -338,6 +354,7 @@ local function PresetDropdown(parent,ui,width)
     local theme=ASUI.Theme
     local container=WINDOW_MANAGER:CreateControlFromVirtual("AlphaSquadThemeChoice",parent,"ZO_ComboBox")
     container:SetAnchor(TOPLEFT,parent,TOPLEFT,14,47);container:SetDimensions(width-28,32)
+    container:SetAnchor(TOPRIGHT,parent,TOPRIGHT,-14,47)
     local combo=ZO_ComboBox_ObjectFromContainer(container)
     combo:SetSortsItems(false)
     if theme.ConfigureDropdown then theme.ConfigureDropdown(combo) end
@@ -365,16 +382,18 @@ Settings.RegisterPage("dashboard",function(page,ui)
         {"ulttracker","ULT TRACKER","Personal and group Ultimates, with specialized Sorcerer Overload support."},
         {"supportcoverage","SUPPORT COVERAGE","Prepare group support and inspect the equipped builds behind it."},
     }
+    local cards={}
     for index,data in ipairs(entries) do
         local id=data[1];local x=8+(index-1)*(half+16)
         local card=ui.CreateCard(page,"AlphaSquadDashboardModule"..index,x,82,half,180,data[2],ui.colors.orange)
+        cards[index]=card
         Icon(card,"AlphaSquadDashboardIcon"..index,Settings.icons[id],14,40,52)
         Label(ui,card,"AlphaSquadDashboardHelp"..index,data[3],80,43,half-98,65,ui.colors.muted,"ZoFontGame")
         ui.AddToggleRow(card,"AlphaSquadDashboardToggle"..index,"Enable module",132,function() return Settings.IsModuleEnabled(id) end,
             function(v) Settings.SetModuleEnabled(id,v) end,"Stops this module's HUD, tracking events and timers. Sharing choices in Libraries are kept.")
     end
     local appearance=ui.CreateCard(page,"AlphaSquadDashboardAppearance",8,280,half,172,"INTERFACE STYLE",ui.colors.orange)
-    PresetDropdown(appearance,ui,half)
+    local themeChoice=PresetDropdown(appearance,ui,half)
     Label(ui,appearance,"AlphaSquadThemeScope","Applies to every menu and HUD. Gameplay colors stay consistent.",14,136,half-28,24)
     local sync=ui.CreateCard(page,"AlphaSquadDashboardSync",8+half+16,280,half,172,"CROSS-SYNC",ui.colors.cyan)
     Label(ui,sync,"AlphaSquadDashboardSyncHelp","Keep your theme, HUD sizes, positions and preferences across characters on this server.",14,44,half-28,60,ui.colors.muted,"ZoFontGame")
@@ -383,14 +402,36 @@ Settings.RegisterPage("dashboard",function(page,ui)
         "Your current appearance and layout are kept when switching. ON saves future changes across characters; OFF saves them for this character. Sharing remains account-wide. No reload is needed.")
     local help=ui.CreateCard(page,"AlphaSquadDashboardSharing",8,470,width,108,"GROUP DATA",ui.colors.green)
     Icon(help,"AlphaSquadDashboardGroupIcon",Settings.icons.libraries,14,38,48)
-    Label(ui,help,"AlphaSquadDashboardSharingHelp","Manage dependencies and sharing in Libraries. Your sharing choices remain independent of tracking modules.",78,40,width-330,56,ui.colors.muted,"ZoFontGame")
-    ui.CreateButton(help,"AlphaSquadDashboardLibraries","LIBRARIES",width-206,44,190,36,function() Settings.OpenPage("libraries") end)
+    local sharingHelp=Label(ui,help,"AlphaSquadDashboardSharingHelp","Manage dependencies and sharing in Libraries. Your sharing choices remain independent of tracking modules.",78,40,width-330,56,ui.colors.muted,"ZoFontGame")
+    local libraries=ui.CreateButton(help,"AlphaSquadDashboardLibraries","LIBRARIES",width-206,44,190,36,function() Settings.OpenPage("libraries") end)
+    if ui.RegisterLayout then ui.RegisterLayout(page,function(pageWidth)
+        local available=pageWidth-16
+        local columns=available>=860 and 2 or 1
+        local column=(available-(columns-1)*16)/columns
+        ReflowLabels(page,pageWidth)
+        for index,card in ipairs(cards) do
+            CardLayout(card,page,8+((index-1)%columns)*(column+16),82+math.floor((index-1)/columns)*196,column,180)
+        end
+        local rowY=82+math.ceil(#cards/columns)*196
+        CardLayout(appearance,page,8,rowY,column,172)
+        themeChoice:SetWidth(column-28)
+        CardLayout(sync,page,columns==2 and 24+column or 8,columns==2 and rowY or rowY+188,column,172)
+        local helpY=rowY+(columns==2 and 188 or 376)
+        local stacked=available<640
+        local helpHeight=stacked and 160 or 108
+        CardLayout(help,page,8,helpY,available,helpHeight)
+        if stacked then
+            Place(sharingHelp,help,78,40,available-92,64)
+            Place(libraries,help,14,112,190,36)
+        else Place(libraries,help,available-206,44,190,36) end
+        page.contentHeight=helpY+helpHeight+12
+    end) end
 end)
 Settings.RegisterPage("libraries",function(page,ui)
     page.responsiveCards=true;page.contentHeight=590
     local c=ui.colors;local width=LogicalWidth(page)-16;local half=(width-16)/2
     Label(ui,page,"AlphaSquadLibrariesTitle","LIBRARIES & SHARING",8,2,width,34,c.orange,"ZoFontWinH2")
-    Label(ui,page,"AlphaSquadLibrariesIntro","Required add-ons for group features • green: installed • red: missing. Local trackers work without these libraries.",8,38,width,28)
+    Label(ui,page,"AlphaSquadLibrariesIntro","Group libraries • Green: installed • Red: missing",8,38,width,28)
     local rows={
         {key="LibGroupBroadcast",name="LibGroupBroadcast",id=1337,kind="builds",toggle="Share equipped build",text="Needs LibAddonMenu-2.0 (38+) + LibDebugLogger."},
         {key="LibGroupCombatStats",name="LibGroupCombatStats",id=4024,kind="ultimate",toggle="Share group Ultimates",text="Needs LibCombat + LibGroupBroadcast."},
@@ -400,17 +441,20 @@ Settings.RegisterPage("libraries",function(page,ui)
         {key="LibAddonMenu2",name="LibAddonMenu-2.0",id=7,text="Required by LibGroupBroadcast. Version 38 or newer."},
         {key="LibDebugLogger",name="LibDebugLogger",id=2275,text="Required by LibGroupBroadcast. No logging setup needed."},
     }
+    local cards={}
     for index,data in ipairs(rows) do
         local x=8+((index-1)%2)*(half+16);local y=78+math.floor((index-1)/2)*108
         local card=ui.CreateCard(page,"AlphaSquadLibraryCard"..index,x,y,half,98,data.name,c.orange)
         local status=Label(ui,card,"AlphaSquadLibraryStatus"..index,"",half-188,10,112,22,c.red)
-        ui.CreateButton(card,"AlphaSquadLibraryLink"..index,"ESOUI",half-76,6,62,26,function() OpenLink("https://www.esoui.com/downloads/info"..data.id) end)
+        local link=ui.CreateButton(card,"AlphaSquadLibraryLink"..index,"ESOUI",half-76,6,62,30,function() OpenLink("https://www.esoui.com/downloads/info"..data.id) end)
+        local record={card=card,status=status,link=link,data=data};cards[index]=record
         if data.kind then
             local switch=ui.AddToggleRow(card,"AlphaSquadLibraryShare"..index,data.toggle,36,function() return ASUI.Sharing and ASUI.Sharing.IsEnabled(data.kind) or false end,
                 function(value) if ASUI.Sharing then ASUI.Sharing.SetEnabled(data.kind,value) end end,
                 data.kind=="builds" and "Share supported equipment, traits, glyphs, skill bars, CP and readiness in your current group. Both clients need compatible software. Build transport registration is pending; use in coordinated groups. Enabled at installation; your later OFF choice is saved. Module switches do not change sharing."
                 or "Changes this library's matching group protocols and saved settings here, without opening another panel. Other addons using the same protocols follow this setting. Enabled at installation; your later OFF choice is saved. Module switches do not change sharing.")
-            local baseHelp=switch.help
+            record.switch=switch
+            local baseHelp=switch.help.."\n\n"..data.text
             ui.RegisterRefresher(function()
                 local _,reason,available=false,"Install the listed libraries to enable sharing.",false
                 if ASUI.Sharing then _,reason,available=ASUI.Sharing.GetStatus(data.kind) end
@@ -427,8 +471,8 @@ Settings.RegisterPage("libraries",function(page,ui)
                     switch.label:SetDimensions(40,30)
                 end
             end)
-            Label(ui,card,"AlphaSquadLibraryHelp"..index,data.text,14,72,half-28,23)
-        else Label(ui,card,"AlphaSquadLibraryHelp"..index,data.text,14,40,half-28,48) end
+            record.help=Label(ui,card,"AlphaSquadLibraryHelp"..index,data.text,14,72,half-28,23)
+        else record.help=Label(ui,card,"AlphaSquadLibraryHelp"..index,data.text,14,40,half-28,48) end
         ui.RegisterRefresher(function()
             local lib=rawget(_G,data.key);local installed=lib~=nil
             local old=data.key=="LibAddonMenu2" and type(lib)=="table" and tonumber(lib.version) and tonumber(lib.version)<38
@@ -437,28 +481,79 @@ Settings.RegisterPage("libraries",function(page,ui)
         end)
     end
     local help=ui.CreateCard(page,"AlphaSquadLibraryPrivacy",8+half+16,402,half,98,"DATA ACCESS",c.cyan)
-    Label(ui,help,"AlphaSquadLibraryPrivacyText","Group membership alone cannot reveal full builds. Senders can use AlphaSquadBuildShare instead of the full UI. Unavailable data stays Unknown.",14,38,half-28,54)
+    local privacyText=Label(ui,help,"AlphaSquadLibraryPrivacyText","Compatible senders share builds. AlphaSquadBuildShare works without the full UI. Missing data stays Unknown.",14,38,half-28,54)
     local footer=ui.CreateCard(page,"AlphaSquadMinion",8,518,width,70,"MINION • ADDON MANAGER",c.green)
-    Label(ui,footer,"AlphaSquadMinionHelp","Install and update ESO addons and libraries, then /reloadui.",14,34,width-180,26)
-    ui.CreateButton(footer,"AlphaSquadMinionLink","GET MINION",width-152,24,136,30,function() OpenLink("https://minion.mmoui.com/") end)
+    local minionHelp=Label(ui,footer,"AlphaSquadMinionHelp","Install and update ESO addons and libraries, then /reloadui.",14,34,width-180,26)
+    local minion=ui.CreateButton(footer,"AlphaSquadMinionLink","GET MINION",width-152,24,136,30,function() OpenLink("https://minion.mmoui.com/") end)
+    if ui.RegisterLayout then ui.RegisterLayout(page,function(pageWidth,viewport)
+        local available=pageWidth-16
+        local columns=available>=920 and 2 or 1
+        local column=(available-(columns-1)*16)/columns
+        local condensed=viewport<590 and columns==2
+        local cardHeight=condensed and 84 or 102
+        local gap=8
+        local top=72
+        ReflowLabels(page,pageWidth)
+        for index,record in ipairs(cards) do
+            local card=record.card
+            CardLayout(card,page,8+((index-1)%columns)*(column+16),top+math.floor((index-1)/columns)*(cardHeight+gap),column,cardHeight)
+            Place(card.title,card,14,8,column-214,24)
+            Place(record.status,card,column-192,10,112,22)
+            Place(record.link,card,column-76,6,62,30)
+            record.help:SetHidden(condensed and record.switch~=nil)
+            if not record.switch then Place(record.help,card,14,38,column-28,cardHeight-42) end
+        end
+        local index=#cards
+        CardLayout(help,page,8+(index%columns)*(column+16),top+math.floor(index/columns)*(cardHeight+gap),column,cardHeight)
+        privacyText:SetHeight(cardHeight-42)
+        local footerY=top+math.ceil((#cards+1)/columns)*(cardHeight+gap)
+        local footerHeight=available<640 and 90 or 70
+        CardLayout(footer,page,8,footerY,available,footerHeight)
+        if footerHeight>70 then minionHelp:SetHeight(48) end
+        Place(minion,footer,available-152,24,136,30)
+        page.contentHeight=footerY+footerHeight+8
+    end) end
 end)
 
 Settings.RegisterPage("community",function(page,ui)
     page.responsiveCards=true;page.contentHeight=590
     local width=LogicalWidth(page)-16;local half=(width-16)/2
     Label(ui,page,"AlphaSquadCommunityTitle","ABOUT",8,2,width,36,ui.colors.orange,"ZoFontWinH2")
-    Label(ui,page,"AlphaSquadCommunityIntro","Endgame ESO PvE • Hard Modes • Trifectas • Guides • Community",8,44,width,26)
+    Label(ui,page,"AlphaSquadCommunityIntro","Endgame ESO PvE • Hard Modes • Trifectas • Guides • Community",8,44,width,40)
     local site=ui.CreateCard(page,"AlphaSquadCommunitySite",8,88,width,180,"EXPLORE ALPHA SQUAD",ui.colors.orange)
     Icon(site,"AlphaSquadCommunitySiteIcon",Settings.icons.community,18,48,64)
     Label(ui,site,"AlphaSquadCommunitySiteText","Build guides, roster information and resources for your next challenge.",100,48,width-124,56,ui.colors.white,"ZoFontGame")
-    ui.CreateButton(site,"AlphaSquadSiteButton","VISIT WEBSITE",100,116,190,36,function()OpenLink(ASUI.website)end)
-    ui.CreateButton(site,"AlphaSquadESOUI","FIND ON ESOUI",310,116,190,36,function()OpenLink("https://www.esoui.com/downloads/search.php?search=Alpha%20Squad%20UI")end)
-    ui.CreateButton(site,"AlphaSquadReleases","RELEASE NOTES",520,116,190,36,function()OpenLink("https://github.com/ALPHASQUADUI/Alpha-Squad-UI/releases")end)
+    local links={
+        ui.CreateButton(site,"AlphaSquadSiteButton","VISIT WEBSITE",100,116,190,36,function()OpenLink(ASUI.website)end),
+        ui.CreateButton(site,"AlphaSquadESOUI","FIND ON ESOUI",310,116,190,36,function()OpenLink("https://www.esoui.com/downloads/search.php?search=Alpha%20Squad%20UI")end),
+        ui.CreateButton(site,"AlphaSquadReleases","RELEASE NOTES",520,116,190,36,function()OpenLink("https://github.com/ALPHASQUADUI/Alpha-Squad-UI/releases")end),
+    }
     local about=ui.CreateCard(page,"AlphaSquadCommunityAbout",8,286,half,210,"ABOUT THE ADDON",ui.colors.cyan)
     Label(ui,about,"AlphaSquadAboutText","Clear group preparation and one unified Ultimate tracker. Built around native ESO information and controls.\n\nCreated by "..ASUI.Theme.authorText,16,46,half-32,130,ui.colors.muted,"ZoFontGame")
     local discord=ui.CreateCard(page,"AlphaSquadCommunityDiscord",8+half+16,286,half,210,"JOIN THE COMMUNITY",ui.colors.orange)
     Label(ui,discord,"AlphaSquadCommunityDiscordText","Find the Alpha Squad Discord, meet the roster and connect with other players.",16,46,half-32,80,ui.colors.muted,"ZoFontGame")
     local join=ui.CreateButton(discord,"AlphaSquadCommunityDiscordButton","JOIN DISCORD",16,148,190,36,function()OpenLink(ASUI.discord)end)
     join.help="Open the Alpha Squad server invitation after ESO's normal link confirmation. No build, character or group data is sent through this link."
-    Label(ui,page,"AlphaSquadCommunityCommands","/asui  Settings     /asmove  Arrange HUD     /assupport builds  Inspect builds",8,522,width,30,ui.colors.muted,"ZoFontGame")
+    local commands=Label(ui,page,"AlphaSquadCommunityCommands","/asui  Settings     /asmove  Arrange HUD     /assupport builds  Inspect builds",8,522,width,30,ui.colors.muted,"ZoFontGame")
+    if ui.RegisterLayout then ui.RegisterLayout(page,function(pageWidth)
+        local available=pageWidth-16
+        local columns=available>=860 and 2 or 1
+        local column=(available-(columns-1)*16)/columns
+        local linkColumns=available>=540 and 3 or 1
+        local linkWidth=math.min(190,(available-28-(linkColumns-1)*12)/linkColumns)
+        local siteHeight=128+math.ceil(#links/linkColumns)*44
+        ReflowLabels(page,pageWidth)
+        CardLayout(site,page,8,88,available,siteHeight)
+        for index,button in ipairs(links) do
+            Place(button,site,14+((index-1)%linkColumns)*(linkWidth+12),116+math.floor((index-1)/linkColumns)*44,linkWidth,36)
+        end
+        local aboutY=88+siteHeight+18
+        CardLayout(about,page,8,aboutY,column,210)
+        CardLayout(discord,page,columns==2 and 24+column or 8,columns==2 and aboutY or aboutY+226,column,210)
+        local commandY=aboutY+(columns==2 and 226 or 452)
+        commands:SetText(columns==2 and "/asui  Settings     /asmove  Arrange HUD     /assupport builds  Inspect builds"
+            or "/asui  Settings\n/asmove  Arrange HUD\n/assupport builds  Inspect builds")
+        Place(commands,page,8,commandY,available,columns==2 and 30 or 72)
+        page.contentHeight=commandY+(columns==2 and 42 or 84)
+    end) end
 end)

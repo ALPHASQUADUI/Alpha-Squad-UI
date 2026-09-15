@@ -509,7 +509,8 @@ Catalog.masterySources = {
     {abilityId=263607,name="Share the Spoils",requires="Transfer",requiresIds={45145},rank=2,
         provides={"share_the_spoils"}},
     {abilityId=263606,name="Cutthroat's Focus",aliases={"Evasive Trance"},provides={"evasive_trance"}},
-    {abilityId=263247,name="Lead From the Front",requires="The Storm Voice",requiresIds={},rank=2,
+    {abilityId=263247,name="Lead From the Front",requires="The Storm Voice",requiresIds={},
+        requiresPassive={lineId=36,texture="ability_dragonknight_031_u49_new.dds"},rank=2,
         provides={"major_berserk","major_protection"}},
     {abilityId=263412,name="Erudite's Rigor",requires="Fatewoven Armor",
         requiresIds={183648,185908,186477},rank=1,provides={"minor_cowardice","major_vitality"}},
@@ -825,12 +826,49 @@ AddSkill({86015}, "Deep Fissure", {"major_breach","minor_breach"}, "The subterra
 
 Catalog.passiveSources = {
     {name="Elder Dragon",abilityIds={29460,44951},rank=1,skillLineIds={36},trigger="CAST_LINE",provides={"minor_brutality"},conditions="Learn the passive and slot a Draconic Power ability, then cast it to buff the group."},
-    {name="Traumatic Burns",abilityIds={},rank=1,skillLineIds={35},trigger="CAST_LINE",provides={"traumatic_burns"},conditions="Learn the passive and deal direct damage with an Ardent Flame ability."},
+    {name="Traumatic Burns",abilityIds={29430,45012},rank=1,skillLineIds={35},trigger="CAST_LINE",provides={"traumatic_burns"},conditions="Learn the passive and deal direct damage with an Ardent Flame ability."},
     {name="Illuminate",abilityIds={31743,45215},rank=1,skillLineIds={44},trigger="CAST_LINE",provides={"minor_sorcery"},conditions="Learn Illuminate and cast a slotted Dawn's Wrath ability."},
     {name="Exploitation",abilityIds={31389,45181},rank=1,skillLineIds={41},trigger="CAST_LINE",provides={"minor_prophecy"},conditions="Learn Exploitation and cast a slotted Dark Magic ability. Font of Power can broaden its trigger."},
     {name="Hemorrhage",abilityIds={36641,45060},rank=1,skillLineIds={38},trigger="CRITICAL_DAMAGE",provides={"minor_savagery"},conditions="Learn Hemorrhage, keep an Assassination ability slotted, and deal Critical Damage. Its Critical Damage bonus is personal."},
     {name="Maturation",abilityIds={85880,85881},rank=1,trigger="ANY_HEAL",provides={"minor_toughness"},conditions="Learn Maturation and heal an ally. The passive does not require a Green Balance heal."},
 }
+
+-- Learned ability IDs are the shared authority, never the peer's display names.
+-- The U49 Storm Voice passive moved to Draconic Power. Resolve its learned ID
+-- through native definition keys + its native texture instead of guessing one
+-- of the similarly named combat-effect/bundle IDs. This works in every locale
+-- and does not inspect the viewer's purchased rank or active skill lines.
+function Catalog:GetLearnedSourceRank(masteries, ids, passive)
+    local learned=type(masteries)=="table" and masteries.learnedIds or {}
+    learned=type(learned)=="table" and learned or {}
+    local maximum=0
+    local function Rank(value)
+        return type(value)=="number" and value==value and value>=1 and value<=10 and value%1==0 and value or 0
+    end
+    for _,id in ipairs(ids or {}) do maximum=math.max(maximum,Rank(learned[id])) end
+    if not passive or type(GetAbilityIcon)~="function" or type(GetSpecificSkillAbilityKeysByAbilityId)~="function"
+        or type(IsSkillAbilityPassive)~="function" or type(GetSkillLineId)~="function" then return maximum end
+    local inspected=0
+    for id,reportedRank in pairs(learned) do
+        inspected=inspected+1
+        if inspected>128 then break end
+        if Rank(reportedRank)>maximum and type(id)=="number" and id>0 and id<=2147483647 and id%1==0 then
+            local ok,icon=pcall(GetAbilityIcon,id)
+            icon=ok and type(icon)=="string" and icon:lower():gsub("\\","/") or ""
+            if icon=="/esoui/art/icons/"..passive.texture or icon=="esoui/art/icons/"..passive.texture then
+                local found,skillType,lineIndex,skillIndex,_,nativeRank=pcall(GetSpecificSkillAbilityKeysByAbilityId,id)
+                if found and SKILL_TYPE_CLASS~=nil and skillType==SKILL_TYPE_CLASS then
+                    local lineOK,lineId=pcall(GetSkillLineId,skillType,lineIndex)
+                    local passiveOK,isPassive=pcall(IsSkillAbilityPassive,skillType,lineIndex,skillIndex)
+                    if lineOK and lineId==passive.lineId and passiveOK and isPassive==true then
+                        maximum=math.max(maximum,math.min(Rank(reportedRank),Rank(nativeRank)))
+                    end
+                end
+            end
+        end
+    end
+    return maximum
+end
 
 Catalog.profiles.trial={label="TRIAL",groupSize=12,requirements={
     "major_courage","minor_courage","major_slayer","minor_berserk","major_berserk",
@@ -1009,6 +1047,74 @@ for _,keys in pairs(Catalog.scribingTextures.bannerAffix) do
         Catalog.effects[key].providers[#Catalog.effects[key].providers+1]={name="Banner Bearer Affix",kind="scribing",conditions="The exact Banner Bearer Affix must be shared. The same Affix on a different grimoire may be personal."}
     end
 end
+
+-- Exact native grimoire identities and per-grimoire script effects. A shared
+-- Affix texture is NOT a shared recipient rule or Major/Minor tier. These
+-- matrices come from the native script tooltips listed in CATALOG_EVIDENCE.
+-- Beneficial scripts require an ally-targeting Focus except Mender's link.
+local function Affixes(definition)
+    local result={}
+    for texture,keys in pairs(definition) do
+        result["scribing_tertiary_"..texture..".dds"]=type(keys)=="table" and keys or {keys}
+    end
+    return result
+end
+Catalog.scribingGrimoires={
+    ["ability_grimoire_1handed.dds"]={name="Shield Throw",
+        enemy=Affixes({cowardice="major_cowardice",maim="major_maim",offbalance="off_balance"})},
+    ["ability_grimoire_2handed.dds"]={name="Smash",healing=true,shield=true,
+        enemy=Affixes({breach="minor_breach",maim="minor_maim"}),
+        ally=Affixes({berserk="minor_berserk",force="minor_force",vitality="minor_vitality"})},
+    ["ability_grimoire_assault.dds"]={name="Trample",
+        enemy=Affixes({vulnerability="minor_vulnerability",cowardice="minor_cowardice",offbalance="off_balance"})},
+    ["ability_grimoire_bow.dds"]={name="Vault",healing=true,
+        enemy=Affixes({vulnerability="minor_vulnerability",maim="minor_maim",lifesteal="minor_lifesteal",offbalance="off_balance"}),
+        ally=Affixes({berserk="minor_berserk",force="minor_force",intellectendurance={"minor_intellect","minor_endurance"}})},
+    ["ability_grimoire_dualwield.dds"]={name="Traveling Knife",warriorsOpportunity=true,
+        enemy=Affixes({vulnerability="minor_vulnerability",maim="minor_maim",lifesteal="minor_lifesteal",offbalance="off_balance"})},
+    ["ability_grimoire_fightersguild.dds"]={name="Torchbearer",healing=true,
+        enemy=Affixes({breach="minor_breach",cowardice="minor_cowardice"}),
+        ally=Affixes({heroism="minor_heroism",resolve="minor_resolve",vitality="minor_vitality"})},
+    ["ability_grimoire_magesguild.dds"]={name="Ulfsild's Contingency",healing=true,shield=true,
+        enemy=Affixes({breach="minor_breach",vulnerability="minor_vulnerability",magickasteal="minor_magickasteal"}),
+        ally=Affixes({force="minor_force",protection="minor_protection",resolve="minor_resolve",intellectendurance={"minor_intellect","minor_endurance"}})},
+    ["ability_grimoire_soulmagic1.dds"]={name="Wield Soul",healing=true,shield=true,
+        enemy=Affixes({breach="major_breach",cowardice="major_cowardice",maim="major_maim"}),
+        ally=Affixes({empower="empower",resolve="major_resolve",vitality="major_vitality",intellectendurance={"major_intellect","major_endurance"}})},
+    ["ability_grimoire_soulmagic2.dds"]={name="Soul Burst",healing=true,shield=true,
+        enemy=Affixes({breach="minor_breach",maim="minor_maim",magickasteal="minor_magickasteal"}),
+        ally=Affixes({courage="minor_courage",resolve="minor_resolve",intellectendurance={"minor_intellect","minor_endurance"}})},
+    ["ability_grimoire_staffdestro.dds"]={name="Elemental Explosion",
+        enemy=Affixes({brittle="minor_brittle",cowardice="minor_cowardice",lifesteal="minor_lifesteal",
+            magickasteal="minor_magickasteal",offbalance="off_balance"})},
+    ["ability_grimoire_staffresto.dds"]={name="Mender's Bond",healing=true,shield=true,link=true,
+        enemy=Affixes({breach="minor_breach",brittle="minor_brittle",maim="minor_maim",vulnerability="minor_vulnerability"}),
+        ally=Affixes({courage="minor_courage",empower="empower",force="minor_force",heroism="minor_heroism",protection="minor_protection",
+            vitality="minor_vitality",intellectendurance={"minor_intellect","minor_endurance"}})},
+}
+Catalog.scribingEnemyFocus={}
+for _,texture in ipairs({"bleeding","disease","flame","frost","magicka","physical","poison","shock",
+    "immobilized","knockback","pull","stunned","taunt","trauma"}) do
+    Catalog.scribingEnemyFocus["scribing_primary_"..texture..".dds"]=true
+end
+for _,grimoire in pairs(Catalog.scribingGrimoires) do
+    for _,recipient in ipairs({"enemy","ally"}) do
+        for _,keys in pairs(grimoire[recipient] or {}) do
+            for _,key in ipairs(keys) do
+                local effect=Catalog.effects[key]
+                effect.providers[#effect.providers+1]={name=grimoire.name.." Affix",kind="scribing",
+                    conditions=recipient=="enemy" and "Equip the matching Affix in a valid recipe and affect the intended enemy."
+                        or "Equip the matching Affix with an ally-targeting Focus. The intended allies must receive the skill or link."}
+            end
+        end
+    end
+    if grimoire.shield then
+        local effect=Catalog.effects.group_shield
+        effect.providers[#effect.providers+1]={name=grimoire.name.." Shield",kind="scribing",conditions="Use the Damage Shield Focus and apply it to the intended allies."}
+    end
+end
+Catalog.effects.warriors_opportunity.providers[#Catalog.effects.warriors_opportunity.providers+1]={
+    name="Traveling Knife Signature",kind="scribing",conditions="Equip Warrior's Opportunity in a valid damaging Traveling Knife recipe and hit the intended enemy."}
 
 -- Presentation uses native effect/item textures, never a guessed skill icon.
 local displaySources={}

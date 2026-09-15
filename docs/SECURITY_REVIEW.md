@@ -33,7 +33,9 @@ Summaries become stale after 75 seconds. Complete captures expire after 120 seco
 
 Libraries controls govern sharing independently of Dashboard tracking. Existing OFF choices are preserved. Paired native protocol changes roll back when a setter fails. Missing, ambiguous or incompatible native controls are reported as unavailable; discovery never opens a library panel, reads closure upvalues or changes unrelated protocols. Reentrant options callbacks cannot recurse through the discovery hook. Native setting failures stop new sends without an unhandled Lua error.
 
-The companion's OFF command stops new captures and locally generated frames. Data already broadcast cannot be recalled. LibGroupBroadcast owns its queue; the addon does not clear another addon's traffic. The full interface also changes the matching native Allow Sending settings, which LibGroupBroadcast checks before broadcasting queued messages.
+Both installations use the same native sharing bridge. OFF stops new captures, cancels local transfers and replaces queued frames for protocols 507/510 with empty, unsupported-version frames through LibGroupBroadcast's public per-message replacement option before disabling those native protocols. This also replaces partially transmitted queued messages, so an immediate OFF/ON cannot resume an old private fragment. Unrelated protocols remain untouched. Data already broadcast cannot be recalled.
+
+If potentially queued data must be revoked after leaving a group, native sending remains disabled until replacement can succeed in a group or the UI reloads. A quick solo ON remains pending instead of reactivating that queue. Unavailable or failed native controls are reported explicitly. Status follows the actual native settings and clears a resolved control error; it does not report a successful OFF merely because the local sender stopped.
 
 Protocols 507 and 510 remain provisional. Conflict handling prevents repeated declarations, but stable public transport still requires reserved IDs and coexistence checks with other installed libraries.
 
@@ -49,7 +51,7 @@ The subsequent video-driven review rechecked payload loops and allocations, send
 
 ## Verification and remaining client checks
 
-Regression suites include `build_codec.lua`, `build_sharing.lua`, `scanner_details.lua`, `sharing_controls.lua`, `support_coverage.lua` and `companion_package.lua`. They cover malformed records, exact item-link preservation, native slot checks, stale data, offline identity, conflicting registration, partial transfers, late packets, consent, loading and scan coalescing. Package validation runs the same companion sources after extraction from its installable ZIP.
+Regression suites include `build_codec.lua`, `build_sharing.lua`, `scanner_details.lua`, `source_roundtrip.lua`, `sharing_controls.lua`, `support_coverage.lua` and `companion_package.lua`. They cover malformed records, exact item-link preservation, native slot checks, stale data, offline identity, conflicting registration, partial transfers, late packets, queue revocation, consent, loading and scan coalescing. Package validation runs the shipped suite and companion sources after extraction from their installable ZIPs. An additional review against the referenced LibGroupBroadcast queue implementation checked synchronous replacement of whole/partial frames and preservation of unrelated traffic.
 
 Real-client checks still need to cover native item and script lookups, current library versions, lossy group broadcasts, sharing OFF during queued transfers, combat/loading transitions, and CPU/frame-time behavior in a full group. No synthetic test establishes zero resource cost or compatibility with unreleased game APIs.
 

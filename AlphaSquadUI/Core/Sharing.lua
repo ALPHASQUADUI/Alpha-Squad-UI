@@ -86,18 +86,32 @@ end
 function S.GetStatus(kind)
     local protocols=S.GetProtocols(kind)
     if not protocols then return false,S.errors[kind] or "Sharing controls unavailable. Install or update the listed libraries.",false end
-    local enabled=true
+    local enabled,anyEnabled=true,false
     for _,protocol in pairs(protocols) do
         local value=Call(protocol,"IsEnabled")
         if value==nil then return false,"The library could not confirm its sharing setting.",false end
         if value~=true then enabled=false end
+        if value==true then anyEnabled=true end
     end
     if kind=="builds" then
         local sc=ASUI.Modules.SupportCoverage
-        if not sc or not sc.sv or not sc.share or not sc.share.available then
+        if not sc or not sc.sv or not sc.share then
             return false,sc and sc.share and sc.share.error or "Build transport unavailable.",false
         end
-        if not sc.sv.shareData or not sc.sv.experimentalSharing then return false,nil,true end
+        if not sc.sv.shareData or not sc.sv.experimentalSharing then
+            if sc.share.controlError then
+                if anyEnabled or sc.share.queueRevokeFailed then return false,sc.share.controlError,not anyEnabled end
+                sc.share.controlError=nil;S.errors[kind]=nil
+            end
+            return false,nil,true
+        end
+        if not sc.share.available then return false,sc.share.error or "Build transport unavailable.",false end
+        if sc.share.controlError then
+            if sc.share.queueRevokeFailed then return false,sc.share.controlError,false end
+            -- Valid native controls may have been corrected in the library's
+            -- panel after an earlier failed attempt in this interface.
+            sc.share.controlError=nil;S.errors[kind]=nil
+        end
     end
     return enabled,S.errors[kind],true
 end
@@ -127,11 +141,18 @@ function S.SetEnabled(kind,enabled)
     local prefs=Preference();enabled=enabled==true
     if S.nativeControls[kind]==false then S.nativeControls[kind]=nil end
     local sc=ASUI.Modules.SupportCoverage
+    local revoked=true
     if kind=="builds" and sc and sc.sv then
         sc.sv.shareData=enabled;sc.sv.experimentalSharing=enabled
         if enabled then sc:InitializeSharing() end
+        -- Replacing only our queued payloads also revokes them when the user
+        -- switches OFF then ON before LGB reaches its next broadcast boundary.
+        if sc.ClearQueuedBuildMessages and (not enabled or sc.share and sc.share.queueRevokeFailed) then
+            revoked=sc:ClearQueuedBuildMessages()~=false
+        end
     end
-    local accepted=SetProtocols(kind,enabled)
+    local accepted=SetProtocols(kind,enabled and revoked)
+    if not revoked then accepted=false end
     if prefs then
         prefs[definition.preference]=enabled
         prefs[definition.preference.."Pending"]=not accepted and enabled or nil
@@ -139,11 +160,19 @@ function S.SetEnabled(kind,enabled)
         if not accepted and not enabled then prefs[definition.preference.."Pending"]=false end
     end
     S.errors[kind]=not accepted and "Sharing controls unavailable. Install or update the listed libraries." or nil
+    if not revoked then
+        S.errors[kind]=sc.share.queueRevokeNeedsGroup and "Sharing remains blocked until you join a group or reload the UI; previous queued data must be cleared first."
+            or "Queued build data could not be revoked. Update LibGroupBroadcast or reload the UI before enabling sharing."
+    end
     if kind=="ultimate" and accepted and enabled then S.StartUltimateSender() end
     if kind=="builds" and sc then
-        if not enabled then sc:ResetSharingState("Sharing disabled") end
+        if sc.share then sc.share.controlError=S.errors[kind] end
+        if not enabled then
+            if sc.ResetSharingState then sc:ResetSharingState("Sharing disabled")
+            elseif sc.ResetBuildDetailState then sc:ResetBuildDetailState() end
+        end
         if sc.UpdateRuntime then sc:UpdateRuntime() end
-        sc:MarkScanDirty("sharing changed")
+        if sc.MarkScanDirty then sc:MarkScanDirty("sharing changed") end
     end
     return accepted,S.errors[kind]
 end

@@ -28,8 +28,10 @@ local UI={colors=C,Text=function(text)return tostring(text or '')end,Color=funct
 function UI.Label(parent,name,text)local c=Control(name,parent);c.text=text;return c end
 function UI.Solid(parent,name)local c=Control(name,parent);return c end
 function UI.Button(parent,name,text,w,h,fn)local c=Control(name,parent);c:SetDimensions(w,h);c.label=UI.Label(c,name..'Label',text);c.click=fn;return c end
-function UI.Window(name)local c=Control(name);c.subtitle=UI.Label(c,name..'Sub','');c.footer=UI.Label(c,name..'Footer','');return c end
+function UI.Window(name)local c=Control(name);c.title=UI.Label(c,name..'Title','');c.subtitle=UI.Label(c,name..'Sub','');c.footer=UI.Label(c,name..'Footer','');return c end
 function UI.RegisterWindow()end
+function UI.ClearTooltip()end
+function UI.ShowWindow(id,win) win:SetHidden(false);UI.shown=id end
 function UI.Hover(c,fn)c.hover=fn end
 function UI.Status(row)if row.status=='covered'then return 'COVERED',C.green elseif row.unverified then return 'UNKNOWN',C.gold end return 'MISSING',C.red end
 local SC={UI=UI,sv={activeProfile='trial',profileOverrides={trial={}}}}
@@ -88,7 +90,21 @@ local tooltip=target.contributors.hover()
 for i=1,12 do check(tooltip:find('@Player'..i,1,true) and tooltip:find('Exact source '..i,1,true),'Hover preserves each duplicate contributor and their real source')end
 check(tooltip:find('front bar',1,true),'Contributor hover preserves known bar availability')
 target.contributors.click()
-check(SC.openedInspector=='player1','Contributor click opens the named build directly')
+check(not SC.openedInspector and UI.shown=='supportContributors','Duplicate click offers a compact choice instead of opening the first player')
+SC.roster=owners
+function SC:GetCapabilityOwners(key)return key=='major_courage' and owners or {}end
+SC:RefreshContributorPicker()
+check(#SC.contributorWindow.rows==12,'The compact chooser includes all twelve contributors')
+SC.contributorWindow.rows[7].click(SC.contributorWindow.rows[7])
+check(SC.openedInspector=='player7','Choosing a contributor opens exactly that player build')
+SC.openedInspector=nil;SC.roster={owners[1]}
+SC.contributorWindow.rows[7].click(SC.contributorWindow.rows[7])
+check(not SC.openedInspector,'A departed player cannot silently open the default or another player build')
+SC:OpenContributorPicker({key='major_courage',owners={owners[1]}})
+check(SC.openedInspector=='player1','A single contributor opens directly without an unnecessary chooser')
+SC.openedInspector=nil
+SC:OpenContributorPicker({key='major_courage',owners={owners[2]}})
+check(not SC.openedInspector,'A stale single contributor cannot open another player as a fallback')
 local wasTracked=SC:IsEffectTracked('major_courage')
 target.toggle.click()
 check(SC.lastTracking.key=='major_courage' and SC.lastTracking.value==not wasTracked,'Compact ON/OFF only changes its own effect')

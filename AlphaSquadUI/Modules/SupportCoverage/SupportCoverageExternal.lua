@@ -199,36 +199,72 @@ function SC:ResetExternalSources()
     self.externalSetReceipts={}
 end
 function SC:PruneExternalSources()
+    -- Unit tags may be temporarily unavailable during a load screen. Explicit
+    -- departure/disconnect events below still remove their identities immediately.
+    if self.loading then return end
     local active={}
     local size=Integer(Call(GetGroupSize),0,12) or 0
     for index=1,size do
         local tag=Call(GetGroupUnitTagByIndex,index)
         local key=tag and MemberIdentity(tag,true)
-        if key then active[key]=true end
+        if key and (not self.externalSetLibrary or Call(self.externalSetLibrary.IsUnitDataAvailable,tag)==true) then active[key]=true end
     end
     for key in pairs(self.externalSetReceipts or {}) do
         if not active[key] then self.externalSetReceipts[key]=nil end
     end
 end
+-- LibSetDetection retains its character cache across zoning and local departure.
+-- Keep only reports received in this uninterrupted group session. These small
+-- guards stay live when tracking is OFF; they never scan equipment or broadcast.
+function SC:RegisterExternalSessionEvents()
+    if self.externalSessionEvents or not EVENT_MANAGER or not EVENT_MANAGER.RegisterForEvent then return end
+    self.externalSessionEvents=true
+    local function Register(suffix,event,callback)
+        if event then EVENT_MANAGER:RegisterForEvent("AlphaSquadUI_ExternalSession_"..suffix,event,callback) end
+    end
+    Register("Left",EVENT_GROUP_MEMBER_LEFT,function(_,characterName,_,isLocalPlayer)
+        if isLocalPlayer then SC:ResetExternalSources();return end
+        if type(characterName)=="string" then
+            local plain=characterName:gsub("%^.*$","")
+            for key in pairs(SC.externalSetReceipts or {}) do
+                local name=key:match("\031(.*)$")
+                if name and name:gsub("%^.*$","")==plain then SC.externalSetReceipts[key]=nil end
+            end
+        end
+        SC:PruneExternalSources()
+    end)
+    Register("Connected",EVENT_GROUP_MEMBER_CONNECTED_STATUS,function(_,tag,connected)
+        if connected==false then
+            local characterName=Call(GetUnitName,tag)
+            for key in pairs(SC.externalSetReceipts or {}) do
+                if key:match("\031(.*)$")==characterName then SC.externalSetReceipts[key]=nil end
+            end
+        end
+        SC:PruneExternalSources()
+    end)
+    Register("Group",EVENT_GROUP_UPDATE,function() SC:PruneExternalSources() end)
+    -- The module's always-live Activated handler prunes after the roster settles.
+end
 function SC:InitializeExternalSources()
     local lib=rawget(_G,"LibSetDetection")
     if type(lib)~="table" or type(lib.constants)~="table" or type(lib.RegisterEvent)~="function"
         or type(lib.GetUnitSetData)~="function" or type(lib.IsUnitDataAvailable)~="function" then return false end
-    if self.externalSetLibrary==lib then return true end
+    if self.externalSetLibrary==lib then self:RegisterExternalSessionEvents();return true end
     self.externalSetReceipts={}
     local event,unitType=lib.constants.event_data_update,lib.constants.unit_type_group
     if not Integer(event,1,100) or not Integer(unitType,1,100) then return false end
     local result=Call(lib.RegisterEvent,event,"AlphaSquadSupportCoverageExternal",function(tag,localPlayer)
-        if localPlayer==true or not SC.sv or not SC.sv.enabled then return end
+        if localPlayer==true or not SC.sv then return end
         SC:PruneExternalSources()
         local key=MemberIdentity(tag,true)
         local now=Now()
         if not key or not now then return end
         SC.externalSetReceipts[key]=ReadSetReport(lib,tag,now)
-        if SC.ScheduleRefresh then SC:ScheduleRefresh("shared set data",150) end
+        if SC.sv.enabled and not SC.loading and SC.ScheduleRefresh then SC:ScheduleRefresh("shared set data",150) end
     end,unitType)
     if result~=0 then return false end
     self.externalSetLibrary=lib
+    self:RegisterExternalSessionEvents()
     return true
 end
 

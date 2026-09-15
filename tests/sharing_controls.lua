@@ -77,6 +77,12 @@ end
 local _,_,availableAfterReentry=S.GetStatus('sets')
 check(reentries==1 and availableAfterReentry and LibAddonMenu2.RegisterOptionControls==originalRegister,
     'An options callback that queries sharing cannot recurse or leave an interceptor installed')
+S.nativeControls={}
+CALLBACK_MANAGER.FireCallbacks=function()LibAddonMenu2:RegisterOptionControls('LibGroupBroadcastOptions',optionTables)end
+S.SetEnabled('builds',true)
+sc.share.controlError='Earlier native control failure';S.errors.builds=sc.share.controlError
+check(S.IsEnabled('builds') and not sc.share.controlError and not S.errors.builds,
+    'Corrected native controls clear a stale error without requiring another explicit ON')
 -- Upgrade from the previous ineffective bridge honors explicit Alpha choices.
 S.nativeControls={};prefs.sharingDefaultsVersion=nil
 prefs.buildSharing=false;prefs.ultimateSharing=false;prefs.setsSharing=true
@@ -127,4 +133,53 @@ sc:PrunePeerSharingData()
 check(not sc.share.outgoingBuild and not sc.share.incomingBuild and not sc.share.requestedKey,'Departed peers cannot retain pending transfer state')
 keys.group2='|t999999:999999:untrusted.dds|t';sc:OnPeerShareData('group2',payload)
 check(sc.peerData[keys.group2]==nil,'Invalid account identities never become peer table keys')
+-- Full-addon consent uses the same queue revocation as the companion. A queued
+-- previous-group build stays blocked while solo, then the next grouped share
+-- attempt resolves only that deferred choice before publishing a fresh build.
+local sharingGrouped=true
+local pendingFrames={}
+sc.IsGrouped=function()return sharingGrouped end
+sc.share.handler={}
+local function NativeProtocol(id)
+    return {IsEnabled=function()return values[id]end,Send=function(_,data,options)
+        if not sharingGrouped then return false end
+        if options and options.replaceQueuedMessages then
+            for i=#pendingFrames,1,-1 do if pendingFrames[i].id==id then table.remove(pendingFrames,i) end end
+        end
+        pendingFrames[#pendingFrames+1]={id=id,data=data};return true
+    end}
+end
+sc.share.protocol=NativeProtocol(510);sc.share.detailProtocol=NativeProtocol(507)
+LibGroupBroadcast.RegisterHandler=function()return sc.share.handler end
+CALLBACK_MANAGER.FireCallbacks=function()LibAddonMenu2:RegisterOptionControls('LibGroupBroadcastOptions',optionTables)end
+assert(loadfile('AlphaSquadUI/Core/Sharing.lua'))()
+local fullSharing=AlphaSquadUI.Sharing
+check(fullSharing.SetEnabled('builds',true),'Full build sender starts with the supported native controls')
+sc.share.lastSendAt=-60000
+check(sc:ShareLocalSnapshot('queue before group leave') and sc.share.mayHaveQueuedBuildData,
+    'Successful full-addon sends record the need to revoke possibly queued data')
+for _,frame in ipairs(pendingFrames) do frame.previousGroup=true end
+sharingGrouped=false
+fullSharing.SetEnabled('builds',false);fullSharing.SetEnabled('builds',true)
+check(not values[507] and not values[510] and sc.share.queueRevokeNeedsGroup,
+    'Full-addon rapid solo OFF -> ON leaves both native protocols blocked')
+sharingGrouped=true;now=now+1600
+check(sc:ShareLocalSnapshot('new group') and values[507] and values[510] and not sc.share.queueRevokeNeedsGroup,
+    'The next grouped full-addon publication resolves deferred revocation and restores sharing')
+for _,frame in ipairs(pendingFrames) do check(not frame.previousGroup,'No previous-group private frame survives full-addon reactivation') end
+-- Neutral version-zero fragments are ignored without entering a response flow.
+sc:OnDetailData('group2',{version=0,kind=0,revision=0,checksum=0,body=''})
+check(not sc.share.outgoingBuild,'A native queue-revocation frame never starts a detail transfer')
+fullSharing.SetEnabled('builds',false);sc:InitializeSharing()
+local off,offReason,offAvailable=fullSharing.GetStatus('builds')
+check(not off and offAvailable and offReason==nil,
+    'Registered native controls keep a deliberate OFF available after transport initialization while disabled')
+sc.share.controlError='Native OFF failed';values[507]=true
+local blocked,blockedReason,blockedAvailable=fullSharing.GetStatus('builds')
+check(not blocked and not blockedAvailable and blockedReason=='Native OFF failed',
+    'An unsuccessful native OFF keeps its actionable error instead of showing an unqualified OFF')
+values[507]=false
+local corrected,correctedReason,correctedAvailable=fullSharing.GetStatus('builds')
+check(not corrected and correctedAvailable and correctedReason==nil and not sc.share.controlError,
+    'A corrected native OFF clears an obsolete error without enabling sharing')
 print('Sharing controls and boundaries: '..checks..' assertions passed')

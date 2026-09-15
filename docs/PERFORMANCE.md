@@ -27,6 +27,8 @@ LibGroupCombatStats is subscribed for **ULT only**. An incoming player update ch
 
 The group view excludes the local player and retains no group-ready-sound callback. The HUD reuses up to twelve player rows, including the twelve-player placement sample. Horizontal and vertical presentations reuse the same pool. READY animation stops when no visible row requires it, and placement samples do not start gameplay alerts.
 
+Group row geometry is cached separately from charge/readiness painting. The configured row size does not stretch when fewer players match; the live frame contracts while retaining the requested full-roster dimensions for placement. Sorting and resource changes reuse existing geometry when its signature is unchanged.
+
 ## Support Coverage
 
 Equipment, skill, Champion and mastery changes invalidate a cached local build. Coalesced scans run outside combat. Quickslot/readiness changes take the lightweight consumable path instead of always rescanning equipment. Screen-resize bursts schedule one deferred Support refresh using the dimensions available when it runs. A regression delivers 200 events before that callback and checks that they produce one pass; this measures coalescing, not native frame time.
@@ -53,7 +55,9 @@ The native Add-Ons status list reuses the manager's existing entries in one pass
 
 Libraries remain installed and available independently of UI modules. Only verified matching protocols are changed, and queued disabled packets are pruned. LibGroupCombatStats does not expose sender unregistration; its own shared send timer can remain until reload after its protocol is disabled. The addon does not suppress callbacks belonging to another library or its other clients. On the next load, an explicitly disabled Ultimate sender is not registered by this addon.
 
-Dashboard and Libraries use static controls. Libraries fits its two columns and Minion footer on the settings canvas without a scrollbar. The common shell fits smaller viewports by scaling only when necessary. Native tooltip scale and draw order are restored after use.
+Dashboard and Libraries reuse static controls. The shell uses actual viewport dimensions and page layout callbacks at native scale: navigation becomes a compact strip and cards stack when needed. Libraries retains one-page layouts where space permits; very narrow canvases use readable scrolling instead of shrinking all text. Native tooltip scale and draw order are restored after use.
+
+LibSetDetection receipts belong to an uninterrupted group session rather than the tracking switch. A small membership/connectivity guard remains registered while tracking is disabled so old character data cannot survive departure. It performs no equipment scan, coverage evaluation or send. Ordinary zoning and OFF/ON do not fabricate receipt times or rehydrate an unproven stale library cache.
 
 
 ## Compact interface and placement

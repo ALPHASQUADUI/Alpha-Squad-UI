@@ -8,6 +8,8 @@ Keep each change focused, explain the user problem and document the resulting be
 
 Update the README, module documentation and changelog when behavior changes. Use English in the addon and public documentation. Keep personal identities, private conversations, credentials and player snapshots out of commits and screenshots.
 
+Use a GitHub-provided `noreply` address for both author and committer metadata. Report historical exposures privately using [SECURITY.md](SECURITY.md); do not repeat sensitive values in a public issue or rewrite history as part of an unrelated change. Contributions to the addon are under its [MIT license](LICENSE); native game resources and external libraries retain their respective licenses.
+
 ## Engineering rules
 
 - Prefer filtered events, coalesced work and bounded caches to frequent polling.
@@ -36,12 +38,16 @@ From the repository root:
 python3 tooling/validate.py
 ```
 
-The validator runs every regression suite with Lua 5.1 and 5.4, checks Lua/XML syntax, manifest/version consistency and whitespace, and validates the full and companion packages. Use `LUA51` and `LUA54` environment variables when the runtimes have different executable names. CI runs the same checks with standard Lua interpreters.
+The validator builds both archives once, extracts them, then runs every regression suite with Lua 5.1 and 5.4 against the shipped runtime files. It checks Lua/XML syntax, manifest inventory, numeric/string version correspondence, incoming whitespace and redacted security/privacy patterns. Use `LUA51` and `LUA54` when runtimes have different executable names, and `--output-dir` to select the artifact directory. Use `--base` and `--head` to check an explicit change range; CI derives the range from its event. Exact ZIPs, checksums, release notes and source provenance are retained in `dist/`, which is not committed.
 
 Meaningful regressions should cover the affected boundary: exact item traits/enchantments, CP allocation, profile isolation, module lifecycle, tooltip ownership or malformed/stale packets. Avoid tests that only duplicate implementation details.
 
-For client validation, use the [ESO checklist](docs/SUPPORT_COVERAGE_TESTING.md). Include enabled/disabled states, initial sharing setup, later OFF choices, global placement/resizing, all three themes, unified Ultimate/Overload migration, both weapon bars, character changes, `/reloadui`, travel and instance transitions. Reproduce a defect with the smallest relevant addon/library combination and attach the exact error and steps.
+For client validation, record results in the [acceptance matrix](docs/CLIENT_ACCEPTANCE.md) and use the detailed [ESO checklist](docs/SUPPORT_COVERAGE_TESTING.md). Include enabled/disabled states, initial sharing setup, later OFF choices, global placement/resizing, all three themes, unified Ultimate/Overload migration, both weapon bars, character changes, `/reloadui`, travel and instance transitions. Reproduce a defect with the smallest relevant addon/library combination and attach the exact error and steps. Leave unperformed native checks explicitly unrecorded.
 
 ## Release preparation
 
 Keep manifest/Core versions aligned and increment the numeric AddOnVersion. Build installable full-suite and companion archives, inspect the CI result and publish concise notes describing the user-visible changes. Reserve the active LibGroupBroadcast protocol identifiers before a public full-build-sharing release. Preserve the maintainer's final approval step.
+
+Publication uses an explicit version policy, an authorized source ref and the exact artifacts from the successful validation job. The publish job alone receives repository-content write permission; pull-request validation does not. Existing releases and tags are never overwritten. An interrupted unpublished draft may resume only with matching source and asset digests. A correction after publication receives a new version.
+
+See [repository operations](docs/REPOSITORY_OPERATIONS.md) for required-check configuration, About metadata, private reporting and historical privacy. Committed configuration is not proof that administrator-only settings have been enabled.

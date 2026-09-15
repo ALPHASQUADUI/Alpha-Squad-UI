@@ -3,6 +3,7 @@ name: Validate AlphaSquadUI
 on:
   pull_request:
   push:
+    branches: ['**']
   workflow_dispatch:
 
 permissions:
@@ -10,40 +11,59 @@ permissions:
 
 concurrency:
   group: addon-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   validate-and-package:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Checkout proposed source and comparison history
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
 
-      - name: Install Lua and ZIP
+      - name: Install supported Lua runtimes
         run: |
           sudo apt-get update
-          sudo apt-get install -y lua5.1 lua5.4 zip unzip
+          sudo apt-get install -y --no-install-recommends lua5.1 lua5.4
 
-      - name: Validate runtimes, regressions, manifests and packages
-        run: python3 tooling/validate.py
+      - name: Check privacy, security, regressions and exact installable packages
+        run: python3 tooling/validate.py --output-dir dist
 
-      - name: Build addon ZIP
-        run: |
-          set -euo pipefail
-          zip -r AlphaSquadUI.zip AlphaSquadUI -x '*/.gitkeep'
-          unzip -t AlphaSquadUI.zip
-          python3 -c "import zipfile; z=zipfile.ZipFile('AlphaSquadUI.zip'); assert all(p.startswith('AlphaSquadUI/') for p in z.namelist())"
-
-      - name: Build companion ZIP
-        run: python3 tooling/build_companion.py AlphaSquadBuildShare.zip
-      - uses: actions/upload-artifact@v4
+      - name: Upload the exact validated archives and checksums
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
-          name: AlphaSquadBuildShare
-          path: AlphaSquadBuildShare.zip
+          name: AlphaSquadUI-release-${{ github.sha }}
+          path: dist/
           if-no-files-found: error
-      - name: Upload validated build
-        uses: actions/upload-artifact@v4
+          compression-level: 0
+          retention-days: 90
+
+  publish-release:
+    needs: validate-and-package
+    if: github.event_name == 'push' && github.repository == 'ALPHASQUADUI/Alpha-Squad-UI' && github.ref == 'refs/heads/support-coverage'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    concurrency:
+      group: publish-alpha-squad-ui
+      cancel-in-progress: false
+    steps:
+      - name: Checkout authorized publisher
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
-          name: AlphaSquadUI
-          path: AlphaSquadUI.zip
-          if-no-files-found: error
+          persist-credentials: false
+
+      - name: Download this run's validated release bundle
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with:
+          name: AlphaSquadUI-release-${{ github.sha }}
+          path: dist
+
+      - name: Verify hashes and publish authorized version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tooling/publish_release.py dist

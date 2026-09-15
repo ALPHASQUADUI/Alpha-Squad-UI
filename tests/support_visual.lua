@@ -184,4 +184,18 @@ check(SC.UI.EffectTooltip('demo1'):find('category symbol',1,true),'Fallback artw
 SC.Catalog.GetEffectVisual=function()return {icon='native-provider',isFallback=false,iconKind='source',sourceName='Exact provider'}end
 check(SC.UI.EffectTooltip('demo1'):find('Exact provider',1,true),'A source ability icon is named as a provider, not mislabeled as the effect image')
 SC.Catalog.GetEffectVisual=nativeVisual
+-- Contributor navigation uses the same registered Back/restore flow as Builds.
+assert(loadfile('AlphaSquadUI/Modules/SupportCoverage/SupportCoverageSettings.lua'))()
+SC.sv.enabled=true
+function SC:GetCapabilityOwners()return {SC.roster[1],SC.roster[2]} end
+SC:OpenContributorPicker({key='demo1',owners={SC.roster[1],SC.roster[2]}})
+local picker=SC.contributorWindow
+check(registeredWindows.supportContributors.options.fallbackPage=='supportcoverage',
+    'The contributor chooser participates in normal secondary-window navigation')
+picker:SetHidden(false);SC:RefreshContributorPicker()
+picker.close.handlers.OnMouseUp(picker.close,MOUSE_BUTTON_INDEX_LEFT,true)
+check(backTarget=='supportContributors','Contributor Back returns through the shared history controller')
+local beforeRequest=requests
+registeredWindows.supportContributors.options.restore()
+check(requests==beforeRequest,'Returning from a build to contributor choices sends no additional request')
 print(string.format('Support visual integration: %d assertions passed',total))

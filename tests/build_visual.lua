@@ -100,6 +100,17 @@ SC.GetChampionSlotLayout=originalLayout
 local before=created
 V.Bind(canvas,player,details)
 check(created==before,'Repeated build binding reuses all controls without allocating new controls')
+canvas.equipment.slots.HEAD.handlers.OnMouseEnter()
+local wrapper={};for key,value in pairs(player) do wrapper[key]=value end
+V.Bind(canvas,wrapper,details)
+check(hovered==head,'Periodic roster wrapper replacement preserves the current native item tooltip')
+wrapper.characterName='New character';V.Bind(canvas,wrapper,details)
+check(hovered==nil,'A different character clears the previous item tooltip even for the same account')
+canvas.equipment.slots.HEAD.handlers.OnMouseEnter()
+local replacement={};for key,value in pairs(details) do replacement[key]=value end
+V.Bind(canvas,wrapper,replacement)
+check(hovered==nil,'A new immutable build snapshot clears the previous snapshot tooltip')
+V.Bind(canvas,player,details)
 details.curse={known=true,kind='WEREWOLF',transformed=true}
 details.skills.werewolfKnown=true;details.skills.werewolf={{slot=3,abilityId=999,icon='werewolf-morph'}}
 V.Bind(canvas,player,details)
@@ -111,6 +122,15 @@ V.Bind(canvas,player,nil,'Detailed build unavailable')
 check(canvas.equipment.slots.HEAD.data.value==nil and canvas.equipment.slots.HEAD.empty.text=='?','Switching to partial build clears prior equipment')
 check(canvas.skills.bars.primary.icons[6].icon.texture=='shared-ultimate','Valid partial ultimate is shown')
 check(canvas.skills.bars.primary.icons[1].data.value==nil,'Partial ultimate does not imply knowledge of normal skills')
+canvas.skills.bars.primary.icons[6].handlers.OnMouseEnter()
+local partialWrapper={};for key,value in pairs(player) do partialWrapper[key]=value end
+partialWrapper.externalUltimates={{bar='front',abilityId=600,name='Shared ultimate',updatedAt=100000,icon='shared-ultimate'}}
+V.Bind(canvas,partialWrapper,nil,'Detailed build unavailable')
+check(hovered~=nil,'Unchanged partial library values in a fresh wrapper preserve the open tooltip')
+partialWrapper.externalUltimates[1].abilityId=601
+V.Bind(canvas,partialWrapper,nil,'Detailed build unavailable')
+check(hovered==nil,'A changed shared ultimate clears the previous ability tooltip')
+V.Bind(canvas,player,nil,'Detailed build unavailable')
 local shared=V.SetRows(nil,player.externalSets)[1]
 check(shared.name=='≥5× Shared set' and shared.front==5 and shared.back==nil,'Partial sets show the known bar as a lower bound and leave the other bar unknown')
 check(canvas.champion.rows.COMBAT.icons[1].data.value==nil,'Switching player removes previous CP data')

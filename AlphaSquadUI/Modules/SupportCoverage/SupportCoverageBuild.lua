@@ -147,19 +147,11 @@ function SC:ScanClassMasteries()
         for _,selected in ipairs(result.selected) do
             for _,source in ipairs(self.Catalog.masterySources or {}) do
                 local matchedById=selected.id==source.abilityId
-                local selectedMatch=matchedById or MasteryName(selected.name)==MasteryName(source.name)
-                if not selectedMatch then
-                    for _,alias in ipairs(source.aliases or {}) do
-                        if MasteryName(selected.name)==MasteryName(alias) then selectedMatch=true;break end
-                    end
-                end
+                local selectedMatch=matchedById
                 local requiredRank=source.rank or 1
                 local prerequisiteMatch=not source.requires
-                for _,abilityId in ipairs(source.requiresIds or {}) do
-                    if (result.learnedIds[abilityId] or 0)>=requiredRank then prerequisiteMatch=true;break end
-                end
-                if not prerequisiteMatch and source.requires then
-                    prerequisiteMatch=(result.learned[MasteryName(source.requires)] or 0)>=requiredRank
+                if selectedMatch and source.requires then
+                    prerequisiteMatch=self.Catalog:GetLearnedSourceRank(result,source.requiresIds,source.requiresPassive)>=requiredRank
                 end
                 if selectedMatch and prerequisiteMatch then
                     for _,key in ipairs(source.provides) do
@@ -178,19 +170,8 @@ function SC:ScanClassPassives(skills, masteries)
     local capabilities = {}
     if not masteries or not masteries.known then return capabilities end
     for _, source in ipairs(self.Catalog.passiveSources or {}) do
-        local learnedRank, evidence = 0, "LEARNED_PASSIVE_NAME"
-        for _, id in ipairs(source.abilityIds or {}) do
-            local rank = NaturalNumber((masteries.learnedIds or {})[id], 100)
-            if rank and rank > learnedRank then learnedRank, evidence = rank, "LEARNED_PASSIVE_ID" end
-        end
-        if learnedRank == 0 then
-            local localizedName = source.name
-            for _, id in ipairs(source.abilityIds or {}) do
-                local candidate = Try(GetAbilityName, id)
-                if type(candidate) == "string" and candidate ~= "" then localizedName=candidate; break end
-            end
-            learnedRank = NaturalNumber((masteries.learned or {})[MasteryName(localizedName)], 100) or 0
-        end
+        local learnedRank=self.Catalog:GetLearnedSourceRank(masteries,source.abilityIds,source.nativePassive)
+        local evidence="LEARNED_PASSIVE_ID"
         if learnedRank >= (source.rank or 1) then
             local unrestricted = #(source.skillLineIds or {}) == 0
             local main, back = unrestricted, unrestricted

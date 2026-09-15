@@ -357,7 +357,12 @@ end
 
 function SC:ShareLocalSnapshot(reason)
     if not self.sv or not self.sv.experimentalSharing or not self.sv.shareData or self.inCombat or self.loading then return false end
-    if not self:IsGrouped() or not self.share or not self.share.available or not self.share.protocol then return false end
+    if self.share and self.share.queueRevokeNeedsGroup and self:IsGrouped() and AlphaSquadUI.Sharing then
+        -- A solo opt-out cannot call LGB's grouped-only Send API. Keep native
+        -- protocols OFF until replacement is possible in the new group.
+        AlphaSquadUI.Sharing.SetEnabled("builds",true)
+    end
+    if not self:IsGrouped() or not self.share or not self.share.available or self.share.controlError or not self.share.protocol then return false end
     if self.share.protocol.IsEnabled then
         local ok,enabled=pcall(self.share.protocol.IsEnabled,self.share.protocol)
         if not ok or enabled~=true then return false end
@@ -368,6 +373,7 @@ function SC:ShareLocalSnapshot(reason)
     if not payload then return false end
     local ok,sent=pcall(self.share.protocol.Send,self.share.protocol,payload,{isRelevantInCombat=false,replaceQueuedMessages=true})
     if ok and sent==true then
+        self.share.mayHaveQueuedBuildData=true
         self.share.lastSendAt=now
         self.share.lastBuildFingerprint=math.floor(payload.cap4/512)
         if self.ShareCapabilitySummary then self:ShareCapabilitySummary() end
@@ -376,8 +382,57 @@ function SC:ShareLocalSnapshot(reason)
     return false
 end
 
+-- LGB's public replacement option removes older messages for this protocol at
+-- enqueue time. Empty version-zero frames are rejected by every ASUI receiver;
+-- they contain no player data and are pruned once native Allow Sending is OFF.
+-- This avoids resurrecting a queued build after a rapid OFF -> ON toggle.
+function SC:ClearQueuedBuildMessages()
+    if not self.share then return true end
+    if not self:IsGrouped() then
+        if self.share.mayHaveQueuedBuildData or self.share.queueRevokeFailed then
+            self.share.queueRevokeFailed=true;self.share.queueRevokeNeedsGroup=true
+            return false
+        end
+        return true
+    end
+    -- A failed supported-API attempt needs an explicit retry, not an automatic
+    -- refresh loop. Only a transition from solo to grouped is retried here.
+    self.share.queueRevokeNeedsGroup=nil
+    local summary={version=0,role=0,classId=0,food=false,foodVerified=false,foodId=0,potion=0,
+        missingGlyphs=0,prism=0,mag=0,stam=0,health=0,supportScore=0,
+        cap1=0,cap2=0,cap3=0,cap4=0,set1=0,set2=0}
+    local detail={version=0,kind=0,revision=0,checksum=0,body=""}
+    local cleared=true
+    for _,entry in ipairs({{self.share.protocol,summary},{self.share.detailProtocol,detail}}) do
+        local protocol=entry[1]
+        if protocol and type(protocol.Send)=="function" then
+            local ok,sent=pcall(protocol.Send,protocol,entry[2],{isRelevantInCombat=false,replaceQueuedMessages=true})
+            if not ok or sent~=true then cleared=false end
+        end
+    end
+    self.share.queueRevokeFailed=not cleared or nil
+    if cleared then
+        self.share.mayHaveQueuedBuildData=nil;self.share.queueRevokeNeedsGroup=nil
+    end
+    return cleared
+end
+
 function SC:GetSharingStatus()
     if not self.sv or not self.sv.experimentalSharing or not self.sv.shareData then return "LOCAL","Build sharing is off" end
-    if self.share and self.share.available then return "SHARING",self.share.detailError end
+    if AlphaSquadUI.Sharing and type(AlphaSquadUI.Sharing.GetStatus)=="function" then
+        local enabled,reason,available=AlphaSquadUI.Sharing.GetStatus("builds")
+        if not available or not enabled then return "LOCAL",reason or "Build sharing is disabled in LibGroupBroadcast" end
+    end
+    if self.share and self.share.controlError then return "LOCAL",self.share.controlError end
+    if self.share and self.share.available then
+        for _,field in ipairs({"protocol","detailProtocol"}) do
+            local protocol=self.share[field]
+            if not protocol or type(protocol.IsEnabled)~="function" then return "LOCAL","Build transport status unavailable" end
+            local ok,enabled=pcall(protocol.IsEnabled,protocol)
+            if not ok or type(enabled)~="boolean" then return "LOCAL","Build transport status unavailable" end
+            if not enabled then return "LOCAL","Build sharing is disabled in LibGroupBroadcast" end
+        end
+        return "SHARING",self.share.detailError
+    end
     return "LOCAL",self.share and self.share.error or "LibGroupBroadcast unavailable"
 end

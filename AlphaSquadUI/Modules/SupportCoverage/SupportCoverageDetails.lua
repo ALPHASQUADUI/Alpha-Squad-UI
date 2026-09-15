@@ -12,7 +12,7 @@ local function Integer(value,minimum,maximum)
 end
 local function Enabled(sc)
     return sc.sv and sc.sv.experimentalSharing and sc.sv.shareData
-        and not sc.inCombat and not sc.loading and sc:IsGrouped() and sc.share and sc.share.detailProtocol
+        and not sc.inCombat and not sc.loading and sc:IsGrouped() and sc.share and not sc.share.controlError and sc.share.detailProtocol
 end
 local function ValidKey(key)
     return type(key)=="string" and #key>1 and #key<=60 and key:match("^@[^%c|]+$")
@@ -34,6 +34,7 @@ local function Frame(sc,kind,revision,checksum,body)
     end
     local ok,sent=pcall(p.Send,p,{version=Details.VERSION,kind=kind,revision=revision,checksum=checksum,body=body},
         {isRelevantInCombat=false,replaceQueuedMessages=false})
+    if ok and sent==true then sc.share.mayHaveQueuedBuildData=true end
     return ok and sent==true
 end
 local function PackHash(hash)

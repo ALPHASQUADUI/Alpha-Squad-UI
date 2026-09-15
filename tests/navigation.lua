@@ -70,6 +70,18 @@ local sceneName,inUIMode,cursorCalls="hud",false,0
 SCENE_MANAGER={GetCurrentScene=function()return {GetName=function()return sceneName end}end,
     IsInUIMode=function()return inUIMode end,
     SetInUIMode=function(_,value)inUIMode=value;cursorCalls=cursorCalls+1 end}
+S.OpenPage("dashboard")
+check(Only(main) and inUIMode and S.ownsCursor,"First explicit open from gameplay acquires mouse mode without needing chat or a previous panel")
+S.ShowExclusiveWindow("group")
+check(Only(group) and inUIMode and S.ownsCursor,"Opening a secondary preserves the cursor ownership acquired at the root")
+S.CloseExclusiveWindow("group");inputWindows[main].close()
+check(not inUIMode and not S.ownsCursor,"Returning through a secondary and closing the root releases only addon-owned mouse mode")
+local dialog=true
+ZO_Dialogs_IsShowingDialog=function()return dialog end
+local beforeDialog=cursorCalls
+S.OpenPage("dashboard")
+check(cursorCalls==beforeDialog and not S.ownsCursor,"An open native dialog retains control of cursor mode")
+dialog=false;ZO_Dialogs_IsShowingDialog=nil;inputWindows[main].close()
 S.RestoreReturnTarget({id="settings",page="dashboard"})
 check(Only(main) and inUIMode and S.ownsCursor,"Returning from placement restores native cursor access after the toolbar releases it")
 inputWindows[main].close()
