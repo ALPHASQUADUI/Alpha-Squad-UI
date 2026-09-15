@@ -186,7 +186,37 @@ function SC:DeriveScribingCapabilities(skill)
     if Try(IsCraftedAbilityDisabled,craftedId)==true
         or Try(IsScribableScriptCombinationForCraftedAbility,craftedId,ids[1],ids[2],ids[3])~=true then return result end
     local textures=Catalog.scribingTextures
-    if not textures or NativeIconName(Try(GetCraftedAbilityIcon,craftedId))~=textures.banner then return result end
+    if not textures then return result end
+    local grimoireIcon=NativeIconName(Try(GetCraftedAbilityIcon,craftedId))
+    if grimoireIcon~=textures.banner then
+        local definition=Catalog.scribingGrimoires[grimoireIcon]
+        if not definition then return result end
+        local shield=icons[1]=="scribing_primary_damageshield.dds" and definition.shield
+        local allies=definition.link or shield or icons[1]=="scribing_primary_healing.dds" and definition.healing
+        local enemies=definition.link or Catalog.scribingEnemyFocus[icons[1]]==true
+        local function Add(key,conditions)
+            if Catalog.effects[key] then
+                result[key]={name=definition.name.." - "..Catalog.effects[key].label,conditions=conditions}
+            end
+        end
+        if shield then Add("group_shield","The exact Damage Shield Focus is equipped. Apply the shield to the intended allies; range and recipient limits belong to this grimoire.") end
+        if allies then
+            for _,key in ipairs((definition.ally or {})[icons[3]] or {}) do
+                Add(key,definition.link and "The intended allies must be in the active link. The exact Affix is equipped in a valid recipe."
+                    or "The exact Affix is equipped with an ally-targeting Focus. Cast it on the intended allies; the same recipe used on yourself does not buff the whole group.")
+            end
+        end
+        if enemies then
+            for _,key in ipairs((definition.enemy or {})[icons[3]] or {}) do
+                Add(key,definition.link and "The intended enemy must be in the active link. The exact Affix is equipped in a valid recipe."
+                    or "The exact Affix is equipped in a valid enemy-targeting recipe. Hit the intended enemy; boss immunities and recipient limits still apply.")
+            end
+            if definition.warriorsOpportunity and icons[2]=="scribing_secondary_opportunism.dds" then
+                Add("warriors_opportunity","Hit the intended enemy with Traveling Knife using Warrior's Opportunity. Its Martial Damage taken bonus is specific to this grimoire.")
+            end
+        end
+        return result
+    end
     local focusKey=textures.bannerFocus[icons[1]]
     -- Immobilize is a personal cleanse; it is deliberately not a group-cleanse provider.
     if focusKey then
@@ -296,20 +326,12 @@ function SC:DeriveBuildCapabilities(snapshot)
     if masteries.known and masteries.eligible then
         for _,selected in ipairs(masteries.selected or {}) do
             for _,source in ipairs(Catalog.masterySources or {}) do
-                local nativeName=Try(GetAbilityName,selected.id)
-                local name=type(nativeName)=="string" and nativeName~="" and nativeName or selected.name
-                local matches=(source.abilityId and selected.id==source.abilityId) or Normalize(name)==Normalize(source.name)
-                if not matches then
-                    for _,alias in ipairs(source.aliases or {}) do if Normalize(name)==Normalize(alias) then matches=true;break end end
-                end
+                local matches=source.abilityId and selected.id==source.abilityId
                 local prerequisite=not source.requires
-                for _,id in ipairs(source.requiresIds or {}) do
-                    if ((masteries.learnedIds or {})[id] or 0)>=(source.rank or 1) then prerequisite=true;break end
+                if matches and source.requires then
+                    prerequisite=Catalog:GetLearnedSourceRank(masteries,source.requiresIds,source.requiresPassive)>=(source.rank or 1)
                 end
-                if not prerequisite and source.requires then
-                    prerequisite=((masteries.learned or {})[Normalize(source.requires)] or 0)>=(source.rank or 1)
-                end
-                if prerequisite and (source.requiredSkillLineIds or source.requiredSlottedIds) then
+                if matches and prerequisite and (source.requiredSkillLineIds or source.requiredSlottedIds) then
                     local slotted=false
                     if skills.known then
                         for _,bar in ipairs({"primary","backup"}) do

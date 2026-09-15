@@ -58,6 +58,27 @@ end
 local last=G.window.rows[12];local bottom=last.anchor[4]+last:GetHeight()
 check(bottom<=800 and not last:IsHidden(),'Twelve players fit inside the resized panel')
 check(G.window.rows[1].user:GetWidth()>300,'Extra width is used for account names rather than stretched artwork')
+local fullRoster=entries
+local fullRowHeight=G:GetRowHeight()
+entries={fullRoster[1],fullRoster[2]};G:RefreshHUD()
+check(G:GetRowHeight()==fullRowHeight and G.window.height<200,'A smaller filtered roster shrinks its frame without enlarging its rows')
+check(G.sv.hudHeight==800,'Roster changes retain the saved twelve-player design height')
+local geometryCalls=0
+local applyGeometry=G.ApplyListGeometry
+G.ApplyListGeometry=function(self)geometryCalls=geometryCalls+1;return applyGeometry(self)end
+local anchorCalls=0
+local clearAnchors=G.window.rows[1].ClearAnchors
+G.window.rows[1].ClearAnchors=function(self)anchorCalls=anchorCalls+1;return clearAnchors(self)end
+entries[1].chargePercent=63;G:RefreshHUD()
+check(G.window.rows[1].percent.text=='63%' and geometryCalls==0 and anchorCalls==0,'Charge updates refresh the percentage without reapplying row geometry')
+entries={fullRoster[2],fullRoster[1]};G:RefreshHUD()
+check(G.window.rows[1].entry==fullRoster[2] and geometryCalls==0 and anchorCalls==0,'Readiness sorting reuses positioned row controls')
+G.sv.scale=150;GuiRoot:SetDimensions(1920,800);G:RefreshHUD()
+local compactScale=G.window:GetScale()
+entries=fullRoster;G:RefreshHUD()
+check(G.window:GetScale()==compactScale,'Screen fitting keeps row pixels stable when the full roster returns')
+GuiRoot:SetDimensions(1920,1080);G.sv.scale=100
+G.ApplyListGeometry=applyGeometry;G.window.rows[1].ClearAnchors=clearAnchors
 G.sv.hudHeight=90;G:ApplyLayout()
 check(G.window:GetHeight()>=12*28+24,'A too-short saved panel retains enough room for all current players')
 G.sv.hudHeight=800;G.sv.scale=150;G:ApplyLayout()
@@ -100,4 +121,26 @@ G:SetLayoutPreview("ready");check(G:GetHUDEntries()[12].anyReady,"All twelve acc
 G:SetLayoutPreview("missing");check(G:GetHUDEntries()[1].previewState=="missing","Missing preview covers all group rows")
 L.active=false;G:RefreshHUD()
 check(G:GetHUDEntries()==liveEntries,"Closing placement restores the real group immediately")
+local savedHorizontalHeight=G.sv.hudHeight
+G:SetLayoutOrientation('vertical');G:SetLayoutOrientation('horizontal')
+check(G.sv.hudHeight==savedHorizontalHeight,'Switching templates with only two real players preserves the full-roster size')
+L.active=true;L.selected=G;G:SetLayoutPreview('live');G.sv.scale=100;G:RefreshHUD()
+local previousHeight,previousWidth=G.window.height,G.window.width
+L.ResizeSelected(0,12)
+check(math.abs(G.window.height-previousHeight-12)<0.00001 and G.window.width==previousWidth,'Controller height resizing follows the visible Live preview by the requested pixels')
+local editedRowHeight=G:GetRowHeight()
+entries=fullRoster;G:RefreshHUD()
+check(G:GetRowHeight()==editedRowHeight,'The resized Live preview applies the same row height to players who appear later')
+entries={fullRoster[1],fullRoster[2]};G:SetLayoutOrientation('vertical')
+GuiRoot:SetDimensions(1920,800);G.sv.hudWidth=312;G.sv.hudHeight=800;G.sv.scale=100;G:RefreshHUD()
+function GetUIMousePosition()return 0,0 end
+check(L.BeginResize(G,1,1,L.attachments[G][5]),'A corner drag begins on a compact Live roster')
+L.UpdateResize(-40,-20);L.EndResize()
+local pointerScale=G.window:GetScale();G:RefreshHUD()
+check(math.abs(G.window:GetScale()-pointerScale)<0.00001,'A charge refresh cannot snap a resized compact roster back to a different scale')
+L.BeginResize(G,0,1,L.attachments[G][6]);L.UpdateResize(0,500)
+local edgeScale=G.window:GetScale();L.EndResize();G:RefreshHUD()
+check(math.abs(edgeScale-pointerScale)<0.00001 and math.abs(G.window:GetScale()-pointerScale)<0.00001,
+    'Edge resizing stops at the full-roster screen limit without changing scale mid-drag')
+L.active=false
 print('Group HUD resizing: '..count..' assertions passed')

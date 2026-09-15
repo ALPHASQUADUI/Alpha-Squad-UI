@@ -10,7 +10,7 @@ end
 function SC:RefreshSettings()
     local settings=AlphaSquadUI.Settings
     if settings and settings.RefreshMain then settings.RefreshMain() end
-    self:RefreshMatrix(); self:RefreshInspector()
+    self:RefreshMatrix(); self:RefreshInspector();self:RefreshContributorPicker()
 end
 function SC:BuildIntegratedSettingsPage(page,ui)
     if not page or not ui or not self.sv then return end
@@ -22,8 +22,8 @@ function SC:BuildIntegratedSettingsPage(page,ui)
     local overview=ui.CreateCard(page,"AlphaSquadSupportOverview",8,76,658,130,"GROUP PREPARATION",C.orange)
     local status=ui.CreateLabel(overview,"AlphaSquadSupportOverviewStatus","ZoFontGameBold","",C.white)
     status:SetAnchor(TOPLEFT,overview,TOPLEFT,14,34); status:SetDimensions(630,38)
-    ui.CreateButton(overview,"AlphaSquadSupportSettingsCoverage","COVERAGE",14,82,190,32,function() SC:OpenMatrix() end)
-    ui.CreateButton(overview,"AlphaSquadSupportSettingsBuilds","BUILDS",216,82,190,32,function() SC:OpenInspector("BUILD") end)
+    local coverageButton=ui.CreateButton(overview,"AlphaSquadSupportSettingsCoverage","COVERAGE",14,82,190,32,function() SC:OpenMatrix() end)
+    local buildsButton=ui.CreateButton(overview,"AlphaSquadSupportSettingsBuilds","BUILDS",216,82,190,32,function() SC:OpenInspector("BUILD") end)
     local module=ui.CreateCard(page,"AlphaSquadSupportModule",8,218,322,354,"PREPARATION",C.orange)
     local function Toggle(id,label,y,get,set,help) return ui.AddToggleRow(module,"AlphaSquadSupport"..id,label,y,get,set,help) end
     Toggle("Visible","Show preparation HUD",40,function() return SC.sv.visible end,function(v) SC:SetVisible(v) end,
@@ -38,17 +38,34 @@ function SC:BuildIntegratedSettingsPage(page,ui)
         "Hide the preparation HUD while inventory, Champion Points and other ESO menus are open.")
     local appearance=ui.CreateCard(page,"AlphaSquadSupportAppearance",344,218,322,354,"YOUR HUD",C.accent or C.gold)
     local help=ui.CreateLabel(appearance,"AlphaSquadSupportLayoutHelp","ZoFontGameSmall",
-        "Arrange and resize every enabled panel in Move HUD. Drag an edge to change its space, or a corner to scale the whole panel.",C.muted)
+        "Drag an edge to resize a panel. Drag a corner to scale it. Done saves your layout.",C.muted)
     help:SetAnchor(TOPLEFT,appearance,TOPLEFT,14,42);help:SetDimensions(294,66)
     ui.CreateButton(appearance,"AlphaSquadSupportGlobalMove","MOVE HUD",14,122,190,32,function()
         if AlphaSquadUI.Layout and AlphaSquadUI.Layout.Start then AlphaSquadUI.Layout.Start() end
     end)
     local placement=ui.CreateLabel(appearance,"AlphaSquadSupportPlacementNote","ZoFontGameSmall",
-        "Use Preview for sample ready, missing and optional sources. Done saves and locks your panels; previews never change group data.",C.muted)
+        "Preview shows sample states while you arrange panels. It never changes group data.",C.muted)
     placement:SetAnchor(TOPLEFT,appearance,TOPLEFT,14,170);placement:SetDimensions(294,76)
     local native=ui.CreateLabel(appearance,"AlphaSquadSupportNativeNote","ZoFontGameSmall",
         "Equipment, skills and Champion stars use the game's own icons. Choose the suite design in Dashboard.",C.muted)
-    native:SetAnchor(TOPLEFT,appearance,TOPLEFT,14,258);native:SetDimensions(294,70)
+    native:SetAnchor(TOPLEFT,appearance,TOPLEFT,14,250);native:SetDimensions(294,70)
+    if ui.RegisterLayout then
+        ui.RegisterLayout(page,function(width)
+            local available=math.max(1,width-16)
+            local columns=width>=860 and 2 or 1
+            local cardWidth=columns==2 and (available-14)/2 or available
+            title:SetWidth(available);sub:SetDimensions(available,40)
+            overview:SetWidth(available);status:SetDimensions(available-28,38)
+            local buttonWidth=math.min(190,(available-40)/2)
+            coverageButton:SetWidth(buttonWidth);buildsButton:SetWidth(buttonWidth)
+            buildsButton:ClearAnchors();buildsButton:SetAnchor(TOPLEFT,overview,TOPLEFT,26+buttonWidth,82)
+            module:ClearAnchors();module:SetAnchor(TOPLEFT,page,TOPLEFT,8,218);module:SetDimensions(cardWidth,330)
+            appearance:ClearAnchors();appearance:SetAnchor(TOPLEFT,page,TOPLEFT,columns==2 and 22+cardWidth or 8,columns==2 and 218 or 562)
+            appearance:SetDimensions(cardWidth,330)
+            help:SetWidth(cardWidth-28);placement:SetWidth(cardWidth-28);native:SetWidth(cardWidth-28)
+            page.contentHeight=columns==2 and 564 or 908
+        end)
+    end
     ui.RegisterRefresher(function()
         local coverage=SC.coverage or {}
         status:SetText(string.format("%d / %d covered  •  %d missing  •  %d players with limited data",coverage.coveredCount or 0,coverage.requiredCount or 0,coverage.missingCount or 0,coverage.limitedPlayers or 0))
@@ -108,10 +125,71 @@ local function ContributorTooltip(data)
         lines[#lines+1]=tostring(player.displayName or "Unknown player")..bars.."\n"..(#sources>0 and table.concat(sources,", ") or "Detailed sources unavailable • inspect build")
     end
     if #owners==0 then lines[#lines+1]="No verified source in the current group. Unknown builds may contain a source." end
-    if #owners>0 then lines[#lines+1]="Click to inspect "..tostring(owners[1].displayName or "this player")..". Select any group member in Builds." end
+    if #owners==1 then lines[#lines+1]="Click to inspect this player's build."
+    elseif #owners>1 then lines[#lines+1]="Click to choose a player's build." end
     return table.concat(lines,"\n\n")
 end
 function SC:GetCoverageContributorTooltip(data)return ContributorTooltip(data)end
+function SC:CloseContributorPicker()
+    if self.contributorWindow then self.contributorWindow:SetHidden(true) end
+    UI.ClearTooltip()
+end
+function SC:InspectContributor(key,characterName)
+    -- Never let a stale selection fall through to the inspector's default player.
+    for _,player in ipairs(self.roster or {}) do
+        if (player.key or player.displayName)==key and player.characterName==characterName then
+            self.inspectorPlayerKey=key;return self:OpenInspector("BUILD")
+        end
+    end
+    self:RefreshContributorPicker();self:RefreshMatrix();return false
+end
+function SC:RefreshContributorPicker()
+    local win=self.contributorWindow
+    if not win or win:IsHidden() then return end
+    local key=self.contributorEffectKey
+    local effect=key and Catalog.effects[key]
+    local owners=effect and self:GetCapabilityOwners(key) or {}
+    local count=math.min(12,#owners)
+    local height=math.max(172,count*34+136)
+    win:SetDimensions(420,height)
+    win:SetScale(math.max(.1,math.min(1,(GuiRoot:GetWidth()-24)/420,(GuiRoot:GetHeight()-24)/height)))
+    win.subtitle:SetText(effect and UI.Text(effect.label) or "Source unavailable")
+    win.footer:SetText(count>0 and "Choose a player to inspect their build." or "No current contributor is available.")
+    for index=1,count do
+        local row=win.rows[index]
+        if not row then
+            row=UI.Button(win,"AlphaSquadContributor"..index,"",384,30,function(button)
+                SC:InspectContributor(button.playerKey,button.characterName)
+            end)
+            row:SetAnchor(TOPLEFT,win,TOPLEFT,18,88+(index-1)*34)
+            if row.label.SetWrapMode then row.label:SetWrapMode(TEXT_WRAP_MODE_ELLIPSIS) end
+            UI.Hover(row,function() return row.data and ContributorTooltip(row.data) end)
+            win.rows[index]=row
+        end
+        local player=owners[index]
+        row.playerKey=player.key or player.displayName;row.characterName=player.characterName
+        row.label:SetText(UI.Text(player.displayName or "Unknown player"));row:SetHidden(false)
+        row.data={key=key,effect=effect,status="covered",owners={player}}
+    end
+    for index=count+1,#win.rows do win.rows[index]:SetHidden(true);win.rows[index].playerKey=nil;win.rows[index].data=nil end
+end
+function SC:OpenContributorPicker(data)
+    if self.loading or self.inCombat or not data then return false end
+    local owners=data.owners or {}
+    if #owners==0 then return false end
+    if #owners==1 then return self:InspectContributor(owners[1].key or owners[1].displayName,owners[1].characterName) end
+    self.contributorEffectKey=data.key
+    if not self.contributorWindow then
+        local win=UI.Window("AlphaSquadContributors","Ąlpha Şquad UI  •  Contributors",function()
+            UI.CloseWindow("supportContributors",function() SC:CloseContributorPicker() end)
+        end)
+        win.title:SetText("CONTRIBUTORS")
+        win.hasContentLayout=true;win.rows={};self.contributorWindow=win
+        UI.RegisterWindow("supportContributors",win,function()SC:CloseContributorPicker()end,function()SC:RefreshContributorPicker()end)
+    end
+    UI.ClearTooltip();UI.ShowWindow("supportContributors",self.contributorWindow)
+    self:RefreshContributorPicker();return true
+end
 function SC:CreateMatrixWindow()
     local win=UI.Window("AlphaSquadSupportCoverageMatrix","Ąlpha Şquad UI  •  Coverage",function()
         UI.CloseWindow("supportCoverage",function() SC:CloseMatrix() end)
@@ -152,7 +230,7 @@ function SC:CreateMatrixWindow()
         local label=UI.Label(win.legend,"AlphaSquadCoverageLegendLabel"..index,data[1],"ZoFontGameSmall",C.white)
         label:SetAnchor(TOPLEFT,win.legend,TOPLEFT,30,29+(index-1)*32);win.legend.rows[index]=label
     end
-    win.footer:SetText("Hover names for sources and conditions • Hover counts for every contributor • Click a count to inspect its named build")
+    win.footer:SetText("Hover names for sources and conditions • Hover counts for contributors • Click a count to choose a build")
 end
 function SC:RefreshMatrix()
     local win=self.matrixWindow;if not win or win:IsHidden() then return end
@@ -216,8 +294,7 @@ function SC:RefreshMatrix()
                 row.toggle:SetAnchor(TOPRIGHT,row,TOPRIGHT,0,0)
                 UI.Hover(row.toggle,function()return row.data and (SC:IsEffectTracked(row.data.key) and "Tracking is on. Click to make this effect optional for " or "Tracking is off. Click to require this effect for ")..SC.sv.activeProfile.."." end)
                 row.contributors=UI.Button(row,name.."Contributors","",26,20,function()
-                    local player=row.data and (row.data.owners or {})[1]
-                    if player then SC.inspectorPlayerKey=player.key or player.displayName;SC:OpenInspector("BUILD") end
+                    SC:OpenContributorPicker(row.data)
                 end)
                 row.contributors.label:SetFont("ZoFontGameSmall")
                 row.contributors:SetAnchor(TOPRIGHT,row.toggle,TOPLEFT,-1,0)

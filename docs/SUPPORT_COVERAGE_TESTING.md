@@ -1,6 +1,6 @@
 # ESO acceptance checklist
 
-Version **3.2.0** / **30200**. This checklist is not a record of completed in-game tests.
+Version **3.3.0** / **30300**. This checklist is not a record of completed in-game tests. Record current results in the [client acceptance matrix](CLIENT_ACCEPTANCE.md).
 
 ## Native Add-Ons menu
 

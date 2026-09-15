@@ -114,19 +114,38 @@ check(Shell.initialized and Shell.settingsPages.ulttracker.profileReady,"Deferre
 check(Settings.GetPageBuilder("libraries") and Shell.settingsPages.libraries,"Libraries page is registered in the real shell")
 Settings.OpenPage("libraries")
 check(controls.AlphaSquadSettingsTitle.text:gsub("|c%x%x%x%x%x%x",""):gsub("|r",""):find("Ąlpha Şquad UI",1,true)~=nil,"Settings brand retains the original letters and UI suffix")
-check(Shell.settingsWindow.width==1350 and Shell.settingsWindow.height<=720,"Settings provide the wider desktop canvas and fit the viewport")
+check(Shell.settingsWindow.width==1256 and Shell.settingsWindow.height==696 and Shell.settingsWindow.scale==1,
+    "Settings fit the actual desktop viewport without shrinking native text or controls")
 check(Shell.settingsScroll.maximum==0 and Shell.settingsPages.libraries.contentHeight==590,"Every library and sharing switch fits on one page")
 GuiRoot:SetDimensions(854,480);Shell:ApplySettingsGeometry()
-check(Shell.settingsWindow.width*Shell.settingsWindow.scale<=814 and Shell.settingsWindow.height*Shell.settingsWindow.scale<=440,
-    "The complete settings canvas fits a smaller viewport without clipping")
-check(Shell.settingsScroll.maximum==0,"Libraries still needs no scrollbar at a smaller viewport")
-local logicalLibraryWidth = AlphaSquadUI.Utils.GetLogicalWidth(controls.AlphaSquadLibraryCard1)
-for _, dimensions in ipairs({{1920,1080},{3440,1440},{800,600},{3840,2160},{1280,720}}) do
+check(Shell.settingsWindow.width==830 and Shell.settingsWindow.height==456 and Shell.settingsWindow.scale==1,
+    "A smaller viewport keeps readable native text and adapts the actual window dimensions")
+check(Shell.settingsCompact and Shell.settingsSidebar.height==92 and controls.AlphaSquadNav_dashboard.label.width>=200,
+    "Narrow screens use two navigation rows with full module names")
+check(controls.AlphaSquadLibraryCard2.anchor[4]==8 and controls.AlphaSquadLibraryCard2.anchor[5]>controls.AlphaSquadLibraryCard1.anchor[5],
+    "Library cards stack vertically when two readable columns cannot fit")
+check(Shell.settingsScroll.maximum>0 and controls.AlphaSquadLibraryShare2Button.height==30,
+    "Unavoidable overflow scrolls instead of shrinking library switches and descriptions")
+local narrowCardWidth=controls.AlphaSquadLibraryCard1.width
+for _, dimensions in ipairs({{1920,1080},{3440,1440},{800,600},{640,480},{3840,2160},{1280,720}}) do
     GuiRoot:SetDimensions(dimensions[1],dimensions[2]);Shell:ApplySettingsGeometry();Shell:ShowSettingsPage("libraries")
-    check(math.abs(AlphaSquadUI.Utils.GetLogicalWidth(controls.AlphaSquadLibraryCard1)-logicalLibraryWidth)<0.00001,
-        "Viewport changes retain the logical library-card width")
-    check(Shell.settingsScroll.maximum==0,"Scaled inherited dimensions do not invent a Libraries scrollbar")
+    check(Shell.settingsWindow.scale==1 and Shell.settingsWindow.width<=dimensions[1]-24 and Shell.settingsWindow.height<=dimensions[2]-24,
+        "Viewport and display-mode changes preserve the native control scale within screen bounds")
+    check(controls.AlphaSquadLibraryCard1.width>400 and controls.AlphaSquadLibraryLink1.width==62,
+        "Reflow preserves room for exact library names, status text and a usable link button")
+    check(Shell.settingsScroll.maximum==(dimensions[1]<1000 and Shell.settingsPages.libraries.contentHeight-Shell.settingsScroll.height or 0),
+        "Libraries remains one page wherever the viewport has room for readable columns")
 end
+GuiRoot:SetDimensions(1024,768);Shell:ApplySettingsGeometry()
+check(Shell.settingsScroll.maximum==0 and not controls.AlphaSquadLibraryCard7:IsHidden() and controls.AlphaSquadLibraryShare1Button.height==30,
+    "A 1024-wide screen fits every library and sharing switch by condensing helpers without shrinking controls")
+check(controls.AlphaSquadLibraryHelp1:IsHidden() and controls.AlphaSquadLibraryShare1Button.help:find("LibDebugLogger",1,true),
+    "Condensed library cards retain dependency instructions on the sharing tooltip")
+GuiRoot:SetDimensions(1920,1080);Shell:ApplySettingsGeometry()
+check(Shell.settingsWindow.width==1350 and controls.AlphaSquadLibraryCard1.width<narrowCardWidth and not controls.AlphaSquadLibraryHelp1:IsHidden(),
+    "Returning to desktop restores two columns and visible helper text without recreating controls")
+check(Shell.settingsPages.dashboard.contentHeight<=618 and Shell.settingsPages.community.contentHeight<=618,
+    "Dashboard and About fit the desktop single-page canvas")
 GuiRoot:SetDimensions(1280,720);Shell:ApplySettingsGeometry()
 check(controls.AlphaSquadSettingsClose==nil,"Parent settings has no close cross")
 check(Shell.settingsPages.dashboard~=nil,"Dashboard is available independently of modules")
@@ -138,7 +157,7 @@ local choice=controls.AlphaSquadThemeChoice.combo
 check(#choice.entries==3 and choice.selected.id=="obsidian" and not choice.sorted,"The native global theme picker defaults to Obsidian and retains curated order")
 choice.entries[1].callback()
 check(AlphaSquadUI.Theme.GetPresetId()=="ember" and choice.selected.id=="ember","Selecting a native theme applies and refreshes the picker immediately")
-check(Shell.settingsPages.dashboard.contentHeight==590 and Shell.settingsPages.community.contentHeight==590,"Dashboard and About fit the shared single-page canvas")
+check(Shell.settingsPages.dashboard.contentHeight<=594 and Shell.settingsPages.community.contentHeight<=594,"Dashboard and About fit the available desktop canvas")
 check(controls.AlphaSquadLibraryStatus1.text=="MISSING","Missing transport is clearly identified")
 check(controls.AlphaSquadLibraryShare1Button.label.text=="N/A","Missing sharing controls cannot be mistaken for a confirmed OFF setting")
 check(controls.AlphaSquadLibraryShare1Button.track:IsHidden() and controls.AlphaSquadLibraryShare1Button.thumb:IsHidden(),

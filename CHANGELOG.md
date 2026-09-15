@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.3.0 — 2026-09-15
+
+Corrected companion sharing controls and actual status, retained valid same-session set reports across tracking changes, and improved native source recognition and Scribing coverage. Settings reflow on narrow screens, Group Ultimate rows retain their height, and Move HUD uses a simpler toolbar. Initial opening restores mouse access; Builds tooltips survive unchanged refreshes and duplicate contributors can be chosen directly. Distribution now validates the exact shipped archives with checksums and provenance, pinned CI dependencies and redacted security checks. Added an MIT license, security reporting policy and client acceptance matrix. See [complete release notes](releases/3.3.0.md).
+
 All notable changes to Ąlpha Şquad UI are documented here.
 
 ## 3.2.0 — 2026-09-15

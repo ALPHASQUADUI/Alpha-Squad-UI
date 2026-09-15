@@ -132,7 +132,12 @@ check(not L.active and ult.refreshes==refreshes,'Loading saves placement without
 check(not L.Start(),'The editor cannot restart between deactivation and player activation')
 events[EVENT_PLAYER_ACTIVATED]()
 L.Start();GuiRoot:SetDimensions(640,480);events[EVENT_SCREEN_RESIZED]()
-check(L.toolbar.scale<1 and L.toolbar.width*L.toolbar.scale<=616,'Toolbar fits narrow screens proportionally')
+check(L.toolbar.scale==1 and L.toolbar.width==600 and L.toolbar.width*L.toolbar.scale<=616,'Toolbar reflows on a narrow screen without shrinking its text')
+GuiRoot:SetDimensions(480,320);events[EVENT_SCREEN_RESIZED]()
+check(L.toolbar.scale==1 and L.toolbar.width==440 and L.toolbar.height==204,'The narrow toolbar retains readable text with four short control rows')
+check(L.toolbar.inputHint.width==412 and L.toolbar.inputHint.height==36,'The single instruction line can wrap on a narrow viewport')
+check(L.toolbar.values==nil and L.toolbar.size.text:find('SIZE',1,true) and L.toolbar.opacity.text:find('BACKGROUND',1,true),
+    'The editor shows values beside their controls without a duplicate dimensions readout')
 L.Finish()
 -- A scaled native control must never be interpreted as a larger logical panel.
 local function near(a,b)return math.abs(a-b)<0.00001 end

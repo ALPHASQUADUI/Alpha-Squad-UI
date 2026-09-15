@@ -2,6 +2,9 @@
 local total=0
 local function check(value,message) total=total+1;assert(value,message) end
 local now,size,online,dead,character=100000,2,true,false,"Remote character"
+EVENT_GROUP_MEMBER_LEFT,EVENT_GROUP_MEMBER_CONNECTED_STATUS,EVENT_GROUP_UPDATE,EVENT_PLAYER_ACTIVATED=1,2,3,4
+local events={}
+EVENT_MANAGER={RegisterForEvent=function(_,_,event,callback) events[event]=callback end}
 local SC={sv={enabled=true},NowMs=function() return now end,ScheduleRefresh=function(self) self.refreshes=(self.refreshes or 0)+1 end}
 AlphaSquadUI={Modules={SupportCoverage=SC,ULTTracker={Group={}}}}
 function GetGroupSize() return size end
@@ -113,6 +116,36 @@ local received=now
 now=now+600000;SC:MergeExternalCapabilities(entry)
 check(entry.externalSets and entry.externalSets.updatedAt==received and entry.capabilities.major_courage,
     "A change-driven set report remains valid for the continuous group session without renewing its timestamp")
+SC.sv.enabled=false;SC:PruneExternalSources();SC:MergeExternalCapabilities(entry)
+check(not entry.externalSets and not entry.capabilities.major_courage,"Tracking OFF removes actionable coverage from the view")
+SC.sv.enabled=true;SC:MergeExternalCapabilities(entry)
+check(entry.externalSets and entry.externalSets.updatedAt==received and entry.capabilities.major_courage,
+    "Tracking OFF then ON restores only the current session's received set report without a new broadcast")
+SC.loading=true;size=0;SC:PruneExternalSources();size=2;SC.loading=false
+SC:PruneExternalSources();SC:MergeExternalCapabilities(entry)
+check(entry.externalSets and entry.externalSets.updatedAt==received,
+    "Ordinary zoning retains a received report through transient loading tags without inventing receipt time")
+SC.sv.enabled=false
+local refreshes=SC.refreshes
+setData=Set(185,5,0,0,1);callback("group2",false)
+check(SC.refreshes==refreshes,"Library receipts while tracking is OFF do not schedule tracking, scans or a HUD refresh")
+SC.sv.enabled=true;SC:MergeExternalCapabilities(entry)
+check(entry.externalSets.setList[1].backCount==5,"Changes received while tracking is OFF are restored instead of an obsolete set report")
+SC.sv.enabled=false
+events[EVENT_GROUP_MEMBER_LEFT](nil,"Local character",nil,true)
+-- Upstream local leave does not clear groupSets; it is deliberately still available here.
+check(available and next(setData)~=nil,"Upstream cached sets survive local group departure in this regression")
+SC.sv.enabled=true;SC:MergeExternalCapabilities(entry)
+check(not entry.externalSets,"A departure while tracking is OFF invalidates receipts even if the same cached character rejoins")
+callback("group2",false)
+events[EVENT_GROUP_MEMBER_CONNECTED_STATUS](nil,"group2",false)
+SC:MergeExternalCapabilities(entry)
+check(not entry.externalSets,"Disconnect events invalidate receipts before native online flags settle")
+callback("group2",false)
+events[EVENT_GROUP_MEMBER_LEFT](nil,"Remote character^Mx",nil,false)
+SC:MergeExternalCapabilities(entry)
+check(not entry.externalSets,"Remote departure invalidates matching formatted character identity before unit tags change")
+callback("group2",false)
 function GetItemSetUnperfectedSetId(id) return id==99951 and 185 or 0 end
 setData=Set(99951,3,2,0,2);callback("group2",false);SC:MergeExternalCapabilities(entry)
 check(entry.capabilities.major_courage and entry.externalSets.setList[1].id==185,

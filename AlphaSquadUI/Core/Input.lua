@@ -169,6 +169,7 @@ function Input.GetHint()
     local backKey = Binding(gamepad and "ASUI_PAD_BACK" or "ASUI_KEY_BACK", gamepad and "Back" or "Esc")
     local window = Input.windows[Input.activeWindow]
     if window and window.layout then
+        if not gamepad then return "Drag a panel to move it. Drag a corner to resize. Esc saves." end
         local mode = Input.layoutMode
         local modeKey = Binding(gamepad and "ASUI_PAD_MODE" or "ASUI_KEY_MODE", gamepad and "Secondary" or "Space")
         local previous = Binding(gamepad and "ASUI_PAD_PANEL_PREVIOUS" or "ASUI_KEY_PANEL_PREVIOUS", gamepad and "Left shoulder" or "PgUp")

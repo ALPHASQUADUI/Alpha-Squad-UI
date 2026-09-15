@@ -89,19 +89,49 @@ end
 
 function Shell:ApplySettingsGeometry()
     if not self.settingsWindow or not GuiRoot then return end
-    local scale=math.max(0.001,math.min(1,(GuiRoot:GetWidth()-40)/WINDOW_WIDTH,(GuiRoot:GetHeight()-40)/WINDOW_HEIGHT))
-    local height=WINDOW_HEIGHT
-    if self.settingsAppliedScale==scale then return end
-    self.settingsAppliedScale=scale
-    self.settingsWindow:SetDimensions(WINDOW_WIDTH, height)
-    self.settingsWindow:SetScale(scale)
-    if self.settingsSidebar then self.settingsSidebar:SetHeight(height - 64) end
-    if self.settingsSaveNote then self.settingsSaveNote:SetHidden(height < 490) end
-    if self.settingsScroll then
-        self.settingsScroll:SetHeight(height - 80)
-        self.settingsScroll.scrollbar:SetHeight(height - 80)
-        self.settingsScroll.UpdateBounds()
+    local width=math.max(320,math.min(WINDOW_WIDTH,GuiRoot:GetWidth()-24))
+    local height=math.max(260,math.min(WINDOW_HEIGHT,GuiRoot:GetHeight()-24))
+    local compact=width<1200
+    if self.settingsAppliedWidth==width and self.settingsAppliedHeight==height then return end
+    self.settingsAppliedWidth,self.settingsAppliedHeight=width,height
+    self.settingsCompact=compact
+    self.settingsNavColumns=width<730 and 2 or 3
+    self.settingsWindow:SetDimensions(width,height)
+    self.settingsWindow:SetScale(1)
+    local contentX=compact and 12 or CONTENT_X
+    local navHeight=math.ceil(6/self.settingsNavColumns)*44+4
+    local contentY=compact and 72+navHeight or 70
+    local contentWidth=width-contentX-12
+    local viewport=math.max(60,height-contentY-32)
+    if self.settingsHeader then self.settingsHeader:SetWidth(width) end
+    if self.settingsTitle then self.settingsTitle:SetWidth(width-40) end
+    if self.settingsSubtitle then self.settingsSubtitle:SetWidth(width-42) end
+    if self.settingsSidebar then
+        self.settingsSidebar:SetDimensions(compact and width or SIDEBAR_WIDTH,compact and navHeight or height-64)
     end
+    if self.settingsWorkspaceLabel then self.settingsWorkspaceLabel:SetHidden(compact) end
+    if self.settingsSidebarVersion then self.settingsSidebarVersion:SetHidden(compact) end
+    if self.settingsSaveNote then self.settingsSaveNote:SetHidden(compact or height<490) end
+    if self.settingsWindow.inputHint then
+        local hint=self.settingsWindow.inputHint
+        hint:ClearAnchors();hint:SetAnchor(BOTTOMLEFT,self.settingsWindow,BOTTOMLEFT,contentX,-5)
+        hint:SetDimensions(contentWidth,22)
+    end
+    if self.settingsScroll then
+        local scroll=self.settingsScroll
+        scroll:ClearAnchors();scroll:SetAnchor(TOPLEFT,self.settingsWindow,TOPLEFT,contentX,contentY)
+        scroll:SetDimensions(contentWidth-16,viewport)
+        scroll.scrollbar:ClearAnchors();scroll.scrollbar:SetAnchor(TOPLEFT,self.settingsWindow,TOPLEFT,width-24,contentY)
+        scroll.scrollbar:SetHeight(viewport)
+        self.settingsContent:SetWidth(contentWidth-16)
+    end
+    for _,page in pairs(self.settingsPages or {}) do
+        page:SetWidth(contentWidth-16)
+        if page.ApplyLayout then page.ApplyLayout(contentWidth-16,viewport,compact) end
+    end
+    self:RefreshNavigation()
+    self:ShowSettingsPage(self.activeSettingsPage or "dashboard")
+    if self.settingsScroll then self.settingsScroll.UpdateBounds() end
 end
 
 function Shell:CloseSettingsWindow()
@@ -156,17 +186,34 @@ end
 
 function Shell:RefreshNavigation()
     if not self.settingsNavButtons then return end
-    local y=50
+    local y,index=50,0
+    local compact=self.settingsCompact
+    local columns=self.settingsNavColumns or 3
+    local navWidth=compact and (self.settingsAppliedWidth-16-(columns-1)*8)/columns or NAV_WIDTH
     for _,id in ipairs({"dashboard","ulttracker","supportcoverage","libraries","community"}) do
         local button=self.settingsNavButtons[id]
         local visible=not AlphaSquadUI.Settings.modulePages[id] or AlphaSquadUI.Settings.IsModuleEnabled(id)
         if button then
             button:SetHidden(not visible)
-            if visible then button:ClearAnchors();button:SetAnchor(TOPLEFT,self.settingsSidebar,TOPLEFT,12,y);y=y+44 end
+            if visible then
+                button:ClearAnchors()
+                button:SetAnchor(TOPLEFT,self.settingsSidebar,TOPLEFT,
+                    compact and 8+(index%columns)*(navWidth+8) or 12,
+                    compact and 4+math.floor(index/columns)*44 or y)
+                button:SetWidth(navWidth)
+                button.label:SetWidth(navWidth-(button.icon and 47 or 24))
+                index=index+1;y=y+44
+            end
         end
     end
     if self.activeSettingsPage and AlphaSquadUI.Settings.modulePages[self.activeSettingsPage] and not AlphaSquadUI.Settings.IsModuleEnabled(self.activeSettingsPage) then self:ShowSettingsPage("dashboard") end
     if self.settingsSaveNote then self.settingsSaveNote:ClearAnchors();self.settingsSaveNote:SetAnchor(TOPLEFT,self.settingsSidebar,TOPLEFT,18,y+12) end
+    if self.settingsMoveButton then
+        self.settingsMoveButton:ClearAnchors()
+        self.settingsMoveButton:SetWidth(navWidth)
+        if compact then self.settingsMoveButton:SetAnchor(TOPLEFT,self.settingsSidebar,TOPLEFT,8+(index%columns)*(navWidth+8),4+math.floor(index/columns)*44)
+        else self.settingsMoveButton:SetAnchor(BOTTOMLEFT,self.settingsSidebar,BOTTOMLEFT,12,-56) end
+    end
 end
 
 function Shell:CreateSettingsWindow()
@@ -208,7 +255,7 @@ function Shell:CreateSettingsWindow()
     end
     if EVENT_ALL_GUI_SCREENS_RESIZED then
         EVENT_MANAGER:RegisterForEvent("AlphaSquadUI_SettingsUIScale", EVENT_ALL_GUI_SCREENS_RESIZED, function()
-            Shell.settingsAppliedScale=nil
+            Shell.settingsAppliedWidth=nil
             Shell:ApplySettingsGeometry()
         end)
     end
@@ -217,6 +264,7 @@ function Shell:CreateSettingsWindow()
     if ASUI.Theme.RegisterSurface then ASUI.Theme.RegisterSurface(win,win.bg,"window") end
 
     local header = WINDOW_MANAGER:CreateControl("AlphaSquadSettingsHeader", win, CT_CONTROL)
+    self.settingsHeader=header
     header:SetDimensions(WINDOW_WIDTH, 64)
     header:SetAnchor(TOPLEFT, win, TOPLEFT, 0, 0)
     header:SetMouseEnabled(true)
@@ -232,14 +280,17 @@ function Shell:CreateSettingsWindow()
     end)
 
     local title = CreateLabel(win, "AlphaSquadSettingsTitle", "ZoFontWinH2", SETTINGS_MENU_NAME, COLORS.white)
+    self.settingsTitle=title
     title:SetDimensions(420, 30)
     title:SetAnchor(TOPLEFT, win, TOPLEFT, 20, 10)
     title:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
 
     local subtitle = CreateLabel(win, "AlphaSquadSettingsSubtitle", "ZoFontGameSmall", "Group preparation & Ultimate tracking  •  " .. (AlphaSquadUI.Theme and AlphaSquadUI.Theme.authorText or "@SeRuM1"), COLORS.muted)
+    self.settingsSubtitle=subtitle
     subtitle:SetDimensions(520, 20)
     subtitle:SetAnchor(TOPLEFT, win, TOPLEFT, 21, 38)
     subtitle:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
+    subtitle:SetMaxLineCount(1)
 
     win.inputHint = CreateLabel(win, "AlphaSquadSettingsInputHint", "ZoFontGameSmall", "", COLORS.muted)
     win.inputHint:SetDimensions(754, 22)
@@ -267,6 +318,7 @@ function Shell:CreateSettingsWindow()
     sideLine:SetColor(COLORS.orange[1], COLORS.orange[2], COLORS.orange[3], 0.18)
 
     local modulesHeader = CreateLabel(sidebar, "AlphaSquadModulesHeader", "ZoFontGameBold", "WORKSPACE", COLORS.orange)
+    self.settingsWorkspaceLabel=modulesHeader
     modulesHeader:SetDimensions(SIDEBAR_WIDTH-36, 24)
     modulesHeader:SetAnchor(TOPLEFT, sidebar, TOPLEFT, 18, 18)
     modulesHeader:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
@@ -328,6 +380,7 @@ function Shell:CreateSettingsWindow()
     self.settingsMoveButton.help = "Outside combat, place enabled HUDs against the game interface. Enable at least one module in Dashboard first. Drag a panel to move it, its corners to scale it, or its sides to reshape it. Choose Done or press Escape to save and lock your layout."
 
     local versionLabel = CreateLabel(sidebar, "AlphaSquadSidebarVersion", "ZoFontGameSmall", "v" .. VERSION, COLORS.muted)
+    self.settingsSidebarVersion=versionLabel
     versionLabel:SetDimensions(150, 20)
     versionLabel:SetAnchor(BOTTOMLEFT, sidebar, BOTTOMLEFT, 18, -15)
     versionLabel:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
@@ -362,8 +415,10 @@ function Shell:CreateSettingsWindow()
         card.bg = CreateSolid(card, name .. "BG", COLORS.panel)
         if ASUI.Theme.RegisterSurface then ASUI.Theme.RegisterSurface(card,card.bg,"card") end
         local label = CreateLabel(card, name .. "Title", "ZoFontGameBold", titleText, titleColor or COLORS.orange)
-        label:SetDimensions(w - 28, 24)
+        label:SetHeight(24)
         label:SetAnchor(TOPLEFT, card, TOPLEFT, 14, 8)
+        label:SetAnchor(TOPRIGHT,card,TOPRIGHT,-14,8)
+        label:SetMaxLineCount(1)
         label:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
         card.title=label
         return card
@@ -371,8 +426,9 @@ function Shell:CreateSettingsWindow()
 
     local function AddToggleRow(parent, name, labelText, y, getter, setter, help)
         local label = CreateLabel(parent, name .. "Label", "ZoFontGame", labelText, COLORS.white)
-        label:SetDimensions(LogicalWidth(parent) - 116, 30)
+        label:SetHeight(30)
         label:SetAnchor(TOPLEFT, parent, TOPLEFT, 14, y)
+        label:SetAnchor(TOPRIGHT,parent,TOPRIGHT,-106,y)
         label:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
         label:SetMaxLineCount(1)
         if label.SetWrapMode and TEXT_WRAP_MODE_ELLIPSIS then label:SetWrapMode(TEXT_WRAP_MODE_ELLIPSIS) end
@@ -382,6 +438,7 @@ function Shell:CreateSettingsWindow()
             Shell:RefreshSettingsWindow()
         end
         local button = CreateButton(parent, name .. "Button", "", LogicalWidth(parent) - 96, y, 80, 30, Toggle)
+        button:ClearAnchors();button:SetAnchor(TOPRIGHT,parent,TOPRIGHT,-16,y)
         button.track=CreateSolid(button,name.."Track",COLORS.bg)
         button.track:SetDimensions(28,14);button.track:ClearAnchors()
         button.track:SetAnchor(RIGHT,button,RIGHT,-7,0)
@@ -417,8 +474,9 @@ function Shell:CreateSettingsWindow()
 
     local function AddStepperRow(parent, name, labelText, y, getter, setter, step, minimum, maximum, suffix, color, description)
         local label = CreateLabel(parent, name .. "Label", "ZoFontGame", labelText, COLORS.white)
-        label:SetDimensions(LogicalWidth(parent) - 170, 30)
+        label:SetHeight(30)
         label:SetAnchor(TOPLEFT, parent, TOPLEFT, 14, y)
+        label:SetAnchor(TOPRIGHT,parent,TOPRIGHT,-164,y)
         label:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
         label:SetMaxLineCount(1)
         if label.SetWrapMode and TEXT_WRAP_MODE_ELLIPSIS then label:SetWrapMode(TEXT_WRAP_MODE_ELLIPSIS) end
@@ -434,6 +492,9 @@ function Shell:CreateSettingsWindow()
             setter(Clamp(getter() + step, minimum, maximum))
             Shell:RefreshSettingsWindow()
         end)
+        minus:ClearAnchors();minus:SetAnchor(TOPRIGHT,parent,TOPRIGHT,-116,y)
+        value:ClearAnchors();value:SetAnchor(TOPRIGHT,parent,TOPRIGHT,-56,y)
+        plus:ClearAnchors();plus:SetAnchor(TOPRIGHT,parent,TOPRIGHT,-14,y)
         local help = string.format("%s%s\n\nAdjust from %s%s to %s%s. Changes are saved automatically.",
             labelText, description and ("\n\n" .. description) or "", minimum, suffix or "", maximum, suffix or "")
         minus.help, plus.help = help, help
@@ -462,6 +523,7 @@ function Shell:CreateSettingsWindow()
         CreateLabel=CreateLabel, CreateCard=CreateCard, AddToggleRow=AddToggleRow,
         AddStepperRow=AddStepperRow, CreateButton=CreateButton, colors=COLORS,
         RegisterRefresher=function(fn) table.insert(self.settingsRefreshers,fn) end,
+        RegisterLayout=function(page,callback) page.ApplyLayout=callback end,
     }
     self.pageUI=pageUI
     for _,id in ipairs({"dashboard","ulttracker","ultoverload","supportcoverage","libraries","community"}) do

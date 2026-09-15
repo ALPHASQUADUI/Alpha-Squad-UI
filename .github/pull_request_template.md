@@ -1,33 +1,34 @@
-## Summary
+## Purpose
 
-Describe the change and the user-facing reason for it.
+What problem does this solve, and what changes for the player?
 
-## Module
+## Affected areas
 
-- [ ] Core / shared UI
-- [ ] Overload
-- [ ] ULT Tracker
-- [ ] Group Ultimate Tracker
-- [ ] Documentation / CI
-- [ ] Other future module
+- [ ] Core / settings / themes / Move HUD
+- [ ] ULT Tracker / Overload behavior / Group Ultimates
+- [ ] Support Coverage / Builds / catalog
+- [ ] Libraries / sharing / standalone companion
+- [ ] Documentation / packaging / CI
 
-## Performance checklist
+## Evidence
 
-- [ ] Uses events instead of unnecessary high-frequency polling
-- [ ] No permanent fast update loop was added without a strong reason
-- [ ] Hidden/dormant UI does not keep fast animation callbacks running
-- [ ] Reuses controls rather than rebuilding combat UI unnecessarily
-- [ ] No unnecessary automatic chat spam was added
+- [ ] `python3 tooling/validate.py` passes for the proposed commit
+- [ ] Relevant data, input or lifecycle regressions are covered
+- [ ] Both installable packages are validated; release assets are not rebuilt afterward
+- [ ] Player-visible changes and remaining limitations are documented
 
-## Compatibility checklist
+Describe actual ESO checks separately from automated checks, including any
+untested client scenarios. Follow `docs/CLIENT_ACCEPTANCE.md` when applicable.
 
-- [ ] Primary action bar tested where relevant
-- [ ] Backup action bar tested where relevant
-- [ ] Subclassing considered where relevant
-- [ ] Existing SavedVariables compatibility considered
-- [ ] Optional libraries fail gracefully
-- [ ] `CHANGELOG.md` updated for user-facing changes
+## Compatibility and resource use
 
-## Testing
+- [ ] Existing saved preferences, including OFF, remain compatible
+- [ ] Missing optional libraries and unknown remote data degrade safely
+- [ ] Hidden/disabled modules avoid unnecessary work; permitted sharing stays independent
+- [ ] No unnecessary polling, control recreation or layout work was introduced
+- [ ] New commits use a GitHub noreply address; no personal data, credentials or player builds are included
 
-Describe the ESO scenarios tested and attach any relevant errors/screenshots.
+## Remaining risks
+
+State unresolved limits or follow-up work. Never include private logs, complete
+SavedVariables, authentication values or another player's build without consent.

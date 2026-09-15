@@ -1,18 +1,20 @@
 # Downloads and installation
 
-[Release downloads](https://github.com/ALPHASQUADUI/Alpha-Squad-UI/releases) · [Build artifacts](https://github.com/ALPHASQUADUI/Alpha-Squad-UI/actions) · [Version 3.2.0 notes](3.2.0.md)
+[Release downloads](https://github.com/ALPHASQUADUI/Alpha-Squad-UI/releases) · [Build artifacts](https://github.com/ALPHASQUADUI/Alpha-Squad-UI/actions) · [Version 3.3.0 notes](3.3.0.md)
 
 ## Install
 
 1. Close ESO or return to character selection. Back up existing addon SavedVariables before updating.
-2. Extract **AlphaSquadUI.zip** so `AlphaSquadUI/AlphaSquadUI.txt` is directly inside the ESO `live/AddOns` directory.
+2. Extract **AlphaSquadUI-3.3.0.zip** so `AlphaSquadUI/AlphaSquadUI.txt` is directly inside the ESO `live/AddOns` directory.
 3. Install any libraries required by your selected group features. [Minion](https://minion.mmoui.com/) can manage published addons and dependencies.
 4. Enable the addon and libraries, then log in or `/reloadui`.
 5. Open **Settings → Ąlpha Şquad UI → Dashboard**. Review sharing in **Libraries**; a new installation enables supported sharing automatically. Existing saved OFF choices are preserved. Choose **Interface Style** in Dashboard and use **MOVE HUD** to position, scale or reshape enabled panels. Select Horizontal or Vertical for the Ultimate panels and use Preview to place them with sample data, including a twelve-player group.
 
-The optional **AlphaSquadBuildShare.zip** installs a separate `AlphaSquadBuildShare` directory for players who want to share supported builds without the tracking interface. It requires LibGroupBroadcast, starts sharing on a new installation and preserves an existing OFF preference. Use `/asbuildshare off`, `/asbuildshare on` and `/asbuildshare status` to control it. Install the appropriate package; the full suite already includes build sharing.
+The optional **AlphaSquadBuildShare-3.3.0.zip** installs a separate `AlphaSquadBuildShare` directory for players who want to share supported builds without the tracking interface. It requires LibGroupBroadcast and its dependencies, starts sharing on a new installation and preserves an existing OFF preference. Use `/asbuildshare off`, `/asbuildshare on` and `/asbuildshare status` to control it. Install the appropriate package; the full suite already includes build sharing. The companion transmits build snapshots, not live Ultimate charge; that needs a compatible LibGroupCombatStats sender.
 
-## Updating to 3.2.0
+## Updating to 3.3.0
+
+Update the full suite and any separately installed companion together. Settings reflow on narrow screens, Group Ultimate rows retain their configured height as the roster changes, and the simplified Move HUD toolbar keeps positioning controls together. Unchanged build refreshes preserve open tooltips; duplicate contributors can be selected directly. Native sharing status and same-session set restoration are corrected.
 
 Existing supported settings and FRONT/BACK/BOTH selections remain intact; new installations start in AUTO. Overload remains integrated into the personal Ultimate HUD, with **Warning starts** and optional alerts under **ULT Tracker → OVERLOAD SETTINGS**. Automatic cancellation has been removed; you stop Overload using your Ultimate binding. Group tracking has one ON/OFF switch in the parent ULT settings and excludes your own character. A previously hidden group HUD migrates to Group tracking OFF, while filters and layout remain saved.
 

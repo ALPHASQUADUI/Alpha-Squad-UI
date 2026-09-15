@@ -320,8 +320,34 @@ function View.Create(parent)
     canvas:SetHidden(true)
     return canvas
 end
+local function PlayerEvidenceKey(player)
+    if not player then return "" end
+    -- BuildRoster replaces its lightweight wrappers on every refresh. Compare
+    -- the inspected identity and displayed partial data, not wrapper identity.
+    local parts={}
+    local function Value(value)
+        local text=tostring(value);parts[#parts+1]=#text..":"..text
+    end
+    local function Fields(data,fields)
+        for _,field in ipairs(fields) do Value(data and data[field]) end
+    end
+    Fields(player,{"key","displayName","characterName","connected","dead"})
+    Fields(player.food,{"verified","active","abilityId","name","icon"})
+    Fields(player.potion,{"known","selectionKnown","link","name","count"})
+    for _,entry in ipairs(player.externalUltimates or {}) do Fields(entry,{"abilityId","name","bar","updatedAt"}) end
+    local lines=player.externalSkillLines
+    Fields(lines,{"updatedAt"})
+    for _,name in ipairs(lines and lines.names or {}) do Value(name) end
+    local sets=player.externalSets
+    Fields(sets,{"updatedAt","fresh","sessionValid","complete","incognito"})
+    for _,entry in ipairs(sets and sets.setList or {}) do
+        Fields(entry,{"id","name","mainCount","backCount","frontKnown","backKnown","activeOnMain","activeOnBack"})
+    end
+    return table.concat(parts,"|")
+end
 function View.Bind(canvas,player,details,status)
-    if canvas.snapshot~=details or canvas.player~=player then UI.ClearTooltip() end
+    local playerEvidenceKey=PlayerEvidenceKey(player)
+    if canvas.snapshot~=details or canvas.playerEvidenceKey~=playerEvidenceKey then UI.ClearTooltip() end
     canvas.isRemote=player~=nil and player.unitTag~="player" and Try(AreUnitsEqual,player.unitTag,"player")~=true
     local equipment=details and details.equipment or nil
     local skills=details and details.skills or {}
@@ -484,5 +510,5 @@ function View.Bind(canvas,player,details,status)
     local curseText=not curse.known and "Unknown" or curse.kind=="VAMPIRE" and ("Vampire"..(Number(curse.stage) and " • "..curse.stage or "")) or curse.kind=="WEREWOLF" and (curse.transformed and "Werewolf • active" or "Werewolf") or "None"
     curseTile.value:SetText(curseText);UI.Color(curseTile.value,curse.transformed and C.orange or C.white)
     curseTile.tooltip="Vampirism & lycanthropy\n\n"..curseText..(curse.kind=="WEREWOLF" and "\nThe werewolf bar is displayed separately; front and back weapon skill bars are preserved." or "")
-    canvas.player=player;canvas.snapshot=details
+    canvas.player=player;canvas.snapshot=details;canvas.playerEvidenceKey=playerEvidenceKey
 end

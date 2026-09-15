@@ -2,7 +2,7 @@
 AlphaSquadUI=AlphaSquadUI or {}
 local ASUI=AlphaSquadUI
 local Layout={active=false,participants={},attachments={}}
-local TOOLBAR_WIDTH,TOOLBAR_HEIGHT=860,154
+local TOOLBAR_WIDTH,TOOLBAR_HEIGHT=780,120
 ASUI.Layout=Layout
 local function Finite(value,fallback)
     value=tonumber(value)
@@ -12,6 +12,18 @@ end
 local function Clamp(value,minimum,maximum) return math.max(minimum,math.min(maximum,value)) end
 local function RootSize()
     return math.max(1,Finite(GuiRoot and GuiRoot:GetWidth(),1920)),math.max(1,Finite(GuiRoot and GuiRoot:GetHeight(),1080))
+end
+local function FitDimensions(module,width,height)
+    if module.GetLayoutFitDimensions then
+        local fitWidth,fitHeight=module:GetLayoutFitDimensions(width,height)
+        return math.max(1,Finite(fitWidth,width)),math.max(1,Finite(fitHeight,height))
+    end
+    return width,height
+end
+local function ResizeHeightLimit(module,available,scale)
+    if not module.GetLayoutResizeHeightLimit then return available end
+    local _,rootH=RootSize()
+    return math.min(available,Finite(module:GetLayoutResizeHeightLimit(math.max(1,rootH-20)/scale),available))
 end
 local function Modules()
     local modules=ASUI.Modules or {};local ult=modules.ULTTracker;local result={}
@@ -68,6 +80,7 @@ function Layout.GetScale(module,actualWidth,actualHeight)
     actualHeight=Finite(actualHeight,win and win.GetHeight and Finite(win:GetHeight(),height)/currentScale)
     if actualWidth and actualWidth>0 then width=actualWidth end
     if actualHeight and actualHeight>0 then height=actualHeight end
+    width,height=FitDimensions(module,width,height)
     local rootW,rootH=RootSize()
     local requested=Clamp(Finite(module.sv and module.sv.scale,100),60,180)/100
     -- Fitting never overwrites the requested scale. A larger screen restores it.
@@ -150,9 +163,10 @@ function Layout.ResizeSelected(dx,dy)
     local bounds=module.layoutBounds or {}
     local minW,minH=Finite(bounds.minWidth,100),Finite(bounds.minHeight,40)
     local nextW=Clamp(width+Finite(dx,0)/scale,minW,math.max(minW,math.min(Finite(bounds.maxWidth,1920),(rootW-left)/scale)))
-    local nextH=Clamp(height+Finite(dy,0)/scale,minH,math.max(minH,math.min(Finite(bounds.maxHeight,1080),(rootH-top)/scale)))
+    local nextH=Clamp(height+Finite(dy,0)/scale,minH,math.max(minH,ResizeHeightLimit(module,math.min(Finite(bounds.maxHeight,1080),(rootH-top)/scale),scale)))
     if nextW==width and nextH==height then return false end
-    module.sv.hudWidth,module.sv.hudHeight=nextW,nextH
+    if module.SetLayoutDimensions then module:SetLayoutDimensions(nextW,nextH)
+    else module.sv.hudWidth,module.sv.hudHeight=nextW,nextH end
     RefreshModule(module,true);Place(module,left,top);Layout.RefreshToolbar();return true
 end
 function Layout.CycleOrientation(direction)
@@ -202,8 +216,9 @@ function Layout.UpdateResize(mouseX,mouseY)
         local rootW,rootH=RootSize()
         local availableW=drag.horizontal<0 and drag.right or rootW-drag.left
         local availableH=drag.vertical<0 and drag.bottom or rootH-drag.top
-        local maximum=math.max(0.001,math.min(1.8,math.max(1,rootW-20)/drag.width,
-            math.max(1,rootH-20)/drag.height,availableW/drag.width,availableH/drag.height))
+        local fitWidth,fitHeight=FitDimensions(module,drag.width,drag.height)
+        local maximum=math.max(0.001,math.min(1.8,math.max(1,rootW-20)/fitWidth,
+            math.max(1,rootH-20)/fitHeight,availableW/drag.width,availableH/drag.height))
         local requested=Clamp(drag.scale+delta,math.min(0.6,maximum),maximum)
         if math.abs(requested-Finite(module.window:GetScale(),drag.scale))>0.000001 then
             sv.scale=requested*100
@@ -222,9 +237,10 @@ function Layout.UpdateResize(mouseX,mouseY)
         local minW=math.max(32,Finite(bounds.minWidth,100))
         local minH=math.max(24,Finite(bounds.minHeight,40))
         width=Clamp(width,minW,math.max(minW,math.min(Finite(bounds.maxWidth,1920),availableW/drag.scale)))
-        height=Clamp(height,minH,math.max(minH,math.min(Finite(bounds.maxHeight,1080),availableH/drag.scale)))
+        height=Clamp(height,minH,math.max(minH,ResizeHeightLimit(module,math.min(Finite(bounds.maxHeight,1080),availableH/drag.scale),drag.scale)))
         if math.abs(width-drag.appliedWidth)>0.000001 or math.abs(height-drag.appliedHeight)>0.000001 then
-            sv.hudWidth,sv.hudHeight=width,height
+            if module.SetLayoutDimensions then module:SetLayoutDimensions(width,height)
+            else sv.hudWidth,sv.hudHeight=width,height end
             drag.appliedWidth,drag.appliedHeight=width,height
             RefreshModule(module,true);changed=true
         end
@@ -284,8 +300,8 @@ function Layout.Attach(module)
         handle:SetHandler("OnHide",function() if Layout.drag and Layout.drag.handle==handle then Layout.EndResize() end end)
         handle:SetHandler("OnMouseEnter",function()
             if ASUI.Tooltips then ASUI.Tooltips.ShowText(handle,horizontal~=0 and vertical~=0
-                and "Drag this corner to scale the entire panel. Icons keep their proportions."
-                or "Drag this edge to change the panel layout. Icons stay square.") end
+                and "Resize the whole panel."
+                or "Change the panel's width or height.") end
         end)
         handle:SetHandler("OnMouseExit",function() if ASUI.Tooltips then ASUI.Tooltips.Hide() end end)
         handle:SetHidden(not Layout.IsMoving(module));handles[#handles+1]=handle
@@ -319,17 +335,42 @@ function Layout.RefreshToolbar()
         if control and control.layoutText~=value then control:SetText(value);control.layoutText=value end
     end
     Text(toolbar.selection,module and (module.layoutName or "HUD Panel") or "No active panel")
-    local width,height=0,0
-    if module then width,height=Layout.GetLogicalDimensions(module) end
-    Text(toolbar.values,module and string.format("%.1f%% scale   •   %d%% background   •   %.0f × %.0f",
-        Finite(module.window:GetScale(),1)*100,math.floor(Clamp(Finite(module.sv.opacity,92),30,100)),width,height) or "")
+    Text(toolbar.size,module and string.format("SIZE %.0f%% −",Finite(module.window:GetScale(),1)*100) or "SIZE −")
+    Text(toolbar.opacity,module and string.format("BACKGROUND %d%% −",math.floor(Clamp(Finite(module.sv.opacity,92),30,100))) or "BACKGROUND −")
     local orientation=module and module.GetLayoutOrientation and module:GetLayoutOrientation()
     Text(toolbar.orientation,orientation and (orientation=="vertical" and "VERTICAL" or "HORIZONTAL") or "FIXED LAYOUT")
     if toolbar.orientation and toolbar.orientation.SetEnabled then toolbar.orientation:SetEnabled(orientation~=nil) end
     local preview=ASUI.Preview;local mode=preview and preview.GetMode and preview.GetMode() or "mixed"
-    Text(toolbar.preview,"PREVIEW: "..string.upper(mode))
+    local names={mixed="EXAMPLES: MIXED",ready="EXAMPLES: READY",missing="EXAMPLES: MISSING",overload="EXAMPLES: OVERLOAD",live="LIVE DATA"}
+    Text(toolbar.preview,names[mode] or names.mixed)
     local rootW,rootH=RootSize()
-    local scale=math.max(0.001,math.min(1,math.max(1,rootW-24)/TOOLBAR_WIDTH,math.max(1,rootH-24)/TOOLBAR_HEIGHT))
+    local format=rootW>=804 and "wide" or rootW>=624 and "compact" or "narrow"
+    if toolbar.layoutFormat~=format then
+        toolbar.layoutFormat=format
+        local function PlaceControl(control,x,y,width)
+            if not control then return end
+            control:ClearAnchors();control:SetAnchor(TOPLEFT,toolbar,TOPLEFT,x,y);control:SetWidth(width)
+        end
+        local positions
+        if format=="wide" then
+            toolbar.layoutWidth,toolbar.layoutHeight=TOOLBAR_WIDTH,TOOLBAR_HEIGHT
+            positions={selection={14,10,220},orientation={244,10,164},preview={418,10,218},done={646,10,120},
+                size={14,48,128},sizePlus={146,48,34},opacity={196,48,192},opacityPlus={392,48,34},reset={444,48,132},fit={586,48,70}}
+        elseif format=="compact" then
+            toolbar.layoutWidth,toolbar.layoutHeight=600,158
+            positions={selection={14,10,220},orientation={244,10,164},done={424,10,162},preview={14,48,218},
+                size={244,48,128},sizePlus={376,48,34},reset={430,48,156},opacity={14,86,192},opacityPlus={210,86,34},fit={260,86,70}}
+        else
+            toolbar.layoutWidth,toolbar.layoutHeight=440,204
+            positions={selection={14,10,220},done={306,10,120},orientation={14,48,164},preview={188,48,238},
+                size={14,86,128},sizePlus={146,86,34},opacity={196,86,192},opacityPlus={392,86,34},reset={14,124,132},fit={162,124,70}}
+        end
+        toolbar:SetDimensions(toolbar.layoutWidth,toolbar.layoutHeight)
+        for key,position in pairs(positions) do PlaceControl(toolbar[key],position[1],position[2],position[3]) end
+        PlaceControl(toolbar.inputHint,14,format=="wide" and 88 or format=="compact" and 126 or 164,toolbar.layoutWidth-28)
+        toolbar.inputHint:SetHeight(format=="narrow" and 36 or 24)
+    end
+    local scale=math.max(0.001,math.min(1,math.max(1,rootW-24)/toolbar.layoutWidth,math.max(1,rootH-24)/toolbar.layoutHeight))
     if toolbar.layoutScale~=scale then toolbar:SetScale(scale);toolbar.layoutScale=scale end
 end
 function Layout.AdjustSelected(field,delta)
@@ -406,10 +447,9 @@ function Layout.CreateToolbar()
         local label=WINDOW_MANAGER:CreateControl(nil,win,CT_LABEL);label:SetFont("ZoFontGameSmall")
         label:SetDimensions(width,24);label:SetAnchor(TOPLEFT,win,TOPLEFT,x,y);label:SetText(text);return label
     end
-    Label("MOVE HUD  •  Drag panels to move. Drag edges to reshape. Drag corners to scale.",14,8,730)
-    local function Button(text,x,width,callback,y)
+    local function Button(text,x,width,callback,y,help)
         local button=WINDOW_MANAGER:CreateControl(nil,win,CT_BUTTON);button:SetDimensions(width,30)
-        button:SetAnchor(TOPLEFT,win,TOPLEFT,x,y or 38);button:SetFont("ZoFontGameBold");button:SetText(text)
+        button:SetAnchor(TOPLEFT,win,TOPLEFT,x,y or 10);button:SetFont("ZoFontGameBold");button:SetText(text)
         button:SetMouseEnabled(true)
         local bg=WINDOW_MANAGER:CreateControl(nil,button,CT_TEXTURE);bg:SetAnchorFill(button)
         if bg.SetDrawLayer and DL_BACKGROUND then bg:SetDrawLayer(DL_BACKGROUND) end
@@ -422,27 +462,28 @@ function Layout.CreateToolbar()
             if theme and theme.BindColor then theme.BindColor(bg,role)
             else bg:SetColor(role=="hover" and 0.12 or 0.055,0.07,0.095,0.98) end
         end
-        button:SetHandler("OnMouseEnter",function()Paint("hover")end)
-        button:SetHandler("OnMouseExit",function()Paint("panel")end)
+        button:SetHandler("OnMouseEnter",function()
+            Paint("hover")
+            if help and ASUI.Tooltips then ASUI.Tooltips.ShowText(button,help) end
+        end)
+        button:SetHandler("OnMouseExit",function()Paint("panel");if ASUI.Tooltips then ASUI.Tooltips.Hide() end end)
         button:SetHandler("OnClicked",callback)
         if ASUI.Input and ASUI.Input.Register then ASUI.Input.Register(button,{activate=callback,label=text}) end
         return button
     end
-    win.selection=Button("HUD Panel",14,220,function()Layout.CycleSelected(1)end)
-    Button("SCALE −",244,90,function()Layout.AdjustSelected("scale",-5)end)
-    Button("+",336,28,function()Layout.AdjustSelected("scale",5)end)
-    Button("OPACITY −",378,114,function()Layout.AdjustSelected("opacity",-5)end)
-    Button("+",494,28,function()Layout.AdjustSelected("opacity",5)end)
-    Button("RESET PANEL",540,132,Layout.ResetSelected)
-    Button("FIT",684,58,function()
+    win.selection=Button("HUD Panel",14,220,function()Layout.CycleSelected(1)end,nil,"Choose the next active panel, or click the panel itself.")
+    win.orientation=Button("HORIZONTAL",244,164,function()Layout.CycleOrientation(1)end,nil,"Switch between vertical and horizontal layouts.")
+    win.preview=Button("EXAMPLES: MIXED",418,218,function()Layout.CyclePreview(1)end,nil,"Cycle example states. Examples are never shared with the group.")
+    win.done=Button("DONE",646,120,Layout.Done,nil,"Save placement and return.")
+    win.size=Button("SIZE −",14,128,function()Layout.AdjustSelected("scale",-5)end,48)
+    win.sizePlus=Button("+",146,34,function()Layout.AdjustSelected("scale",5)end,48)
+    win.opacity=Button("BACKGROUND −",196,192,function()Layout.AdjustSelected("opacity",-5)end,48)
+    win.opacityPlus=Button("+",392,34,function()Layout.AdjustSelected("opacity",5)end,48)
+    win.reset=Button("RESET PANEL",444,132,Layout.ResetSelected,48,"Restore only this panel's default position, size and background.")
+    win.fit=Button("FIT",586,70,function()
         local module=Layout.selected;if Layout.IsMoving(module) then RefreshModule(module);Place(module,module.window:GetLeft(),module.window:GetTop()) end
-    end)
-    Button("DONE",754,92,Layout.Done)
-    win.orientation=Button("HORIZONTAL",14,170,function()Layout.CycleOrientation(1)end,74)
-    win.preview=Button("PREVIEW: MIXED",194,216,function()Layout.CyclePreview(1)end,74)
-    Label("Corners scale. Edges reshape. Esc / Back saves.",420,78,430)
-    win.values=Label("",14,106,830)
-    win.inputHint=Label("",14,130,830)
+    end,48,"Keep this panel inside the screen.")
+    win.inputHint=Label("Drag a panel to move it. Drag a corner to resize. Esc saves.",14,88,752)
     win:SetHandler("OnHide",Layout.Finish)
     if ASUI.Input and ASUI.Input.RegisterWindow then ASUI.Input.RegisterWindow(win,{layout=true,close=Layout.Done,dismiss=Layout.Finish}) end
     if SCENE_MANAGER and SCENE_MANAGER.RegisterTopLevel then SCENE_MANAGER:RegisterTopLevel(win,true) end

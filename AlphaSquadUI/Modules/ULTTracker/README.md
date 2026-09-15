@@ -34,7 +34,7 @@ Use **MOVE HUD** in the main sidebar or `/asmove` outside combat. Position the p
 
 A new personal HUD starts at 300 × 116 logical UI units. Existing saved sizes and bar choices are retained. ESO applies screen and interface scaling once; automatic fitting preserves the requested dimensions, scale and saved position for a larger viewport.
 
-Sizing and opacity are centralized in MOVE HUD. Group rows adapt to the available panel space while keeping their icons square. Cross-sync ON shares settings and positions across characters on the same account/server; OFF keeps native character profiles separate. Existing SavedVariables and group selections survive reloads and travel. Dashboard's Ember Classic, Tactical Compact and Obsidian Studio styles update both personal and group panels without changing status meanings.
+Sizing and opacity are centralized in MOVE HUD. Group rows keep the height chosen using the twelve-player layout as players enter or leave. The visible panel contracts around the live roster without enlarging the remaining rows; icons stay square. Cross-sync ON shares settings and positions across characters on the same account/server; OFF keeps native character profiles separate. Existing SavedVariables and group selections survive reloads and travel. Dashboard's Ember Classic, Tactical Compact and Obsidian Studio styles update both personal and group panels without changing status meanings.
 
 Dashboard owns the module switch. Disabling tracking releases its gameplay work while Libraries sharing remains independent. The group view also respects its single tracking switch and the parent's state.
 

@@ -263,7 +263,10 @@ function SC:SetEnabled(enabled)
     if not self.sv.enabled then
         if self.CloseInspector then self:CloseInspector() end
         if self.CloseMatrix then self:CloseMatrix() end
-        if self.ResetExternalSources then self:ResetExternalSources() end
+        if self.CloseContributorPicker then self:CloseContributorPicker() end
+        -- Library receipts belong to the uninterrupted group session, not the HUD.
+        -- The external adapter keeps its own minimal identity lifecycle guard.
+        if self.PruneExternalSources then self:PruneExternalSources() end
         if not self:NeedsBuildData() and self.ResetSharingState then self:ResetSharingState("No active build consumer") end
     else
         self.inCombat = self.Try and self.Try(IsUnitInCombat, "player") == true or false
@@ -359,6 +362,7 @@ function SC:CheckGroupSession()
         self:ResetSharingState("Group disbanded")
         if self.ResetExternalSources then self:ResetExternalSources() end
         if self.CloseInspector then self:CloseInspector() end
+        if self.CloseContributorPicker then self:CloseContributorPicker() end
     end
     self.wasGrouped = grouped
 end
@@ -370,6 +374,7 @@ function SC:OnCombatState(inCombat)
     if self.inCombat then
         if self.CloseInspector then self:CloseInspector() end
         if self.CloseMatrix then self:CloseMatrix() end
+        if self.CloseContributorPicker then self:CloseContributorPicker() end
         if self.HideReadyBanner then self:HideReadyBanner() end
         if self.CancelBuildDetailTransfer then self:CancelBuildDetailTransfer() end
     elseif wasInCombat then
@@ -414,11 +419,11 @@ function SC:RegisterEvents()
         EM:RegisterForEvent(prefix .. "_Activated", EVENT_PLAYER_ACTIVATED, function()
             SC.loading=false
             SC:UpdateRuntime()
-            if SC.ResetExternalSources then SC:ResetExternalSources() end
             zo_callLater(function()
-                if SC then
+                if SC and not SC.loading then
                     SC.groupSessionReady = true
                     SC:CheckGroupSession()
+                    if SC.PruneExternalSources then SC:PruneExternalSources() end
                     SC:RefreshUIObscured()
                     SC:MarkScanDirty("activated")
                     if SC.Try(IsUnitInCombat, "player") == true then SC:OnCombatState(true) end
@@ -433,6 +438,7 @@ function SC:RegisterEvents()
             SC:UpdateRuntime()
             if SC.CloseInspector then SC:CloseInspector() end
             if SC.CloseMatrix then SC:CloseMatrix() end
+            if SC.CloseContributorPicker then SC:CloseContributorPicker() end
         end)
     end
     if EVENT_GROUP_MEMBER_JOINED then

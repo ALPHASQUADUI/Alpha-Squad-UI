@@ -5,6 +5,8 @@ from pathlib import Path
 import re
 import zipfile
 
+from package_utils import write_archive
+
 ROOT = Path(__file__).resolve().parents[1]
 FILES = [
     "SupportCoverageCatalog.lua", "SupportCoverageScanner.lua", "SupportCoverageBuild.lua",
@@ -22,24 +24,27 @@ def build(destination):
         f"## Version: {version}", f"## AddOnVersion: {addon_version}", f"## APIVersion: {api}",
         "## DependsOn: LibGroupBroadcast", "## OptionalDependsOn: AlphaSquadUI LibFoodDrinkBuff",
         "## SavedVariables: AlphaSquadBuildShareSavedVariables", "",
-        "Bootstrap.lua", *["Shared/" + name for name in FILES], "Runtime.lua", "",
+        "Bootstrap.lua", "Shared/Sharing.lua", *["Shared/" + name for name in FILES], "Runtime.lua", "",
     ]
     destination = Path(destination).resolve()
     destination.parent.mkdir(parents=True, exist_ok=True)
     prefix = "AlphaSquadBuildShare/"
-    with zipfile.ZipFile(destination, "w", zipfile.ZIP_DEFLATED) as archive:
-        archive.writestr(prefix + "AlphaSquadBuildShare.txt", "\n".join(metadata))
-        for name in ("Bootstrap.lua", "Runtime.lua"):
-            archive.writestr(prefix + name, (ROOT / "companion" / name).read_bytes())
-        for name in FILES:
-            # A lexical host keeps this sender separate from the full addon's
-            # global namespace while retaining byte-identical shared source.
-            content = "if AlphaSquadBuildShare.disabled then return end\nlocal AlphaSquadUI = AlphaSquadBuildShare.Host\n"
-            content += (ROOT / "AlphaSquadUI/Modules/SupportCoverage" / name).read_text()
-            archive.writestr(prefix + "Shared/" + name, content)
+    members = {prefix + "AlphaSquadBuildShare.txt": "\n".join(metadata).encode()}
+    for name in ("Bootstrap.lua", "Runtime.lua"):
+        members[prefix + name] = (ROOT / "companion" / name).read_bytes()
+    for name in ["Sharing.lua", *FILES]:
+        # A lexical host keeps this sender separate from the full addon's
+        # global namespace while retaining byte-identical shared source.
+        content = "if AlphaSquadBuildShare.disabled then return end\nlocal AlphaSquadUI = AlphaSquadBuildShare.Host\n"
+        source = ROOT / "AlphaSquadUI" / ("Core" if name == "Sharing.lua" else "Modules/SupportCoverage") / name
+        content += source.read_text()
+        members[prefix + "Shared/" + name] = content.encode()
+    if (ROOT / "LICENSE").is_file():
+        members[prefix + "LICENSE"] = (ROOT / "LICENSE").read_bytes()
+    write_archive(destination, members)
     with zipfile.ZipFile(destination) as archive:
         assert archive.testzip() is None
-        assert len(archive.namelist()) == len(FILES) + 3
+        assert len(archive.namelist()) == len(members)
     print(destination)
 
 if __name__ == "__main__":

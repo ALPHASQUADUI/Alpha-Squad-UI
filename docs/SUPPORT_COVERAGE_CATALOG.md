@@ -8,9 +8,9 @@ Coverage means an available, reported build source. It does not mean that a buff
 
 - A set must reach its actual threshold on Front or Back. Normal and Perfected variants are grouped using the native family API. Front and Back weapon counts are never added together.
 - Native ability identities distinguish skills and morphs. A native name takes priority over a reported label. An English fallback is an exact name, not a substring match.
-- Learned passives require their relevant slotted trigger line. Selected class masteries require eligibility and their prerequisite rank; class identity alone is insufficient.
+- Learned passives use reported native ability IDs and require their relevant slotted trigger line. Selected class masteries require their exact ability ID, eligibility and prerequisite rank; class identity or a received display name alone is insufficient.
 - The Werewolf bar supplies capabilities only while the character is confirmed transformed and that bar is known. Human-form slots do not imply that Roar can currently be cast.
-- Banner Bearer requires the three reported script IDs to be in their native slots, available in the grimoire's definition and a legal combination. Each Focus and group Affix is independent. Personal scripts and the Scribing Class Mastery script do not become group class-masteries.
+- Scribing requires all three reported script IDs in their native slots, available in the grimoire's definition and forming a legal combination. Banner and eleven other grimoires have explicit rules. The same Affix can be Major on one grimoire and Minor on another; an allied buff requires a suitable Focus or link. Personal scripts and the Scribing Class Mastery script do not become group class-masteries.
 - Remote library data stays explicitly partial. LibSetDetection's last report is valid within the same group session; it supplies sets, not inventory, traits, skills or Champion allocations.
 - A duplicate identifies multiple holders. Range, target limits, split groups and cast rotations can justify deliberate duplicates.
 - Variable penetration from Crusher and Alkosh is excluded from the fixed numeric budget. Their presence is still tracked. Tremorscale and other scaling effects likewise do not receive invented maximum values.
@@ -25,9 +25,30 @@ Set previews use the native collection piece and verify its set identity. An alr
 
 The verified ID/name inventory is broader than the set of game interactions reproduced by offline tests. The automatic source catalog is finite. An unlisted source is unverified, not proof that the player cannot provide the effect.
 
-The Traumatic Burns passive and The Storm Voice prerequisite retain exact English-name fallbacks until their committed passive IDs are confirmed independently. Non-English clients can therefore leave those two conditional paths unverified. Support Champion node identities are recorded explicitly and allocation is checked with native APIs.
+Traumatic Burns uses the native learned IDs of the passive renamed from Warmth. The Storm Voice prerequisite resolves the reported learned ID through the native passive definition, Draconic Power line, rank and exact native texture. Its similarly named combat-effect bundles cannot establish the prerequisite. Neither path depends on an English display name. Missing native definition APIs leave The Storm Voice unverified. Support Champion node identities are recorded explicitly and allocation is checked with native APIs.
 
-Only Banner Bearer's verified group Focus/Affix rules are automatically derived from Scribing recipes. Other grimoires, signatures and unrecognized combinations remain inspectable without assigning invented group capabilities. In particular, personal Heroism from another grimoire never inherits Banner's group recipients. Future balance updates require a fresh catalog review.
+Scribing covers the documented Affixes and ally shields below, plus Traveling Knife's Warrior's Opportunity Signature. Other scripts remain inspectable without assigning undocumented group capabilities. Personal Trample Heroism/Protection, Shield Throw's returning buffs and Traveling Knife Berserk/Force do not cover allies. Enemy-targeting and ally-targeting recipes remain distinct. Future balance updates require a fresh catalog review.
+
+## Scribing recipient rules
+
+All entries below also require native recipe validation. These describe potential sources before combat, not an observed cast or a promise that every group member receives the effect.
+
+| Grimoire | Tracked enemy effects | Tracked allied effects |
+|---|---|---|
+| Banner Bearer | None | Existing seven Focus auras and selected group Affixes while the banner is active and allies are in range |
+| Shield Throw | Major Cowardice, Major Maim, Off Balance | None; returning buffs are personal |
+| Smash | Minor Breach, Minor Maim | Minor Berserk, Force, Vitality with Healing or Damage Shield Focus; ally shield with its shield Focus |
+| Trample | Minor Vulnerability, Minor Cowardice, Off Balance | None; Heroism and Protection are personal |
+| Vault | Minor Vulnerability, Minor Maim, Minor Lifesteal, Off Balance | Minor Berserk, Force, Intellect/Endurance with Healing Focus |
+| Traveling Knife | Minor Vulnerability, Minor Maim, Minor Lifesteal, Off Balance; Warrior's Opportunity Signature | None |
+| Torchbearer | Minor Breach, Minor Cowardice | Minor Heroism, Resolve, Vitality with Healing Focus |
+| Ulfsild's Contingency | Minor Breach, Minor Vulnerability, Minor Magickasteal | Minor Force, Protection, Resolve, Intellect/Endurance with Healing or Damage Shield Focus; ally shield |
+| Wield Soul | Major Breach, Major Cowardice, Major Maim | Major Resolve, Vitality, Intellect/Endurance or Empower with Healing or Damage Shield Focus; shield can target an ally |
+| Soul Burst | Minor Breach, Minor Maim, Minor Magickasteal | Minor Courage, Resolve, Intellect/Endurance with Healing or Damage Shield Focus; ally shield |
+| Elemental Explosion | Minor Brittle, Minor Cowardice, Minor Lifesteal, Minor Magickasteal, Off Balance | None |
+| Mender's Bond | Minor Breach, Brittle, Maim, Vulnerability on enemies in the link | Minor Courage, Force, Heroism, Protection, Vitality, Intellect/Endurance or Empower on allies in the link; shield Focus protects linked allies |
+
+The native definition decides whether a particular Focus/Signature/Affix combination is legal. An unlisted Focus does not inherit target rules from another grimoire. Range, target caps, immunities and actual application still need to be considered when assigning a player.
 
 ## Catalog
 

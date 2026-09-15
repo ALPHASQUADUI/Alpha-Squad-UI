@@ -16,6 +16,10 @@ local Catalog={effects={major_courage={},crusher={},minor_sorcery={},major_heroi
 function Catalog:MatchSkill(id) return id==900 and {minor_sorcery=true} or {} end
 local SC={Catalog=Catalog}
 AlphaSquadUI={Modules={SupportCoverage=SC}}
+SC.Catalog=nil
+dofile("AlphaSquadUI/Modules/SupportCoverage/SupportCoverageCatalog.lua")
+Catalog.GetLearnedSourceRank=SC.Catalog.GetLearnedSourceRank
+SC.Catalog=Catalog
 local worn,items={},{}
 function GetItemLink(_,slot) if worn[slot]==false then return nil end; return worn[slot] or "" end
 function GetItemLinkName(link) return items[link].name end

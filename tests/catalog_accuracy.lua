@@ -70,7 +70,7 @@ snapshot.masteries.selected={{id=263247,name='Lead From the Front'}}
 snapshot.masteries.learned={};snapshot.masteries.learnedIds={[44951]=2}
 check(not SC:DeriveBuildCapabilities(snapshot).major_berserk,'Elder Dragon rank 2 is not The Storm Voice prerequisite')
 snapshot.masteries.learned={['the storm voice']=2}
-check(SC:DeriveBuildCapabilities(snapshot).major_berserk,'Verified selected mastery and actual named prerequisite establish conditional source')
+check(not SC:DeriveBuildCapabilities(snapshot).major_berserk,'A named prerequisite without learned native identity cannot establish a source')
 SCRIBING_SLOT_PRIMARY=1;SCRIBING_SLOT_SECONDARY=2;SCRIBING_SLOT_TERTIARY=3
 local scriptDefs={
     [10]={1,'scribing_primary_flame.dds'},[11]={1,'scribing_primary_immobilized.dds'},

@@ -5,6 +5,8 @@ Thumbs.db
 .idea/
 *.swp
 *.tmp
+__pycache__/
+*.py[cod]
 
 # Local ESO runtime data
 SavedVariables/

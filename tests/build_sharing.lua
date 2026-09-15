@@ -176,6 +176,11 @@ end
 
 ResetWorld()
 local alice,bob,carol=NewClient("@Alice"),NewClient("@Bob"),NewClient("@Carol")
+local beforeNeutralSummary=alice.SC.peerData["@Bob"]
+alice.SC:OnPeerShareData("group2",{version=0})
+alice.SC:OnDetailData("group2",{version=0,kind=0,revision=0,checksum=0,body=""})
+check(alice.SC.peerData["@Bob"]==beforeNeutralSummary and not alice.SC.share.outgoingBuild,
+    "Neutral queue-revocation frames cannot become a peer summary or request a build")
 check(alice.SC.share.available and alice.declarations[507]==1 and alice.declarations[510]==1,
     "Both real sharing protocols initialize exactly once")
 check(alice.protocols[507].config.replaceQueuedMessages==false and alice.protocols[510].config.replaceQueuedMessages==true,
