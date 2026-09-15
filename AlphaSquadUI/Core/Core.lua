@@ -6,9 +6,10 @@ local ASUI = AlphaSquadUI
 
 ASUI.name = "AlphaSquadUI"
 ASUI.displayName = "Ąlpha Şquad UI"
-ASUI.version = "2.6.0"
-ASUI.author = "SeRuM1"
+ASUI.version = "3.2.0"
+ASUI.author = "@SeRuM1"
 ASUI.website = "https://alphasquadeso.com/"
+ASUI.discord = "https://discord.gg/snDyd23h6N"
 
 ASUI.Modules = ASUI.Modules or {}
 ASUI.Events = ASUI.Events or {}

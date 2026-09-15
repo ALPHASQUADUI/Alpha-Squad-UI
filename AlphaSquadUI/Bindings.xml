@@ -1,0 +1,29 @@
+<Bindings>
+    <Layer name="SI_KEYBINDINGS_LAYER_GENERAL">
+        <Category name="SI_ASUI_KEYBIND_CATEGORY">
+            <Action name="ASUI_OPEN_SETTINGS"><Down>AlphaSquadUI.Input.OpenSettings()</Down></Action>
+            <Action name="ASUI_MOVE_HUD"><Down>AlphaSquadUI.Input.MoveHUD()</Down></Action>
+        </Category>
+    </Layer>
+    <!-- This layer exists only while an addon menu or Move HUD is active. -->
+    <Layer name="AlphaSquadUIInput" allowFallthrough="false">
+        <Category>
+            <Action name="ASUI_KEY_UP" hideAction="true" rebindable="false"><Down>AlphaSquadUI.Input.SetDirection("up", true)</Down><Up>AlphaSquadUI.Input.SetDirection("up", false)</Up></Action>
+            <Action name="ASUI_KEY_DOWN" hideAction="true" rebindable="false"><Down>AlphaSquadUI.Input.SetDirection("down", true)</Down><Up>AlphaSquadUI.Input.SetDirection("down", false)</Up></Action>
+            <Action name="ASUI_KEY_LEFT" hideAction="true" rebindable="false"><Down>AlphaSquadUI.Input.SetDirection("left", true)</Down><Up>AlphaSquadUI.Input.SetDirection("left", false)</Up></Action>
+            <Action name="ASUI_KEY_RIGHT" hideAction="true" rebindable="false"><Down>AlphaSquadUI.Input.SetDirection("right", true)</Down><Up>AlphaSquadUI.Input.SetDirection("right", false)</Up></Action>
+            <Action name="ASUI_KEY_ACCEPT" hideAction="true" rebindable="false"><Down>AlphaSquadUI.Input.Action("primary")</Down></Action>
+            <Action name="ASUI_KEY_BACK" hideAction="true" rebindable="false"><Down>AlphaSquadUI.Input.Action("back")</Down></Action>
+            <Action name="ASUI_KEY_NEXT" hideAction="true" rebindable="false"><Down>AlphaSquadUI.Input.Action("next")</Down></Action>
+            <Action name="ASUI_KEY_PREVIOUS" hideAction="true" rebindable="false"><Down>AlphaSquadUI.Input.Action("previous")</Down></Action>
+            <Action name="ASUI_KEY_MODE" hideAction="true" rebindable="false"><Down>AlphaSquadUI.Input.Action("mode")</Down></Action>
+            <Action name="ASUI_KEY_PANEL_NEXT" hideAction="true" rebindable="false"><Down>AlphaSquadUI.Input.Action("panelNext")</Down></Action>
+            <Action name="ASUI_KEY_PANEL_PREVIOUS" hideAction="true" rebindable="false"><Down>AlphaSquadUI.Input.Action("panelPrevious")</Down></Action>
+            <Action name="ASUI_PAD_ACCEPT" hideAction="true" rebindable="false" inheritsBindFrom="UI_SHORTCUT_PRIMARY"><Down>AlphaSquadUI.Input.Action("primary")</Down></Action>
+            <Action name="ASUI_PAD_BACK" hideAction="true" rebindable="false" inheritsBindFrom="UI_SHORTCUT_NEGATIVE"><Down>AlphaSquadUI.Input.Action("back")</Down></Action>
+            <Action name="ASUI_PAD_MODE" hideAction="true" rebindable="false" inheritsBindFrom="UI_SHORTCUT_SECONDARY"><Down>AlphaSquadUI.Input.Action("mode")</Down></Action>
+            <Action name="ASUI_PAD_PANEL_NEXT" hideAction="true" rebindable="false" inheritsBindFrom="UI_SHORTCUT_RIGHT_SHOULDER"><Down>AlphaSquadUI.Input.Action("panelNext")</Down></Action>
+            <Action name="ASUI_PAD_PANEL_PREVIOUS" hideAction="true" rebindable="false" inheritsBindFrom="UI_SHORTCUT_LEFT_SHOULDER"><Down>AlphaSquadUI.Input.Action("panelPrevious")</Down></Action>
+        </Category>
+    </Layer>
+</Bindings>

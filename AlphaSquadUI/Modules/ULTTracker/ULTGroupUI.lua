@@ -20,13 +20,19 @@ local COLORS = ULT.COLORS or {
 
 local BASE_WINDOW_W = 312
 local BASE_ROW_H = 36
-local HEADER_H = 16
-local GAP = 1
+local HEADER_H = 22
+local GAP = 4
+Group.layoutName="Group Ultimates"
+Group.layoutBounds={minWidth=240,minHeight=70,maxWidth=1800,maxHeight=1200}
 
 local READY_ORANGE = {1.00, 0.46, 0.05, 1.00}
 local READY_GOLD = {1.00, 0.82, 0.18, 1.00}
 local READY_WHITE = {1.00, 0.98, 0.88, 1.00}
 
+local function Palette(role,fallback)
+    local theme=AlphaSquadUI.Theme
+    return theme and theme.colors and theme.colors[role] or COLORS[role] or fallback or COLORS.bg
+end
 local function SetColor(control, color, alpha)
     if not control or not color then return end
     control:SetColor(color[1], color[2], color[3], alpha or color[4] or 1)
@@ -36,6 +42,7 @@ local function Solid(parent, name, color)
     local texture = WINDOW_MANAGER:CreateControl(name, parent, CT_TEXTURE)
     texture:SetAnchorFill(parent)
     SetColor(texture, color)
+    if AlphaSquadUI.Theme and AlphaSquadUI.Theme.BindColor then AlphaSquadUI.Theme.BindColor(texture,color) end
     return texture
 end
 
@@ -44,35 +51,93 @@ local function Label(parent, name, font, text, color)
     label:SetFont(font)
     label:SetText(text or "")
     SetColor(label, color or COLORS.white)
+    if AlphaSquadUI.Theme and AlphaSquadUI.Theme.BindColor then AlphaSquadUI.Theme.BindColor(label,color or COLORS.white) end
     label:SetVerticalAlignment(TEXT_ALIGN_CENTER)
     return label
 end
 
-function Group:GetListWidth()
-    return ULT.Clamp(self.sv and self.sv.hudWidth or BASE_WINDOW_W, 240, 520)
+local EMPTY_ICON="EsoUI/Art/ActionBar/abilityFrame64_up.dds"
+local previewEntries,previewMode
+local function PreviewMode(module)
+    if not (AlphaSquadUI.Layout and AlphaSquadUI.Layout.IsMoving(module)) then return "live" end
+    local preview=AlphaSquadUI.Preview
+    return preview and preview.GetMode and preview.GetMode() or module.layoutPreviewMode or "mixed"
 end
-
+function Group:SetLayoutPreview(mode)
+    self.layoutPreviewMode=mode
+    if self.RefreshHUD then self:RefreshHUD() end
+end
+function Group:GetHUDEntries()
+    local mode=PreviewMode(self)
+    if mode=="live" then return self:GetTrackedEntries() end
+    if not previewEntries or previewMode~=mode then
+        previewMode=mode;previewEntries={}
+        for index=1,12 do
+            local name=index<=2 and string.format("@Tank%02d",index) or index<=4 and string.format("@Healer%02d",index-2) or string.format("@Damage%02d",index-4)
+            local id=index<=4 and 40223 or (index%2==0 and 122174 or 30366)
+            local nativeName,nativeIcon=self:GetAbilityMeta(id)
+            local state=mode=="ready" and "ready" or mode=="missing" and "missing" or ({"ready","ready","charging","ready","charging","charging","used","off","missing","offline","dead","charging"})[index]
+            local percent=state=="ready" and 100 or state=="charging" and (97-index*5) or state=="used" and 8 or 0
+            previewEntries[index]={key=name,displayName=name,preview=true,previewState=state,chargePercent=percent,
+                connected=state~="offline",dead=state=="dead",shared=state~="off" and state~="missing",
+                anyReady=state=="ready",unavailable=state=="offline" or state=="dead" or state=="off" or state=="missing",
+                recentlyUsed=state=="used",bestUltimate={id=state=="missing" and 0 or id,name=state=="missing" and "No Ultimate slotted" or nativeName,icon=state=="missing" and EMPTY_ICON or (nativeIcon~="" and nativeIcon or EMPTY_ICON)}}
+        end
+    end
+    return previewEntries
+end
+function Group:GetLayoutOrientation()
+    return self.sv and self.sv.hudOrientation=="horizontal" and "horizontal" or "vertical"
+end
+function Group:GetLayoutOrientations()
+    return {"vertical","horizontal"}
+end
+function Group:SetLayoutOrientation(orientation)
+    if not self.sv or (orientation~="horizontal" and orientation~="vertical") then return false end
+    local previous=self:GetLayoutOrientation()
+    if previous==orientation then return false end
+    if type(self.sv.hudLayouts)~="table" then self.sv.hudLayouts={} end
+    self.sv.hudLayouts[previous]={width=self.layoutWidth or self.sv.hudWidth,height=self.layoutHeight or self.sv.hudHeight}
+    self.sv.hudOrientation=orientation
+    local saved=self.sv.hudLayouts[orientation]
+    self.sv.hudWidth=type(saved)=="table" and saved.width or nil
+    self.sv.hudHeight=type(saved)=="table" and saved.height or nil
+    self:RefreshHUD()
+    return true
+end
+function Group:GetHUDDimensions(count)
+    local visible=math.max(1,math.min(12,count or self.layoutEntryCount or 0))
+    local horizontal=self:GetLayoutOrientation()=="horizontal"
+    local columns=horizontal and 4 or 1
+    local rows=math.ceil(visible/columns)
+    self.layoutColumns=columns
+    local naturalRow=ULT.Clamp(self.sv and self.sv.rowHeight or BASE_ROW_H,28,56)
+    local naturalHeight=math.max(70,HEADER_H+8+rows*naturalRow+(rows-1)*GAP)
+    self.layoutBounds.minWidth=horizontal and 856 or 240
+    self.layoutBounds.minHeight=math.max(70,HEADER_H+8+rows*28+(rows-1)*GAP)
+    local defaultWidth=horizontal and 1020 or BASE_WINDOW_W
+    local layout=AlphaSquadUI.Layout
+    if layout and layout.GetDimensions then return layout.GetDimensions(self,defaultWidth,naturalHeight) end
+    return ULT.Clamp(self.sv and self.sv.hudWidth or defaultWidth,self.layoutBounds.minWidth,1800),
+        ULT.Clamp(self.sv and self.sv.hudHeight or naturalHeight,self.layoutBounds.minHeight,1200)
+end
+function Group:GetListWidth() return self.layoutWidth or (self:GetHUDDimensions()) end
 function Group:GetRowHeight()
-    return ULT.Clamp(self.sv and self.sv.rowHeight or BASE_ROW_H, 28, 56)
+    return self.layoutRowHeight or ULT.Clamp(self.sv and self.sv.rowHeight or BASE_ROW_H,28,56)
 end
-
-function Group:GetIconSize()
-    return ULT.Clamp(self:GetRowHeight() - 8, 20, 44)
-end
-
+function Group:GetIconSize() return ULT.Clamp(self:GetRowHeight()-8,20,44) end
 function Group:GetRowWidth()
-    return math.max(228, self:GetListWidth() - 12)
+    local columns=self.layoutColumns or 1
+    return math.max(1,(self:GetListWidth()-12-(columns-1)*GAP)/columns)
 end
-
-function Group:GetWindowBaseWidth()
-    return self:GetListWidth()
-end
+function Group:GetWindowBaseWidth() return self:GetListWidth() end
 
 local function CreateRow(parent, index)
     local row = WINDOW_MANAGER:CreateControl("AlphaSquadULTGroupListRow" .. index, parent, CT_CONTROL)
     row:SetDimensions(BASE_WINDOW_W - 12, BASE_ROW_H)
 
-    row.bg = Solid(row, "AlphaSquadULTGroupListRow" .. index .. "BG", {0.016, 0.024, 0.042, 0.92})
+    row.bg = Solid(row, "AlphaSquadULTGroupListRow" .. index .. "BG", Palette("surface"))
+    if AlphaSquadUI.Theme and AlphaSquadUI.Theme.RegisterSurface then AlphaSquadUI.Theme.RegisterSurface(row,row.bg,"tile") end
 
     row.readyOverlay = WINDOW_MANAGER:CreateControl("AlphaSquadULTGroupListRow" .. index .. "ReadyOverlay", row, CT_TEXTURE)
     row.readyOverlay:SetAnchorFill(row)
@@ -120,6 +185,18 @@ local function CreateRow(parent, index)
 
     row.ready = false
     row.recentlyUsed = false
+    row:SetMouseEnabled(true)
+    row:SetHandler("OnMouseEnter",function()
+        local entry=row.entry
+        local tips=AlphaSquadUI.Tooltips
+        if not entry or not tips or not tips.ShowText then return end
+        local ultimate=entry.bestUltimate
+        local state=entry.previewState or (entry.connected==false and "offline" or entry.dead and "dead" or entry.stale and "stale" or entry.recentlyUsed and "used" or entry.anyReady and "ready" or "charging")
+        local states={ready="Ready",charging="Charging",used="Recently spent",offline="Offline",dead="Dead",stale="Update needed",missing="No Ultimate available",off="Sharing off"}
+        tips.ShowText(row,(entry.preview and "Placement example\n" or "")..(entry.displayName or "").."\n"..(ultimate and ultimate.name or "Ultimate unavailable").."\n"..(states[state] or "Unknown"))
+    end)
+    row:SetHandler("OnMouseExit",function() if AlphaSquadUI.Tooltips then AlphaSquadUI.Tooltips.Hide() end end)
+    if AlphaSquadUI.Input and AlphaSquadUI.Input.Register then AlphaSquadUI.Input.Register(row,{label="Group Ultimate"}) end
     return row
 end
 
@@ -132,10 +209,10 @@ function Group:ApplyRowGeometry(row)
     local iconBorderSize = iconSize + 4
     local iconX = 7
     local userX = iconX + iconBorderSize + 8
-    local percentWidth = 58
+    local percentWidth = 66
     local rightPadding = 8
-    local userWidth = math.max(90, width - userX - percentWidth - rightPadding - 8)
-    local progressWidth = math.max(80, width - userX - 8)
+    local userWidth = math.max(1, width - userX - percentWidth - rightPadding - 8)
+    local progressWidth = math.max(1, width - userX - 8)
 
     row:SetDimensions(width, height)
     row.accent:SetDimensions(4, height)
@@ -146,6 +223,7 @@ function Group:ApplyRowGeometry(row)
 
     row.icon:SetDimensions(iconSize, iconSize)
 
+    row.user:SetFont(width<260 and "ZoFontGameSmall" or "ZoFontGameBold")
     row.user:SetDimensions(userWidth, height)
     row.user:ClearAnchors()
     row.user:SetAnchor(LEFT, row, LEFT, userX, 0)
@@ -165,6 +243,7 @@ function Group:ApplyListGeometry()
     local width = self:GetListWidth()
     self.window:SetWidth(width)
 
+    if self.window.title then self.window.title:SetWidth(math.max(100,width-16)) end
     if self.window.dragSurface then
         self.window.dragSurface:SetWidth(width)
     end
@@ -185,6 +264,7 @@ function Group:GetDefaultPosition()
 end
 
 function Group:GetEffectiveScale()
+    if AlphaSquadUI.Layout and AlphaSquadUI.Layout.GetScale then return AlphaSquadUI.Layout.GetScale(self,self.layoutWidth,self.layoutHeight) end
     if not self.window or not self.sv or not GuiRoot then
         return (self.sv and self.sv.scale or 100) / 100
     end
@@ -192,11 +272,12 @@ function Group:GetEffectiveScale()
     local requested = (self.sv.scale or 100) / 100
     local rootW = GuiRoot:GetWidth() or 1920
     local rootH = GuiRoot:GetHeight() or 1080
-    local baseW = self.window:GetWidth() or self:GetListWidth()
-    local baseH = self.window:GetHeight() or 100
+    local scale=self.window:GetScale() or 1
+    local baseW = self.layoutWidth or self.window:GetWidth()/math.max(0.001,scale)
+    local baseH = self.layoutHeight or self.window:GetHeight()/math.max(0.001,scale)
 
-    local fitX = math.max(0.50, (rootW - 20) / math.max(1, baseW))
-    local fitY = math.max(0.50, (rootH - 20) / math.max(1, baseH))
+    local fitX = math.max(0.001, (rootW - 20) / math.max(1, baseW))
+    local fitY = math.max(0.001, (rootH - 20) / math.max(1, baseH))
     return math.min(requested, fitX, fitY)
 end
 
@@ -205,9 +286,8 @@ function Group:ClampToScreen(saveIfChanged)
 
     local rootW = GuiRoot:GetWidth() or 1920
     local rootH = GuiRoot:GetHeight() or 1080
-    local scale = self.window:GetScale() or ((self.sv.scale or 100) / 100)
-    local width = (self.window:GetWidth() or self:GetListWidth()) * scale
-    local height = (self.window:GetHeight() or 100) * scale
+    local width = self.window:GetWidth() or self:GetListWidth()
+    local height = self.window:GetHeight() or 100
     local left, top = self.window:GetLeft(), self.window:GetTop()
     if left == nil or top == nil then return end
 
@@ -238,7 +318,7 @@ function Group:ApplyPosition()
 
     self.window:ClearAnchors()
     self.window:SetAnchor(TOPLEFT, GuiRoot, TOPLEFT, x, y)
-    self:ClampToScreen(true)
+    self:ClampToScreen(false)
 end
 
 function Group:SavePosition()
@@ -268,6 +348,7 @@ function Group:ResetSize()
 
     self.sv.scale = 100
     self.sv.hudWidth = BASE_WINDOW_W
+    self.sv.hudHeight = nil
     self.sv.rowHeight = BASE_ROW_H
 
     self:ApplyListGeometry()
@@ -283,7 +364,7 @@ function Group:UpdateLockState()
     self.window:SetMovable(movable)
 
     if self.window.dragSurface then self.window.dragSurface:SetMouseEnabled(movable) end
-    if self.window.dragHint then self.window.dragHint:SetHidden(not movable) end
+    if self.window.dragHint then self.window.dragHint:SetHidden(true) end
 end
 
 function Group:ApplyAppearance()
@@ -296,7 +377,7 @@ function Group:ApplyAppearance()
         self.window.bg:SetAlpha((self.sv.opacity or 92) / 100)
     end
 
-    self:ClampToScreen(true)
+    self:ClampToScreen(false)
 end
 
 function Group:ApplyVisibility()
@@ -304,24 +385,42 @@ function Group:ApplyVisibility()
 
     local sharedSettings = AlphaSquadUI and AlphaSquadUI.Settings and AlphaSquadUI.Settings.mainWindow
     local sharedSettingsVisible = sharedSettings and not sharedSettings:IsHidden() or false
+    local settings = AlphaSquadUI.Settings
+    if settings and settings.AnyExclusiveWindowVisible then
+        sharedSettingsVisible = sharedSettingsVisible or settings.AnyExclusiveWindowVisible()
+    end
     local configVisible = self.configWindow and not self.configWindow:IsHidden() or false
 
+    local moving = AlphaSquadUI.Layout and AlphaSquadUI.Layout.IsMoving(self)
     local hidden =
-        not ULT.sv.enabled
+        ULT.loading == true
+        or not ULT.sv.enabled
         or not self.sv.enabled
-        or not self.sv.visible
         or sharedSettingsVisible
         or configVisible
-        or (self.sv.hideInMenus and ULT.uiObscured)
+        or (self.sv.hideInMenus and ULT.uiObscured and not moving)
 
     self.window:SetHidden(hidden)
+    if self.SetSafetyUpdateActive then self:SetSafetyUpdateActive(not hidden and not moving) end
 
-    if hidden then self:SetReadyPulseActive(false) end
+    if hidden then
+        self:SetReadyPulseActive(false)
+    else
+        local anyReady = false
+        for _, row in ipairs(self.window.rows or {}) do
+            if not row:IsHidden() and row.ready and not row.recentlyUsed then
+                anyReady = true
+                break
+            end
+        end
+        self:SetReadyPulseActive(anyReady and not moving)
+    end
 end
 
 function Group:RefreshRow(row, entry)
     if not row then return false end
 
+    row.entry=entry
     if not entry then
         row:SetHidden(true)
         row.ready = false
@@ -332,37 +431,49 @@ function Group:RefreshRow(row, entry)
     row:SetHidden(false)
 
     local userId = entry.displayName ~= "" and entry.displayName or entry.key or "@Unknown"
-    row.user:SetText(userId)
+    row.user:SetText(AlphaSquadUI.Theme and AlphaSquadUI.Theme.PlayerName and AlphaSquadUI.Theme.PlayerName(userId) or userId)
 
     local ultimate = entry.bestUltimate
     if not ultimate then
         ultimate = self:GetBestMatchingUltimate(entry)
     end
 
-    row.icon:SetHidden(not ultimate or not ultimate.icon or ultimate.icon == "")
-    if ultimate and ultimate.icon and ultimate.icon ~= "" then
-        row.icon:SetTexture(ultimate.icon)
-    end
+    row.icon:SetHidden(false)
+    row.icon:SetTexture(ultimate and ultimate.icon and ultimate.icon~="" and ultimate.icon or EMPTY_ICON)
 
     local percent = tonumber(entry.chargePercent) or 0
     percent = math.min(100, math.max(0, math.floor(percent + 0.5)))
-    row.percent:SetText(tostring(percent) .. "%")
+    if entry.previewState=="missing" then row.percent:SetText("NONE")
+    elseif entry.previewState=="off" then row.percent:SetText("OFF")
+    elseif entry.stale then row.percent:SetText("STALE")
+    elseif entry.recentlyUsed then row.percent:SetText("USED")
+    elseif entry.connected == false then row.percent:SetText("OFFLINE")
+    elseif entry.dead == true then row.percent:SetText("DEAD")
+    else row.percent:SetText(tostring(percent) .. "%") end
 
     local progressWidth = row.geometryProgressWidth or math.max(80, self:GetRowWidth() - 52)
     row.progress:SetWidth(math.floor(progressWidth * (percent / 100)))
 
     row.ready = entry.anyReady == true
+    row.unavailable = entry.unavailable == true
     row.recentlyUsed = entry.recentlyUsed == true
 
     row.readyOverlay:SetColor(1.00, 0.46, 0.05, 0)
 
-    if row.recentlyUsed then
-        row:SetAlpha(0.20)
+    if row.unavailable then
+        row:SetAlpha(0.62)
+        SetColor(row.accent, COLORS.muted, 0.16)
+        SetColor(row.iconBorder, COLORS.muted, 0.18)
+        SetColor(row.percent, COLORS.muted, 0.60)
+        SetColor(row.progress, COLORS.muted, 0.25)
+        SetColor(row.bg,Palette("surface"),0.30)
+    elseif row.recentlyUsed then
+        row:SetAlpha(0.55)
         SetColor(row.accent, COLORS.muted, 0.16)
         SetColor(row.iconBorder, COLORS.muted, 0.18)
         SetColor(row.percent, COLORS.muted, 0.45)
         SetColor(row.progress, COLORS.muted, 0.25)
-        row.bg:SetColor(0.010, 0.014, 0.022, 0.30)
+        SetColor(row.bg,Palette("surface"),0.30)
     elseif row.ready then
         row:SetAlpha(1)
         SetColor(row.accent, READY_ORANGE, 1)
@@ -376,14 +487,14 @@ function Group:RefreshRow(row, entry)
         SetColor(row.iconBorder, COLORS.cyan, 0.40)
         SetColor(row.percent, COLORS.white, 0.82)
         SetColor(row.progress, COLORS.cyan, 0.72)
-        row.bg:SetColor(0.016, 0.024, 0.042, 0.72)
+        SetColor(row.bg,Palette("surface"),0.72)
     end
 
     return row.ready
 end
 
 function Group:SetReadyPulseActive(enabled)
-    enabled = enabled == true
+    enabled = enabled == true and not (AlphaSquadUI.Layout and AlphaSquadUI.Layout.IsMoving(self))
     if self.readyPulseActive == enabled then return end
     self.readyPulseActive = enabled
 
@@ -437,47 +548,49 @@ end
 function Group:RefreshHUD()
     if not self.window or not self.sv then return end
 
+    local entries=self:GetHUDEntries()
+    local count=math.min(12,#entries)
+    self.layoutEntryCount=count
+    local width,height=self:GetHUDDimensions(count)
+    self.layoutWidth,self.layoutHeight=width,height
+    local columns=self.layoutColumns or 1
+    local visibleRows=math.max(1,math.ceil(count/columns))
+    self.layoutRowHeight=math.max(28,(height-HEADER_H-8-(visibleRows-1)*GAP)/visibleRows)
+    local rowHeight=self:GetRowHeight()
+    local rowWidth=self:GetRowWidth()
+    self.window:SetDimensions(width,height)
     self:ApplyListGeometry()
-
-    local entries = self:GetTrackedEntries()
-    local count = #entries
-    local rowHeight = self:GetRowHeight()
-    local visibleRows = math.max(1, count)
-    local height = HEADER_H + 4 + (visibleRows * rowHeight) + ((visibleRows - 1) * GAP) + 4
-
-    self.window:SetDimensions(self:GetListWidth(), height)
-
-    local anyReady = false
-
+    if self.window.title then self.window.title:SetText(PreviewMode(self)~="live" and "GROUP ULT • 12 EXAMPLES" or "GROUP ULTIMATES") end
     for index, row in ipairs(self.window.rows) do
         local entry = entries[index]
-
         if entry then
+            local column=(index-1)%columns
+            local line=math.floor((index-1)/columns)
             row:ClearAnchors()
-            row:SetAnchor(TOPLEFT, self.window, TOPLEFT, 6, HEADER_H + 4 + ((index - 1) * (rowHeight + GAP)))
+            row:SetAnchor(TOPLEFT,self.window,TOPLEFT,6+column*(rowWidth+GAP),HEADER_H+4+line*(rowHeight+GAP))
         end
-
-        if self:RefreshRow(row, entry) then anyReady = true end
+        self:RefreshRow(row,entry)
     end
 
     self.window.empty:SetHidden(count > 0)
     if count == 0 then
-        self.window.empty:SetText(self:GetTrackedAbilityCount() == 0 and "Select Ultimates to track" or "No matching players")
+        self.window.empty:SetText(self:GetEmptyMessage())
     end
 
-    self:SetReadyPulseActive(anyReady and not self.window:IsHidden())
     self:ApplyAppearance()
     self:UpdateLockState()
     self:ApplyVisibility()
 end
+
+function Group:ApplyLayout() self:RefreshHUD() end
 
 function Group:ApplyConfigWindowScale()
     if not self.configWindow or not GuiRoot then return end
 
     local rootW = GuiRoot:GetWidth() or 1920
     local rootH = GuiRoot:GetHeight() or 1080
-    local fitX = math.max(0.65, (rootW - 30) / 780)
-    local fitY = math.max(0.65, (rootH - 30) / 720)
+    local fitX = math.max(0.001, (rootW - 30) / 780)
+    local fitY = math.max(0.001, (rootH - 30) / 630)
 
     self.configWindow:SetScale(math.min(1, fitX, fitY))
 end
@@ -493,6 +606,7 @@ function Group:CreateHUD()
     win:SetDrawTier(DT_HIGH)
     win:SetDrawLayer(DL_OVERLAY)
     win:SetDrawLevel(88)
+    if AlphaSquadUI.Settings and AlphaSquadUI.Settings.ApplyWindowLayer then AlphaSquadUI.Settings.ApplyWindowLayer(win, true) end
 
     win.bg = Solid(win, "AlphaSquadULTGroupBG", COLORS.bg)
 
@@ -502,6 +616,16 @@ function Group:CreateHUD()
     top:SetHeight(2)
     SetColor(top, COLORS.orange, 0.55)
 
+    win.title=Label(win,"AlphaSquadULTGroupTitle","ZoFontGameSmall","GROUP ULTIMATES",COLORS.orange)
+    win.title:SetDimensions(200,HEADER_H)
+    win.title:SetMaxLineCount(1)
+    win.title:SetAnchor(TOPLEFT,win,TOPLEFT,8,0)
+    if AlphaSquadUI.Theme then
+        AlphaSquadUI.Theme.BindColor(top,"accent",0.55)
+        AlphaSquadUI.Theme.BindColor(win.title,"accent")
+        AlphaSquadUI.Theme.RegisterSurface(win,win.bg,"window")
+    end
+
     win.dragHint = Label(win, "AlphaSquadULTGroupDragHint", "ZoFontGameSmall", "DRAG", COLORS.gold)
     win.dragHint:SetDimensions(42, HEADER_H)
     win.dragHint:SetAnchor(TOPRIGHT, win, TOPRIGHT, -5, 0)
@@ -509,7 +633,7 @@ function Group:CreateHUD()
 
     win.empty = Label(win, "AlphaSquadULTGroupEmpty", "ZoFontGameSmall", "", COLORS.muted)
     win.empty:SetDimensions(math.max(100, self:GetListWidth() - 20), 32)
-    win.empty:SetAnchor(TOPLEFT, win, TOPLEFT, 10, HEADER_H + 14)
+    win.empty:SetAnchor(TOPLEFT, win, TOPLEFT, 10, HEADER_H + 6)
     win.empty:SetHorizontalAlignment(TEXT_ALIGN_CENTER)
 
     win.rows = {}
@@ -543,4 +667,13 @@ function Group:CreateHUD()
     self:ApplyAppearance()
     self:UpdateLockState()
     self:ApplyVisibility()
+    if AlphaSquadUI.Layout and AlphaSquadUI.Layout.Attach then AlphaSquadUI.Layout.Attach(self) end
+end
+
+-- A theme change repaints cached rows only; no roster rebuild or network request.
+if AlphaSquadUI.Theme and AlphaSquadUI.Theme.OnChanged then
+    AlphaSquadUI.Theme.OnChanged(function()
+        Group:RefreshHUD()
+        if Group.RefreshConfig then Group:RefreshConfig() end
+    end)
 end

@@ -20,6 +20,10 @@ local COLORS = ULT.COLORS or {
     gold = {0.97, 0.78, 0.30, 1.00},
 }
 
+local function Palette(role,fallback)
+    local theme=AlphaSquadUI.Theme
+    return theme and theme.colors and theme.colors[role] or COLORS[role] or fallback or COLORS.bg
+end
 local function SetColor(control, color, alpha)
     if not control or not color then return end
     control:SetColor(color[1], color[2], color[3], alpha or color[4] or 1)
@@ -29,6 +33,7 @@ local function Solid(parent, name, color)
     local texture = WINDOW_MANAGER:CreateControl(name, parent, CT_TEXTURE)
     texture:SetAnchorFill(parent)
     SetColor(texture, color)
+    if AlphaSquadUI.Theme and AlphaSquadUI.Theme.BindColor then AlphaSquadUI.Theme.BindColor(texture,color) end
     return texture
 end
 
@@ -37,6 +42,7 @@ local function Label(parent, name, font, text, color)
     label:SetFont(font)
     label:SetText(text or "")
     SetColor(label, color or COLORS.white)
+    if AlphaSquadUI.Theme and AlphaSquadUI.Theme.BindColor then AlphaSquadUI.Theme.BindColor(label,color or COLORS.white) end
     label:SetVerticalAlignment(TEXT_ALIGN_CENTER)
     return label
 end
@@ -47,16 +53,21 @@ local function Button(parent, name, text, x, y, w, h, callback)
     button:SetAnchor(TOPLEFT, parent, TOPLEFT, x, y)
     button:SetMouseEnabled(true)
 
-    button.bg = Solid(button, name .. "BG", COLORS.panel)
+    button.bg = Solid(button, name .. "BG", Palette("panel"))
+    if AlphaSquadUI.Theme and AlphaSquadUI.Theme.RegisterSurface then AlphaSquadUI.Theme.RegisterSurface(button,button.bg,"button") end
     button.label = Label(button, name .. "Label", "ZoFontGameSmall", text or "", COLORS.white)
     button.label:SetAnchorFill(button)
     button.label:SetHorizontalAlignment(TEXT_ALIGN_CENTER)
+    button.label:SetMaxLineCount(1)
+    if button.label.SetWrapMode and TEXT_WRAP_MODE_ELLIPSIS then button.label:SetWrapMode(TEXT_WRAP_MODE_ELLIPSIS) end
 
     button:SetHandler("OnMouseEnter", function()
-        button.bg:SetColor(0.050, 0.065, 0.090, 1)
+        SetColor(button.bg,Palette("hover",COLORS.panel))
+        if button.help and AlphaSquadUI.Tooltips then AlphaSquadUI.Tooltips.ShowText(button, button.help) end
     end)
     button:SetHandler("OnMouseExit", function()
-        button.bg:SetColor(COLORS.panel[1], COLORS.panel[2], COLORS.panel[3], COLORS.panel[4])
+        SetColor(button.bg,Palette("panel"))
+        if AlphaSquadUI.Tooltips then AlphaSquadUI.Tooltips.Hide() end
     end)
     button:SetHandler("OnMouseUp", function(_, mouseButton, upInside)
         if mouseButton == MOUSE_BUTTON_INDEX_LEFT and upInside ~= false and callback then
@@ -64,6 +75,7 @@ local function Button(parent, name, text, x, y, w, h, callback)
         end
     end)
 
+    if AlphaSquadUI.Input and AlphaSquadUI.Input.Register then AlphaSquadUI.Input.Register(button,{activate=function() if callback then callback(button) end end,label=text}) end
     return button
 end
 
@@ -72,7 +84,8 @@ local function CreateAbilityRow(parent, index)
     row:SetDimensions(354, 32)
     row:SetMouseEnabled(true)
 
-    row.bg = Solid(row, "AlphaSquadULTGroupAbilityRow" .. index .. "BG", {0.016, 0.024, 0.042, 0.96})
+    row.bg = Solid(row, "AlphaSquadULTGroupAbilityRow" .. index .. "BG", Palette("surface"))
+    if AlphaSquadUI.Theme and AlphaSquadUI.Theme.RegisterSurface then AlphaSquadUI.Theme.RegisterSurface(row,row.bg,"tile") end
 
     row.icon = WINDOW_MANAGER:CreateControl("AlphaSquadULTGroupAbilityRow" .. index .. "Icon", row, CT_TEXTURE)
     row.icon:SetDimensions(24, 24)
@@ -99,6 +112,11 @@ local function CreateAbilityRow(parent, index)
     row.state:SetHorizontalAlignment(TEXT_ALIGN_RIGHT)
 
     row.ability = nil
+    if AlphaSquadUI.Input and AlphaSquadUI.Input.Register then
+        AlphaSquadUI.Input.Register(row,{activate=function()
+            if row.ability then Group:SetAbilityTracked(row.ability.id,not Group:IsAbilityTracked(row.ability.id)) end
+        end,label="Ultimate filter"})
+    end
     return row
 end
 
@@ -114,10 +132,10 @@ function Group:RefreshAbilityRow(row, ability)
     row:SetHidden(false)
     row.ability = ability
 
-    row.icon:SetHidden(not ability.icon or ability.icon == "")
-    if ability.icon and ability.icon ~= "" then row.icon:SetTexture(ability.icon) end
+    row.icon:SetHidden(false)
+    row.icon:SetTexture(ability.icon and ability.icon~="" and ability.icon or "EsoUI/Art/ActionBar/abilityFrame64_up.dds")
 
-    row.name:SetText(ability.name or ("Ultimate " .. tostring(ability.id)))
+    row.name:SetText(ability.name and ability.name ~= "" and ability.name or "Unknown Ultimate")
     row.users:SetText(tostring(ability.users or 0) .. "x")
 
     local tracked = self:IsAbilityTracked(ability.id)
@@ -125,24 +143,36 @@ function Group:RefreshAbilityRow(row, ability)
     SetColor(row.state, tracked and COLORS.green or COLORS.muted)
 
     if tracked then
-        row.bg:SetColor(0.040, 0.085, 0.062, 0.94)
+        SetColor(row.bg,Palette("selected",COLORS.panel))
     else
-        row.bg:SetColor(0.016, 0.024, 0.042, 0.96)
+        SetColor(row.bg,Palette("surface"))
     end
 
     row:SetHandler("OnMouseEnter", function()
         if tracked then
-            row.bg:SetColor(0.055, 0.110, 0.078, 1)
+            SetColor(row.bg,Palette("selected",COLORS.panel))
         else
-            row.bg:SetColor(0.045, 0.058, 0.080, 1)
+            SetColor(row.bg,Palette("hover",COLORS.panel))
+        end
+        local tooltips = AlphaSquadUI.Tooltips
+        if tooltips then
+            local description = ""
+            if GetAbilityDescription then
+                local ok, value = pcall(GetAbilityDescription, ability.id)
+                if ok and type(value) == "string" then description = value end
+            end
+            tooltips.ShowText(row, (ability.name or "Unknown Ultimate")
+                .. (description ~= "" and ("\n\n" .. description) or "")
+                .. "\n\nSelect to turn tracking on or off. The count shows group members with this Ultimate. You can save up to 24 selections.")
         end
     end)
 
     row:SetHandler("OnMouseExit", function()
+        if AlphaSquadUI.Tooltips then AlphaSquadUI.Tooltips.Hide() end
         if Group:IsAbilityTracked(ability.id) then
-            row.bg:SetColor(0.040, 0.085, 0.062, 0.94)
+            SetColor(row.bg,Palette("selected",COLORS.panel))
         else
-            row.bg:SetColor(0.016, 0.024, 0.042, 0.96)
+            SetColor(row.bg,Palette("surface"))
         end
     end)
 
@@ -171,48 +201,40 @@ function Group:RefreshConfig()
     end
 
     self.configWindow.empty:SetHidden(#abilities > 0)
+    if #abilities==0 then
+        self.configWindow.empty:SetText(total==0 and "Join a group to see teammates’ Ultimates.\nYour own Ultimate stays in the personal HUD."
+            or "No teammates are sharing Ultimates yet.\nManage your sharing and required libraries in Libraries.")
+    end
 
     for index, row in ipairs(self.configWindow.abilityRows) do
         local ability = abilities[index]
         self:RefreshAbilityRow(row, ability)
 
         if ability then
-            local col = index <= 12 and 0 or 1
-            local rowIndex = col == 0 and index or (index - 12)
             row:ClearAnchors()
-            row:SetAnchor(TOPLEFT, self.configWindow, TOPLEFT,
-                col == 0 and 22 or 404,
-                152 + ((rowIndex - 1) * 34))
+            if self.configWindow.abilityContent then
+                row:SetAnchor(TOPLEFT, self.configWindow.abilityContent, TOPLEFT, 0, (index - 1) * 34)
+            else
+                local col = index <= 12 and 0 or 1
+                local rowIndex = col == 0 and index or (index - 12)
+                row:SetAnchor(TOPLEFT, self.configWindow, TOPLEFT, col == 0 and 22 or 404,
+                    122 + ((rowIndex - 1) * 34))
+            end
         end
     end
+    if self.configWindow.abilityContent then
+        self.configWindow.abilityContent:SetHeight(math.max(420, math.min(#abilities, 48) * 34))
+    end
 
-    local g = self.sv
-    self.configWindow.enabledButton.label:SetText(g.enabled and "GROUP: ON" or "GROUP: OFF")
-    SetColor(self.configWindow.enabledButton.label, g.enabled and COLORS.green or COLORS.red)
-
-    self.configWindow.visibleButton.label:SetText(g.visible and "HUD: SHOW" or "HUD: HIDE")
-    SetColor(self.configWindow.visibleButton.label, g.visible and COLORS.green or COLORS.muted)
-
-    self.configWindow.lockButton.label:SetText(g.locked and "LOCKED" or "UNLOCKED")
-    SetColor(self.configWindow.lockButton.label, g.locked and COLORS.green or COLORS.gold)
-
-    self.configWindow.selfButton.label:SetText(g.includeSelf and "SELF: ON" or "SELF: OFF")
-    SetColor(self.configWindow.selfButton.label, g.includeSelf and COLORS.green or COLORS.muted)
-
-    self.configWindow.soundButton.label:SetText(g.readySound and "READY SOUND: ON" or "READY SOUND: OFF")
-    SetColor(self.configWindow.soundButton.label, g.readySound and COLORS.green or COLORS.muted)
-
-    self.configWindow.scaleValue:SetText(tostring(g.scale or 100) .. "%")
-    self.configWindow.widthValue:SetText(tostring(g.hudWidth or 312) .. " px")
-    self.configWindow.rowHeightValue:SetText(tostring(g.rowHeight or 36) .. " px")
-    self.configWindow.opacityValue:SetText(tostring(g.opacity or 92) .. "%")
 end
 
 function Group:OpenConfig()
     if not self.configWindow then return end
     self:BuildRoster()
     self:ApplyConfigWindowScale()
-    self.configWindow:SetHidden(false)
+    local settings = AlphaSquadUI.Settings
+    if settings and settings.ShowExclusiveWindow then settings.ShowExclusiveWindow("groupultimate")
+    else self.configWindow:SetHidden(false) end
     self:RefreshConfig()
     self:ApplyVisibility()
 end
@@ -220,19 +242,24 @@ end
 function Group:CloseConfig()
     if not self.configWindow then return end
     self.configWindow:SetHidden(true)
+    if AlphaSquadUI.Tooltips then AlphaSquadUI.Tooltips.Hide() end
     self:ApplyVisibility()
+    local settings = AlphaSquadUI.Settings
+    if settings and settings.RefreshModuleVisibility then settings.RefreshModuleVisibility() end
 end
 
 function Group:ToggleConfig()
     if not self.configWindow then return end
-    if self.configWindow:IsHidden() then self:OpenConfig() else self:CloseConfig() end
+    if self.configWindow:IsHidden() then self:OpenConfig()
+    elseif AlphaSquadUI.Settings and AlphaSquadUI.Settings.CloseExclusiveWindow then AlphaSquadUI.Settings.CloseExclusiveWindow("groupultimate")
+    else self:CloseConfig() end
 end
 
 function Group:CreateConfigWindow()
     local win = WINDOW_MANAGER:CreateTopLevelWindow("AlphaSquadULTGroupConfigWindow")
     self.configWindow = win
 
-    win:SetDimensions(780, 720)
+    win:SetDimensions(780, 630)
     win:SetAnchor(CENTER, GuiRoot, CENTER, 0, 0)
     win:SetClampedToScreen(true)
     win:SetMovable(true)
@@ -240,15 +267,21 @@ function Group:CreateConfigWindow()
     win:SetDrawTier(DT_HIGH)
     win:SetDrawLayer(DL_OVERLAY)
     win:SetDrawLevel(140)
+    if AlphaSquadUI.Settings and AlphaSquadUI.Settings.ApplyWindowLayer then AlphaSquadUI.Settings.ApplyWindowLayer(win, false) end
     win:SetHidden(true)
+    local settings = AlphaSquadUI.Settings
+    if settings and settings.RegisterExclusiveWindow then
+        settings.RegisterExclusiveWindow("groupultimate", win, function() Group:CloseConfig() end, {fallbackPage="ulttracker"})
+    end
 
-    Solid(win, "AlphaSquadULTGroupConfigBG", {0.008, 0.013, 0.025, 0.997})
+    win.bg=Solid(win,"AlphaSquadULTGroupConfigBG",Palette("bg"))
+    if AlphaSquadUI.Theme and AlphaSquadUI.Theme.RegisterSurface then AlphaSquadUI.Theme.RegisterSurface(win,win.bg,"window") end
 
     local top = WINDOW_MANAGER:CreateControl("AlphaSquadULTGroupConfigTop", win, CT_TEXTURE)
     top:SetAnchor(TOPLEFT, win, TOPLEFT, 0, 0)
     top:SetAnchor(TOPRIGHT, win, TOPRIGHT, 0, 0)
     top:SetHeight(3)
-    SetColor(top, COLORS.orange)
+    SetColor(top,Palette("accent",COLORS.orange))
 
     local header = WINDOW_MANAGER:CreateControl("AlphaSquadULTGroupConfigHeader", win, CT_CONTROL)
     header:SetDimensions(780, 62)
@@ -261,19 +294,21 @@ function Group:CreateConfigWindow()
         if button == MOUSE_BUTTON_INDEX_LEFT then win:StopMovingOrResizing() end
     end)
 
-    local title = Label(win, "AlphaSquadULTGroupConfigTitle", "ZoFontWinH2", "GROUP ULTIMATE CONFIG", COLORS.orange)
+    local title = Label(win, "AlphaSquadULTGroupConfigTitle", "ZoFontWinH2", "GROUP ULTIMATES", COLORS.orange)
     title:SetDimensions(480, 30)
     title:SetAnchor(TOPLEFT, win, TOPLEFT, 20, 10)
     title:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
 
     local sub = Label(win, "AlphaSquadULTGroupConfigSub", "ZoFontGameSmall",
-        "Select the Ultimates to monitor. Players are added automatically when they have one slotted.", COLORS.muted)
+        "Choose shared Ultimates to track. Your own Ultimate stays in the personal HUD.", COLORS.muted)
     sub:SetDimensions(660, 20)
     sub:SetAnchor(TOPLEFT, win, TOPLEFT, 21, 39)
     sub:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
 
     Button(win, "AlphaSquadULTGroupConfigClose", "X", 730, 15, 32, 28, function()
-        Group:CloseConfig()
+        local settings=AlphaSquadUI.Settings
+        if settings and settings.CloseExclusiveWindow then settings.CloseExclusiveWindow("groupultimate")
+        else Group:CloseConfig() end
     end)
 
     win.source = Label(win, "AlphaSquadULTGroupConfigSource", "ZoFontGameSmall", "", COLORS.muted)
@@ -281,45 +316,26 @@ function Group:CreateConfigWindow()
     win.source:SetAnchor(TOPLEFT, win, TOPLEFT, 22, 68)
     win.source:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
 
-    win.enabledButton = Button(win, "AlphaSquadULTGroupConfigEnabled", "", 22, 96, 120, 28, function()
-        Group:SetEnabled(not Group.sv.enabled)
-        Group:RefreshConfig()
-    end)
-
-    win.visibleButton = Button(win, "AlphaSquadULTGroupConfigVisible", "", 150, 96, 120, 28, function()
-        Group:SetVisible(not Group.sv.visible)
-        Group:RefreshConfig()
-    end)
-
-    win.lockButton = Button(win, "AlphaSquadULTGroupConfigLock", "", 278, 96, 110, 28, function()
-        Group:SetLocked(not Group.sv.locked)
-        Group:RefreshConfig()
-    end)
-
-    win.selfButton = Button(win, "AlphaSquadULTGroupConfigSelf", "", 396, 96, 110, 28, function()
-        Group.sv.includeSelf = not Group.sv.includeSelf
-        Group:Refresh("include self")
-        Group:RefreshConfig()
-    end)
-
-    win.soundButton = Button(win, "AlphaSquadULTGroupReadySound", "", 514, 96, 244, 28, function()
-        Group.sv.readySound = not Group.sv.readySound
-        Group:RefreshConfig()
-    end)
-
     local listHeader = Label(win, "AlphaSquadULTGroupAbilitiesHeader", "ZoFontGameBold",
-        "ULTIMATES AVAILABLE IN CURRENT GROUP", COLORS.orange)
+        "SAVED & SHARED ULTIMATES", COLORS.orange)
     listHeader:SetDimensions(736, 22)
-    listHeader:SetAnchor(TOPLEFT, win, TOPLEFT, 22, 128)
+    listHeader:SetAnchor(TOPLEFT, win, TOPLEFT, 22, 98)
     listHeader:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
 
     win.abilityRows = {}
-    for index = 1, 24 do
-        win.abilityRows[index] = CreateAbilityRow(win, index)
+    if settings and settings.CreateScrollArea then
+        win.abilityContent, win.abilityScroll = settings.CreateScrollArea(win, "AlphaSquadULTGroupAbilityScroll", 22, 122, 736, 420, 420)
+    end
+    for index = 1, (win.abilityContent and 48 or 24) do
+        win.abilityRows[index] = CreateAbilityRow(win.abilityContent or win, index)
+        if win.abilityContent then
+            win.abilityRows[index]:SetWidth(720)
+            win.abilityRows[index].name:SetWidth(578)
+        end
         win.abilityRows[index]:SetHidden(true)
     end
 
-    win.empty = Label(win, "AlphaSquadULTGroupConfigEmpty", "ZoFontGame", "No shared Ultimates found in the group.", COLORS.muted)
+    win.empty = Label(win, "AlphaSquadULTGroupConfigEmpty", "ZoFontGame", "No shared Ultimates yet.\nJoin a group with teammates sharing Ultimates. Manage your sharing in Libraries.", COLORS.muted)
     win.empty:SetDimensions(736, 80)
     win.empty:SetAnchor(TOPLEFT, win, TOPLEFT, 22, 210)
     win.empty:SetHorizontalAlignment(TEXT_ALIGN_CENTER)
@@ -328,8 +344,13 @@ function Group:CreateConfigWindow()
     local controlsY = 552
 
     Button(win, "AlphaSquadULTGroupSelectAll", "SELECT ALL", 22, controlsY, 110, 28, function()
+        local count = Group:GetTrackedAbilityCount()
         for _, ability in ipairs(Group:GetAvailableAbilities()) do
-            Group.sv.trackedAbilities[tostring(ability.id)] = true
+            local key = tostring(ability.id)
+            if not Group.sv.trackedAbilities[key] and count < 24 then
+                Group.sv.trackedAbilities[key] = true
+                count = count + 1
+            end
         end
         Group:Refresh("select all abilities")
     end)
@@ -339,128 +360,10 @@ function Group:CreateConfigWindow()
         Group:Refresh("clear tracked abilities")
     end)
 
-    local sizeHeader = Label(win, "AlphaSquadULTGroupSizeHeader", "ZoFontGameBold",
-        "HUD SIZE  •  All values are saved automatically", COLORS.orange)
-    sizeHeader:SetDimensions(470, 24)
-    sizeHeader:SetAnchor(TOPLEFT, win, TOPLEFT, 278, controlsY + 1)
-    sizeHeader:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
-
-    local sizeHelp = Label(win, "AlphaSquadULTGroupSizeHelp", "ZoFontGameSmall",
-        "Scale changes everything • Width changes horizontal size • Row Height changes line/icon size", COLORS.muted)
-    sizeHelp:SetDimensions(736, 20)
-    sizeHelp:SetAnchor(TOPLEFT, win, TOPLEFT, 22, 586)
-    sizeHelp:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
-
-    -- Overall Scale
-    local scaleLabel = Label(win, "AlphaSquadULTGroupScaleLabel", "ZoFontGameSmall", "OVERALL SCALE", COLORS.white)
-    scaleLabel:SetDimensions(118, 28)
-    scaleLabel:SetAnchor(TOPLEFT, win, TOPLEFT, 22, 610)
-    scaleLabel:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
-
-    win.scaleMinus = Button(win, "AlphaSquadULTGroupScaleMinus", "−", 142, 610, 30, 28, function()
-        Group.sv.scale = ULT.Clamp((Group.sv.scale or 100) - 5, 60, 180)
-        Group:ApplyAppearance()
-        Group:RefreshHUD()
-        Group:RefreshConfig()
-    end)
-
-    win.scaleValue = Label(win, "AlphaSquadULTGroupScaleValue", "ZoFontGameBold", "", COLORS.cyan)
-    win.scaleValue:SetDimensions(64, 28)
-    win.scaleValue:SetAnchor(TOPLEFT, win, TOPLEFT, 176, 610)
-    win.scaleValue:SetHorizontalAlignment(TEXT_ALIGN_CENTER)
-
-    win.scalePlus = Button(win, "AlphaSquadULTGroupScalePlus", "+", 244, 610, 30, 28, function()
-        Group.sv.scale = ULT.Clamp((Group.sv.scale or 100) + 5, 60, 180)
-        Group:ApplyAppearance()
-        Group:RefreshHUD()
-        Group:RefreshConfig()
-    end)
-
-    -- List Width
-    local widthLabel = Label(win, "AlphaSquadULTGroupWidthLabel", "ZoFontGameSmall", "LIST WIDTH", COLORS.white)
-    widthLabel:SetDimensions(104, 28)
-    widthLabel:SetAnchor(TOPLEFT, win, TOPLEFT, 296, 610)
-    widthLabel:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
-
-    win.widthMinus = Button(win, "AlphaSquadULTGroupWidthMinus", "−", 400, 610, 30, 28, function()
-        Group.sv.hudWidth = ULT.Clamp((Group.sv.hudWidth or 312) - 10, 240, 520)
-        Group:ApplyListGeometry()
-        Group:RefreshHUD()
-        Group:RefreshConfig()
-    end)
-
-    win.widthValue = Label(win, "AlphaSquadULTGroupWidthValue", "ZoFontGameBold", "", COLORS.cyan)
-    win.widthValue:SetDimensions(76, 28)
-    win.widthValue:SetAnchor(TOPLEFT, win, TOPLEFT, 434, 610)
-    win.widthValue:SetHorizontalAlignment(TEXT_ALIGN_CENTER)
-
-    win.widthPlus = Button(win, "AlphaSquadULTGroupWidthPlus", "+", 514, 610, 30, 28, function()
-        Group.sv.hudWidth = ULT.Clamp((Group.sv.hudWidth or 312) + 10, 240, 520)
-        Group:ApplyListGeometry()
-        Group:RefreshHUD()
-        Group:RefreshConfig()
-    end)
-
-    -- Row Height / Icon Size
-    local rowLabel = Label(win, "AlphaSquadULTGroupRowHeightLabel", "ZoFontGameSmall", "ROW HEIGHT", COLORS.white)
-    rowLabel:SetDimensions(118, 28)
-    rowLabel:SetAnchor(TOPLEFT, win, TOPLEFT, 22, 644)
-    rowLabel:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
-
-    win.rowHeightMinus = Button(win, "AlphaSquadULTGroupRowHeightMinus", "−", 142, 644, 30, 28, function()
-        Group.sv.rowHeight = ULT.Clamp((Group.sv.rowHeight or 36) - 2, 28, 56)
-        Group:ApplyListGeometry()
-        Group:RefreshHUD()
-        Group:RefreshConfig()
-    end)
-
-    win.rowHeightValue = Label(win, "AlphaSquadULTGroupRowHeightValue", "ZoFontGameBold", "", COLORS.cyan)
-    win.rowHeightValue:SetDimensions(64, 28)
-    win.rowHeightValue:SetAnchor(TOPLEFT, win, TOPLEFT, 176, 644)
-    win.rowHeightValue:SetHorizontalAlignment(TEXT_ALIGN_CENTER)
-
-    win.rowHeightPlus = Button(win, "AlphaSquadULTGroupRowHeightPlus", "+", 244, 644, 30, 28, function()
-        Group.sv.rowHeight = ULT.Clamp((Group.sv.rowHeight or 36) + 2, 28, 56)
-        Group:ApplyListGeometry()
-        Group:RefreshHUD()
-        Group:RefreshConfig()
-    end)
-
-    -- Background Opacity
-    local opacityLabel = Label(win, "AlphaSquadULTGroupOpacityLabel", "ZoFontGameSmall", "BACKGROUND", COLORS.white)
-    opacityLabel:SetDimensions(104, 28)
-    opacityLabel:SetAnchor(TOPLEFT, win, TOPLEFT, 296, 644)
-    opacityLabel:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
-
-    win.opacityMinus = Button(win, "AlphaSquadULTGroupOpacityMinus", "−", 400, 644, 30, 28, function()
-        Group.sv.opacity = ULT.Clamp((Group.sv.opacity or 92) - 5, 30, 100)
-        Group:ApplyAppearance()
-        Group:RefreshConfig()
-    end)
-
-    win.opacityValue = Label(win, "AlphaSquadULTGroupOpacityValue", "ZoFontGameBold", "", COLORS.cyan)
-    win.opacityValue:SetDimensions(76, 28)
-    win.opacityValue:SetAnchor(TOPLEFT, win, TOPLEFT, 434, 644)
-    win.opacityValue:SetHorizontalAlignment(TEXT_ALIGN_CENTER)
-
-    win.opacityPlus = Button(win, "AlphaSquadULTGroupOpacityPlus", "+", 514, 644, 30, 28, function()
-        Group.sv.opacity = ULT.Clamp((Group.sv.opacity or 92) + 5, 30, 100)
-        Group:ApplyAppearance()
-        Group:RefreshConfig()
-    end)
-
-    Button(win, "AlphaSquadULTGroupResetSize", "RESET SIZE", 566, 610, 92, 28, function()
-        Group:ResetSize()
-    end)
-
-    Button(win, "AlphaSquadULTGroupReset", "RESET POSITION", 664, 610, 94, 28, function()
-        Group:ResetPosition()
-    end)
-
-    local saveNote = Label(win, "AlphaSquadULTGroupSaveNote", "ZoFontGameSmall",
-        "Saved per account/server: Ultimate filters, HUD size, opacity, position, lock state, visibility and sound settings.", COLORS.muted)
-    saveNote:SetDimensions(736, 30)
-    saveNote:SetAnchor(TOPLEFT, win, TOPLEFT, 22, 682)
+    local saveNote=Label(win,"AlphaSquadULTGroupSaveNote","ZoFontGameSmall",
+        "Use Move HUD in the sidebar to place and resize your panels. Drag corners to scale everything; edges reshape the list. Filters and layout are saved automatically.",COLORS.muted)
+    saveNote:SetDimensions(736,40)
+    saveNote:SetAnchor(TOPLEFT,win,TOPLEFT,22,586)
     saveNote:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
     saveNote:SetVerticalAlignment(TEXT_ALIGN_TOP)
 

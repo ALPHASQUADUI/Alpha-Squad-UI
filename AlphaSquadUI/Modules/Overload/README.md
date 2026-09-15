@@ -1,18 +1,36 @@
-# Overload Module
+# Overload behavior
 
-Current gameplay module for Ąlpha Şquad UI.
+Overload is an optional part of the **ULT Tracker** personal HUD. It follows Overload, Energy Overload and Power Overload, including a morph available through subclassing, using the actual slotted ability identity.
 
-Tracks:
+## Settings
 
-- Overload
-- Energy Overload
-- Power Overload
-- subclassed builds using an Overload morph
+Open **ULT Tracker → OVERLOAD SETTINGS**, or `/asoverload settings`.
 
-Features include the movable HUD, Ultimate counter, emergency reserve alerts,
-ready reminder, PvP suppression option, menu auto-hide and dormant behavior
-when no Overload morph is slotted.
+- **Use Overload behavior** enables the specialized reserve and ready-reminder behavior. OFF retains the standard personal Ultimate tracker.
+- **Disable specialized behavior in PvP** uses normal Ultimate tracking there while retaining the Overload options for PvE.
+- **Reserve warnings**, enabled by default, highlights active Overload when Ultimate reaches **Warning starts**. Warning sounds can be disabled independently.
+- Ready-reminder options control the reminder threshold and sound while Overload is off.
 
-The gameplay implementation intentionally remains consolidated in `Overload.lua`
-to minimize regression risk. Any future file split should preserve gameplay
-behavior and SavedVariables exactly.
+Overload and normal Ultimates share one panel, position, scale and background opacity. In AUTO, FRONT or BACK mode, an applicable Overload morph can take priority even on the other weapon bar. **BOTH** retains both cards. All display modes preserve the actual ability icons and morphs.
+
+Use your normal Ultimate binding to switch Overload off. The addon only reports its state and resource reserve; automatic stopping and clickable cancellation are removed. Placement previews do not play alerts.
+
+## Migration and runtime
+
+Existing supported Overload options migrate into the personal ULT settings. An applicable previously enabled Overload HUD can provide the shared panel's previous position and scale. Existing ULT display modes, including BOTH, are preserved; new installations use AUTO. Old SavedVariables are retained for migration. An existing warning OFF choice and its warning threshold survive the removal of the old cutoff setting. A native transformation/temporary hotbar temporarily replaces the weapon display and suppresses unrelated Overload alerts.
+
+The implementation is `../ULTTracker/ULTOverload.lua`. It uses the personal Ultimate tracker's events, resource state, safety update and animation lifecycle. There is no separate Overload HUD or standalone recovery timer. Disabling ULT Tracker stops its specialized Overload work too; changing library sharing remains independent.
+
+Use **MOVE HUD** or `/asmove` to move and resize the shared panel. Corners scale it proportionally, edges rearrange its contents, and the toolbar controls background opacity and reset. The three Dashboard interface styles apply to this same HUD.
+
+## Commands
+
+| Command | Action |
+| --- | --- |
+| `/asui` or `/alphasquad` | Main settings |
+| `/asoverload` | Legacy alias for main settings |
+| `/asoverload settings` | Overload behavior options |
+| `/asoverload on` or `/asoverload off` | Enable or disable specialized behavior |
+| `/asmove` | Arrange enabled HUD panels |
+
+Personal Ultimate and Overload tracking do not require sharing libraries. See the shared **Libraries** page for optional group integrations.
