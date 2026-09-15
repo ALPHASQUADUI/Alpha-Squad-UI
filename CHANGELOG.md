@@ -2,6 +2,10 @@
 
 All notable changes to Ąlpha Şquad UI are documented here.
 
+## 3.0.1 — 2026-09-15
+
+Fixed the truncated name in ESO's Add-Ons menu by keeping title and author color markup within a compact metadata budget. The expanded entry now lists all seven group-feature libraries with green installed states and red missing, disabled, outdated or dependency warnings. Native character filters and other addons remain unchanged. See [release notes](releases/3.0.1.md).
+
 ## 3.0.0 — 2026-09-14
 
 Unified personal Ultimate and optional Overload behavior in one HUD, added three saved interface styles, moved the settings shell into Core, and expanded MOVE HUD with proportional corner scaling, edge reflow and centralized opacity/reset controls. Group Ultimate and Support panels resize through the same placement workflow. Community and Discord use native pages and external-link confirmation. Existing display modes and supported preferences migrate. See [complete release notes](releases/3.0.0.md).

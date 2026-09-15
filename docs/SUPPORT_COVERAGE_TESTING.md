@@ -1,6 +1,14 @@
 # ESO acceptance checklist
 
-Version **3.0.0** / **30000**. This checklist is not a record of completed in-game tests.
+Version **3.0.1** / **30001**. This checklist is not a record of completed in-game tests.
+
+## Native Add-Ons menu
+
+- Before login and in game, verify the complete **Ąlpha Şquad UI** title and **@SeRuM1** author, without a cut-off color tag.
+- In game, expand the entry: all seven group-feature libraries must appear, with available names green and missing names red with **Missing library**.
+- Select another character, disable a library, and enable it again: the status must follow the native filter and checkboxes without modifying them. Also test a missing transitive dependency and an older LibAddonMenu-2.0/LibSetDetection version.
+- Collapse/reopen and refresh: no duplicate list, overlap with the next addon, or changes to CombatMetrics or other entries. Re-enable libraries and reload before verifying tracking/sharing.
+- With Alpha Squad disabled or not loaded, expect the static library description without custom status colors.
 
 ## Automated validation
 

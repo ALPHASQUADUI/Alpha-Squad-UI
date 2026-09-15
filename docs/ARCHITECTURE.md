@@ -12,6 +12,8 @@ AlphaSquadUI.Settings.RegisterPage(id, builder)
 
 `Core/Shell.lua` creates and registers the settings shell independently of gameplay tracking. It remains accessible when ULT Tracker and Support Coverage are both disabled. The shared product label is **Ąlpha Şquad UI**, rendered with ESO's standard UI font.
 
+`Core/AddOnMenu.lua` post-hooks the native Add-Ons manager's `BuildMasterList` once and augments only the suite's entry before native row sizing. Library availability uses the selected character's native addon records and dependency/version API, not Lua globals that remain loaded after a checkbox changes. Libraries remain optional at load time; missing group integrations do not disable local tracking. Compact Title/Author metadata stays within a 64-byte compatibility budget, including color codes. The static description is the fallback before the suite's Lua is loaded.
+
 ## Module boundaries
 
 | Component | Responsibility |

@@ -1,14 +1,15 @@
-## Title: |cFF6F0CĄ|cFF7712l|cFF7F17p|cFF871Dh|cFF8F22a |cFF9828Ş|cFFA02Dq|cFFA833u|cFFB038a|cFFB83Ed |cFFFFFFUI|r
+## Title: |cFF6F0CĄlpha |cFFB83EŞquad |cFFFFFFUI|r
 ## APIVersion: 101050 101051
-## Version: 3.0.0
-## AddOnVersion: 30000
-## Author: |c4E9EFF@|c57A9FFS|c60B4FFe|c69BFFFR|c72CAFFu|c7BD5FFM|c84E0FF1|r
-## Description: Modular Alpha Squad UI with pre-combat group readiness and voluntary build inspection.
+## Version: 3.0.1
+## AddOnVersion: 30001
+## Author: |c4E9EFF@Se|c69BFFFRu|c84E0FFM1|r
+## Description: Modular Alpha Squad UI with pre-combat group readiness and voluntary build inspection. Group libraries: LibGroupBroadcast, LibGroupCombatStats, LibSetDetection, LibFoodDrinkBuff, LibCombat, LibAddonMenu-2.0 and LibDebugLogger.
 ## SavedVariables: AlphaSquadOverloadTrackerSavedVariables AlphaSquadULTTrackerSavedVariables AlphaSquadSupportCoverageSavedVariables AlphaSquadUISettingsSavedVariables
-## OptionalDependsOn: LibGroupCombatStats LibGroupBroadcast LibFoodDrinkBuff LibSetDetection
+## OptionalDependsOn: LibAddonMenu-2.0 LibDebugLogger LibGroupBroadcast LibCombat LibGroupCombatStats LibFoodDrinkBuff LibSetDetection
 
 Core/Core.lua
 Core/Theme.lua
+Core/AddOnMenu.lua
 Core/Utils.lua
 Core/Events.lua
 Core/Preferences.lua

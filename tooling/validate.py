@@ -20,6 +20,11 @@ def main():
     runtimes = [os.environ.get('LUA51', 'lua5.1'), os.environ.get('LUA54', 'lua5.4')]
     root = ROOT / 'AlphaSquadUI'
     manifest = (root / 'AlphaSquadUI.txt').read_text()
+    # Color markup counts toward ESO's short metadata fields. Keep a byte-safe
+    # budget so branding survives before any addon Lua is loaded.
+    for field in ('Title', 'Author'):
+        value = re.search(r'^## ' + field + r': (.+)$', manifest, re.M).group(1)
+        assert len(value.encode('utf-8')) <= 64, f'{field} exceeds the metadata budget'
     paths = [line.strip() for line in manifest.splitlines() if line.strip() and not line.startswith('##')]
     assert len(paths) == len(set(paths)) and all((root / path).is_file() for path in paths)
     version = re.search(r'^## Version: (.+)$', manifest, re.M).group(1)

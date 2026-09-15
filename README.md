@@ -74,6 +74,8 @@ Coverage means a qualifying build source is available before combat. Range, targ
 
 Install libraries as separate addon folders and enable their declared dependencies. **Libraries** shows green installed states, red missing/update states, ESOUI links and all sharing controls on one page.
 
+In the in-game **Add-Ons** menu, expand **Ąlpha Şquad UI** to see all seven libraries under **Required Add-Ons**. Green means installed and enabled for the selected character; red names include **Missing library**, **Disabled**, or an update/dependency warning. This list covers the complete group feature set; local trackers still work without group libraries. The menu reads native addon states when refreshed, without changing any checkbox or sharing preference. Install missing libraries with Minion, then reload the UI. Before login, or if Alpha Squad itself is not loaded, the description lists the libraries without live status colors.
+
 | Library | Purpose | Required setup |
 | --- | --- | --- |
 | [LibGroupBroadcast](https://www.esoui.com/downloads/info1337-LibGroupBroadcast.html) | Compatible full-build exchange | Install with LibAddonMenu-2.0 38+ and LibDebugLogger. **Share equipped build** starts ON on new installations; participating clients need a compatible sender. |

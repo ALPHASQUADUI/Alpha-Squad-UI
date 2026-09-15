@@ -47,6 +47,8 @@ In ESO, compare addon ON/OFF frame time and memory in a four-player dungeon and 
 
 ## Library settings
 
+The native Add-Ons status list reuses the manager's existing entries in one pass when that menu rebuilds, then checks seven known libraries and their declared dependencies. It adds no timer, frame update, network traffic or persistent state, and changes only the suite's display text.
+
 Libraries remain installed and available independently of UI modules. Only verified matching protocols are changed, and queued disabled packets are pruned. LibGroupCombatStats does not expose sender unregistration; its own shared send timer can remain until reload after its protocol is disabled. The addon does not suppress callbacks belonging to another library or its other clients. On the next load, an explicitly disabled Ultimate sender is not registered by this addon.
 
 Dashboard and Libraries use static controls. Libraries fits its two columns and Minion footer on the settings canvas without a scrollbar. The common shell fits smaller viewports by scaling only when necessary. Native tooltip scale and draw order are restored after use.
