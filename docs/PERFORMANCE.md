@@ -17,7 +17,7 @@ Performance is a design constraint for **Ąlpha Şquad UI**. The design reduces 
 
 Native events drive shared personal slot/resource changes and relevant Overload effects. A single 1.5-second fallback refresh runs only while the personal tracker is enabled, visible and unobscured. READY, reserve and reminder animation runs only while visible and needed. Overload uses the same HUD, resource state and lifecycle; it has no separate recovery heartbeat.
 
-The optional Overload effect subscription is filtered to the player and relevant morphs. Cached slot/effect state handles presentation; layout checks do not rescan skills. Placement and loading suppress alerts and cancellation.
+The optional Overload effect subscription is filtered to the player and relevant morphs. Cached slot/effect state handles presentation; layout checks do not rescan skills. Placement and loading suppress alerts. Overload no longer calls effect cancellation APIs or maintains auto-stop state.
 
 The personal HUD compares a layout signature before reanchoring unchanged controls. Resource and readiness text can update without repeating the geometry work. Horizontal/Vertical selection is explicit, with cached dimensions for each orientation; a small edge movement does not trigger a sudden template switch.
 
@@ -25,11 +25,11 @@ The personal HUD compares a layout signature before reanchoring unchanged contro
 
 LibGroupCombatStats is subscribed for **ULT only**. An incoming player update changes that player's cached entry; no DPS/HPS stream is requested. Full roster refreshes are for membership/connectivity changes and a two-second safety check while the group HUD and its parent are enabled, visible and unobscured.
 
-The HUD reuses up to twelve player rows, including the twelve-player placement sample. Horizontal and vertical presentations reuse the same pool. READY animation stops when no visible row requires it, and placement samples do not start gameplay alerts.
+The group view excludes the local player and retains no group-ready-sound callback. The HUD reuses up to twelve player rows, including the twelve-player placement sample. Horizontal and vertical presentations reuse the same pool. READY animation stops when no visible row requires it, and placement samples do not start gameplay alerts.
 
 ## Support Coverage
 
-Equipment, skill, Champion and mastery changes invalidate a cached local build. Coalesced scans run outside combat. Quickslot/readiness changes take the lightweight consumable path instead of always rescanning equipment.
+Equipment, skill, Champion and mastery changes invalidate a cached local build. Coalesced scans run outside combat. Quickslot/readiness changes take the lightweight consumable path instead of always rescanning equipment. Screen-resize bursts schedule one deferred Support refresh using the dimensions available when it runs. A regression delivers 200 events before that callback and checks that they produce one pass; this measures coalescing, not native frame time.
 
 A **five-second lightweight recovery refresh** is restricted to visible or grouped precombat use. Combat suspends Support scans and build sends; deferred changes are handled after combat. Hidden inspectors do not continuously rebuild their content. Build presentation uses existing ESO item/skill assets and cached evidence rather than a live remote 3D character scene. Detailed tooltips are requested on hover instead of pre-rendering every full description.
 
@@ -60,7 +60,7 @@ Dashboard and Libraries use static controls. Libraries fits its two columns and 
 
 The Coverage grid creates its controls once and reanchors them for filtering or viewport changes. A fixed single page replaces tall repeated provider rows; contributor descriptions are assembled on hover. Dense rows fit native icons inside their own hit area. Set-bonus thresholds use a bounded cache of 256 successful native lookups. Successful native effect and set previews are cached; unavailable artwork uses an identified category symbol, without treating a missing lookup as verified identity.
 
-Global MOVE HUD is a short-lived placement state without an idle heartbeat. Only Dashboard-enabled modules participate. A mouse-position callback exists only during an active drag and stops on release or cancellation. Unchanged pointer positions do no layout work. Corners change only the native parent scale; edge changes reflow the logical dimensions. Both paths keep the opposite edge fixed and avoid applying scale twice. Cached logical canvas sizes also prevent repeated scaled inspector refreshes from shrinking the build sheet.
+Global MOVE HUD is a short-lived placement state without an idle heartbeat. Its entry waits on the existing scene lifecycle callback; repeated clicks cannot queue multiple editors. Normal HUD/cursor-mode changes retain the editor, while combat/loading and unrelated menus cancel it. Only Dashboard-enabled modules participate. A mouse-position callback exists only during an active drag and stops on release or cancellation. Unchanged pointer positions do no layout work. Corners change only the native parent scale; edge changes reflow the logical dimensions. Both paths keep the opposite edge fixed and avoid applying scale twice. Cached logical canvas sizes also prevent repeated scaled inspector refreshes from shrinking the build sheet.
 
 `Core/Preview.lua` stores only the selected presentation mode. Personal, group and Support renderers cache their sample tables by mode and consume them only during placement. Switching samples performs no scan, build request or send, and sample rows never enter live evidence. Placement previews suspend normal alert animation work and preserve normal visibility settings; closing saves and locks the panels. Personal ULT and Overload share one HUD, with cached slot state choosing the display and no extra skill scan.
 
@@ -76,4 +76,8 @@ Focus candidate geometry is read when navigating visible controls, not through a
 
 Theme changes repaint registered settings/HUD surfaces once; profile changes rebind the saved preset. The themes add no animation, recurring repaint or build scan. Tactical Compact changes framing and background fill, not the geometric layout or icon sizes. Status, quality, Champion colors and branding remain stable.
 
-Core Shell initializes independently of disabled gameplay modules. Website & About and Discord pages use native static controls. Opening the Discord widget is an explicit external-browser action after ESO confirmation; there is no embedded web renderer or live member-count polling.
+Core Shell initializes independently of disabled gameplay modules. The widened Workspace and About page use static native controls. Discord opens the verified invitation only after an explicit click and ESO confirmation; there is no intermediate community page, embedded web renderer or live member-count polling. The style dropdown owns one opaque native backdrop. Window return history is a bounded transient list, not a polling task or persistent navigation log.
+
+## Recorded observations
+
+The supplied 3.1.0 client recording shows a brief FPS-counter decrease when Builds opens, followed by recovery. It does not isolate the addon from the game scene or other addons, and cannot establish a cause or a before/after improvement. This update fixes scene ordering and redundant resize callbacks; it makes no measured FPS claim. The [video review](VIDEO_REVIEW_3.2.0.md) distinguishes visible failures from code findings and remaining client checks.

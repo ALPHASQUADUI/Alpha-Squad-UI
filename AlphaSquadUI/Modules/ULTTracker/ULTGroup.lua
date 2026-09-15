@@ -22,8 +22,6 @@ Group.roster = {}
 Group.byKey = {}
 Group.byUnitTag = {}
 Group.refreshPending = false
-Group.readyState = {}
-Group.lastReadySoundAt = 0
 Group.previousUltValues = Group.previousUltValues or {}
 Group.recentlyUsedUntil = Group.recentlyUsedUntil or {}
 Group.initialized = false
@@ -107,10 +105,7 @@ function Group:GetDefaults()
     local rootH = GuiRoot and GuiRoot:GetHeight() or 1080
     return {
         enabled = true,
-        visible = true,
         locked = true,
-        includeSelf = false,
-        readySound = false,
         hideInMenus = true,
         scale = 100,
         hudWidth = 312,
@@ -141,6 +136,15 @@ function Group:EnsureSavedVariables()
     -- Cleanup migration from the retired per-player FRONT/BACK prototype.
     -- The current raidlead workflow stores only selected Ultimate ability IDs.
     ULT.sv.group.assignments = nil
+    -- One user-facing switch owns group tracking and visibility. Preserve a
+    -- previously hidden/off panel once, without retaining redundant preferences.
+    if ULT.sv.group.singleSwitchVersion~=1 then
+        if ULT.sv.group.visible==false then ULT.sv.group.enabled=false end
+        ULT.sv.group.singleSwitchVersion=1
+    end
+    ULT.sv.group.visible=nil
+    ULT.sv.group.includeSelf=nil
+    ULT.sv.group.readySound=nil
 
     if type(ULT.sv.group.trackedAbilities) ~= "table" then
         ULT.sv.group.trackedAbilities = {}
@@ -313,12 +317,6 @@ function Group:InitializeSharing()
             end)
         end
 
-        -- Keep Include Self equally responsive without waiting for the safety sync.
-        if LibGroupCombatStats.EVENT_PLAYER_ULT_UPDATE then
-            result:RegisterForEvent(LibGroupCombatStats.EVENT_PLAYER_ULT_UPDATE, function(unitTag, data)
-                Group:OnGroupUltUpdate(unitTag, data)
-            end)
-        end
     end
 
     return true
@@ -346,6 +344,16 @@ function Group:GetUnitTagByIndex(index)
     return nil
 end
 
+local function IsLocalPlayer(unitTag)
+    if unitTag=="player" then return true end
+    if AreUnitsEqual then
+        local ok,same=pcall(AreUnitsEqual,unitTag,"player")
+        if ok and same then return true end
+    end
+    local own=GetDisplayNameSafe("player")
+    return own~="" and GetDisplayNameSafe(unitTag)==own
+end
+
 function Group:BuildRoster()
     local roster = {}
     local byKey = {}
@@ -359,14 +367,13 @@ function Group:BuildRoster()
         self.byUnitTag = byUnitTag
         self.previousUltValues = {}
         self.recentlyUsedUntil = {}
-        self.readyState = {}
         return roster
     end
 
     for index = 1, groupSize do
         local unitTag = self:GetUnitTagByIndex(index)
 
-        if unitTag and UnitExists(unitTag) then
+        if unitTag and UnitExists(unitTag) and not IsLocalPlayer(unitTag) then
             local displayName = GetDisplayNameSafe(unitTag)
             local characterName = GetCharacterName(unitTag)
             local stableKey = displayName ~= "" and displayName or characterName
@@ -379,19 +386,13 @@ function Group:BuildRoster()
             local ult1Cost = ult and BoundedSharedNumber(ult.ult1Cost) or nil
             local ult2Cost = ult and BoundedSharedNumber(ult.ult2Cost) or nil
 
-            local isPlayer = unitTag == "player"
-            if AreUnitsEqual then
-                local ok, same = pcall(AreUnitsEqual, unitTag, "player")
-                if ok and same then isPlayer = true end
-            end
-
             local entry = {
                 index = index,
                 unitTag = unitTag,
                 key = stableKey,
                 displayName = displayName,
                 characterName = characterName,
-                isPlayer = isPlayer,
+                isPlayer = false,
                 shared = ultValue ~= nil,
                 ultValue = ultValue or 0,
                 ult1ID = ult1ID or 0,
@@ -426,7 +427,7 @@ function Group:BuildRoster()
 end
 
 function Group:UpdateEntryFromUltData(unitTag, data)
-    if not unitTag or type(data) ~= "table" then return false end
+    if type(unitTag)~="string" or unitTag=="" or IsLocalPlayer(unitTag) or type(data) ~= "table" then return false end
 
     local ultValue = BoundedSharedNumber(data.ultValue)
     if not ultValue then return false end
@@ -456,6 +457,9 @@ function Group:UpdateEntryFromUltData(unitTag, data)
 
     if not entry then return false end
 
+    -- A slot identity change cannot borrow the previous Ultimate's cost.
+    if ult1ID~=nil and ult1ID~=entry.ult1ID and ult1Cost==nil then ult1Cost=0 end
+    if ult2ID~=nil and ult2ID~=entry.ult2ID and ult2Cost==nil then ult2Cost=0 end
     entry.shared = true
     entry.ultValue = ultValue
     entry.ult1ID = ult1ID ~= nil and ult1ID or entry.ult1ID or 0
@@ -505,8 +509,12 @@ function Group:GetMatchingUltimates(entry)
     if front and self:IsAbilityTracked(front.id) then
         table.insert(matches, front)
     end
-    if back and self:IsAbilityTracked(back.id) and back.id ~= (front and front.id or 0) then
-        table.insert(matches, back)
+    if back and self:IsAbilityTracked(back.id) then
+        if front and back.id==front.id then
+            -- The same morph can have different costs on the two weapon bars.
+            -- Keep one row, using the cheapest reported usable bar.
+            if back.cost>0 and (front.cost<=0 or back.cost<front.cost) then matches[1]=back end
+        else table.insert(matches,back) end
     end
 
     return matches
@@ -523,7 +531,7 @@ function Group:GetBestMatchingUltimate(entry)
         local percent = 0
 
         if cost > 0 then
-            percent = math.min(100, math.max(0, math.floor(((value / cost) * 100) + 0.5)))
+            percent = math.min(99, math.max(0, math.floor(((value / cost) * 100) + 0.5)))
         end
 
         if ultimate.ready then
@@ -546,13 +554,7 @@ function Group:GetTrackedEntries()
     local result = {}
 
     for _, entry in ipairs(self.roster or {}) do
-        local include = true
-
-        if entry.isPlayer and self.sv and not self.sv.includeSelf then
-            include = false
-        end
-
-        if include and entry.shared then
+        if not entry.isPlayer and entry.shared then
             entry.unavailable = entry.connected == false or entry.dead == true
             entry.matchingUltimates = self:GetMatchingUltimates(entry)
 
@@ -594,6 +596,15 @@ function Group:GetTrackedEntries()
     return result
 end
 
+function Group:GetEmptyMessage()
+    if #(self.roster or {})==0 then return "No teammates in this group" end
+    if not self.libraryAvailable then return "Group data unavailable • See Libraries" end
+    if self:GetTrackedAbilityCount()==0 then return "Choose Ultimates in Configure Group" end
+    local shared=self:GetSharingCount()
+    if shared==0 then return "No teammates sharing Ultimates" end
+    return "No matching Ultimates shared"
+end
+
 function Group:GetSharingCount()
     local shared = 0
     for _, entry in ipairs(self.roster or {}) do
@@ -602,27 +613,9 @@ function Group:GetSharingCount()
     return shared, #(self.roster or {})
 end
 
-function Group:PlayReadySound()
-    if AlphaSquadUI.Layout and AlphaSquadUI.Layout.IsMoving(self) then return end
-    if not ULT.sv or not ULT.sv.enabled or not self.sv or not self.sv.enabled or not self.sv.readySound or not PlaySound or not SOUNDS then return end
-    if ULT.uiObscured then return end
-
-    local now = NowMs()
-    if now - (self.lastReadySoundAt or 0) < 700 then return end
-    self.lastReadySoundAt = now
-
-    local soundId =
-        SOUNDS.ABILITY_ULTIMATE_READY
-        or SOUNDS.GENERAL_ALERT_NOTIFICATION
-        or SOUNDS.POSITIVE_CLICK
-
-    if soundId then PlaySound(soundId) end
-end
-
-function Group:CheckReadyTransitions()
+function Group:CheckResourceTransitions()
     if not ULT.sv or not ULT.sv.enabled or not self.sv or not self.sv.enabled then return end
 
-    local activeKeys = {}
     local now = NowMs()
 
     for _, entry in ipairs(self.roster or {}) do
@@ -650,25 +643,9 @@ function Group:CheckReadyTransitions()
 
             self.previousUltValues[entry.key] = value
 
-            for _, ultimate in ipairs(self:GetMatchingUltimates(entry)) do
-                local stateKey = tostring(entry.key) .. ":" .. tostring(ultimate.id)
-                activeKeys[stateKey] = true
-
-                local readyNow = ultimate.ready == true
-                local previousReady = self.readyState[stateKey] == true
-
-                if usable and readyNow and not previousReady then
-                    self:PlayReadySound()
-                end
-
-                self.readyState[stateKey] = usable and readyNow
-            end
         end
     end
 
-    for key in pairs(self.readyState) do
-        if not activeKeys[key] then self.readyState[key] = nil end
-    end
 end
 
 function Group:RefreshIntegratedSettings()
@@ -722,7 +699,7 @@ function Group:Refresh(reason, rebuildRoster)
     end
 
     if self.sv.enabled and ULT.sv and ULT.sv.enabled then
-        self:CheckReadyTransitions()
+        self:CheckResourceTransitions()
         self:RefreshHUD()
     elseif self.ApplyVisibility then
         self:ApplyVisibility()
@@ -733,7 +710,7 @@ function Group:Refresh(reason, rebuildRoster)
 end
 
 function Group:OnGroupUltUpdate(unitTag, data)
-    if ULT.loading then return end
+    if ULT.loading or type(unitTag)~="string" or unitTag=="" or IsLocalPlayer(unitTag) then return end
     if (not ULT.sv or not ULT.sv.enabled or not self.sv or not self.sv.enabled) and not (self.configWindow and not self.configWindow:IsHidden()) then return end
     if self:UpdateEntryFromUltData(unitTag, data) then
         self:ScheduleRefresh(false)
@@ -797,13 +774,8 @@ function Group:SetEnabled(enabled)
     self:ApplyVisibility()
 end
 
-function Group:SetVisible(visible)
-    if not self.sv then return end
-    self.sv.visible = visible == true
-    self:ApplyVisibility()
-    if self.sv.enabled and self.sv.visible and ULT.sv and ULT.sv.enabled then self:Refresh("visibility changed", true) end
-    self:RefreshIntegratedSettings()
-end
+-- Preserve old slash-command compatibility through the one tracking switch.
+function Group:SetVisible(visible) self:SetEnabled(visible) end
 
 function Group:SetLocked(locked)
     if not self.sv then return end

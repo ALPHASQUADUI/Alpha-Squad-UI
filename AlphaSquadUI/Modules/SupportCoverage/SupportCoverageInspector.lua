@@ -60,9 +60,11 @@ function SC:OpenInspector(tab)
 end
 function SC:OpenFoodCheck() return self:OpenInspector("BUILD") end
 function SC:CreateInspectorWindow()
-    local win=UI.Window("AlphaSquadSupportInspector","Ąlpha Şquad UI  •  Builds",function()SC:CloseInspector()end)
+    local win=UI.Window("AlphaSquadSupportInspector","Ąlpha Şquad UI  •  Builds",function()
+        UI.CloseWindow("supportBuilds",function() SC:CloseInspector() end)
+    end)
     win.hasContentLayout=true
-    self.inspectorWindow=win;UI.RegisterWindow("supportBuilds",win,function()SC:CloseInspector()end)
+    self.inspectorWindow=win;UI.RegisterWindow("supportBuilds",win,function()SC:CloseInspector()end,function()SC:RefreshInspector()end)
     win.coverage=UI.Button(win,"AlphaSquadInspectorCoverage","COVERAGE",124,30,function()SC:OpenMatrix()end)
     win.coverage:SetAnchor(TOPRIGHT,win,TOPRIGHT,-104,14)
     win.title:ClearAnchors();win.title:SetAnchor(TOPLEFT,win,TOPLEFT,18,12);win.title:SetDimensions(580,32)

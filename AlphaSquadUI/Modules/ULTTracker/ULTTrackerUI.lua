@@ -123,23 +123,12 @@ local function CreateCard(parent, key, x)
         local bar=ULT:GetHUDBar(key)
         local tooltips=AlphaSquadUI.Tooltips
         if tooltips and bar and bar.abilityId>0 then
-            if bar.overload and bar.overloadState=="critical" then
-                tooltips.ShowText(card,"Low Ultimate reserve. Activate this card to request Overload cancellation, or use your Ultimate binding.")
-            elseif tooltips.ShowSkill then tooltips.ShowSkill(card,{id=bar.abilityId,name=bar.name},false) end
+            if tooltips.ShowSkill then tooltips.ShowSkill(card,{id=bar.abilityId,name=bar.name},false) end
         end
     end)
     card:SetHandler("OnMouseExit",function() if AlphaSquadUI.Tooltips then AlphaSquadUI.Tooltips.Hide() end end)
-    card:SetHandler("OnMouseUp",function(_,button,inside)
-        if button==MOUSE_BUTTON_INDEX_LEFT and inside~=false and ULT.sv.locked then
-            local bar=ULT:GetHUDBar(key)
-            if not (AlphaSquadUI.Layout and AlphaSquadUI.Layout.IsMoving(ULT)) and bar.overload and bar.overloadState=="critical" and ULT.Overload then ULT.Overload:TryCancel("manual") end
-        end
-    end)
     if AlphaSquadUI.Input and AlphaSquadUI.Input.Register then
-        AlphaSquadUI.Input.Register(card,{activate=function()
-            local bar=ULT:GetHUDBar(key)
-            if not (AlphaSquadUI.Layout and AlphaSquadUI.Layout.IsMoving(ULT)) and bar.overload and bar.overloadState=="critical" and ULT.Overload then ULT.Overload:TryCancel("manual") end
-        end,label="Personal Ultimate"})
+        AlphaSquadUI.Input.Register(card,{kind="inspect",label="Personal Ultimate"})
     end
     return card
 end
@@ -159,7 +148,7 @@ function ULT:SetLayoutPreview(mode)
 end
 function ULT:GetHUDBar(key)
     local mode=PreviewMode(self)
-    if mode=="live" then return self.bars[key] end
+    if mode=="live" then return self:GetLiveBar(key) end
     if not previewBars or previewMode~=mode then
         previewMode=mode;previewBars={}
         for index,barKey in ipairs({"primary","backup"}) do
@@ -428,12 +417,11 @@ function ULT:RefreshCard(card, bar)
     local statusText = "CHARGING"
 
     if bar.overload then
-        if state=="critical" then statusText="TURN OFF!";color=COLORS.red
-        elseif state=="warning" then statusText="LOW RESERVE";color=COLORS.red
+        if state=="warning" then statusText="LOW RESERVE";color=COLORS.red
         elseif state=="active" then statusText="OVERLOAD ON";color=COLORS.green
         elseif state=="ready" then statusText="OVERLOAD READY";color=COLORS.gold
         else statusText="OVERLOAD OFF";color=COLORS.muted end
-        card.costLabel:SetText("RESERVE "..tostring(self.sv.overload and self.sv.overload.reserveThreshold or 130))
+        card.costLabel:SetText("WARNING "..tostring(self.sv.overload and self.sv.overload.reserveWarningThreshold or 160))
     elseif state == "ready" then
         statusText = "READY"
         color = COLORS.green
@@ -476,10 +464,10 @@ function ULT:UpdateReadyPulse()
     local borderAlpha = 0.76 + (pulse * 0.14)
 
     for key, card in pairs(self.window.cards) do
-        local bar = self.bars[key]
-        if self:ShouldTrackBar(key) and bar and bar.overload and (bar.overloadState=="critical" or bar.overloadState=="warning" or bar.overloadState=="ready") then
+        local bar = self:GetLiveBar(key)
+        if self:ShouldTrackBar(key) and bar and bar.overload and (bar.overloadState=="warning" or bar.overloadState=="ready") then
             local danger=bar.overloadState~="ready"
-            local rate=bar.overloadState=="critical" and 17 or danger and 10 or 3
+            local rate=danger and 10 or 3
             local wave=(math.sin(t*rate)+1)*0.5
             local color=danger and COLORS.red or COLORS.gold
             card.readyGlow:SetColor(color[1],color[2],color[3],0.08+wave*0.46)

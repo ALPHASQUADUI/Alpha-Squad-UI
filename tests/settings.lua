@@ -70,7 +70,7 @@ WINDOW_MANAGER.CreateControlFromVirtual=function(_,name,parent)
 end
 ZO_ComboBox_ObjectFromContainer=function(control) return control.combo end
 SLASH_COMMANDS={}
-AlphaSquadUI={name="AlphaSquadUI",version="3.0.0",website="https://alphasquadeso.com/",Modules={}}
+AlphaSquadUI={name="AlphaSquadUI",version="3.0.0",website="https://alphasquadeso.com/",discord="https://discord.gg/snDyd23h6N",Modules={}}
 assert(loadfile("AlphaSquadUI/Core/Utils.lua"))()
 assert(loadfile("AlphaSquadUI/Core/Theme.lua"))()
 assert(loadfile("AlphaSquadUI/Core/Settings.lua"))()
@@ -130,15 +130,19 @@ end
 GuiRoot:SetDimensions(1280,720);Shell:ApplySettingsGeometry()
 check(controls.AlphaSquadSettingsClose==nil,"Parent settings has no close cross")
 check(Shell.settingsPages.dashboard~=nil,"Dashboard is available independently of modules")
-check(not Shell.settingsNavButtons.overload and Shell.settingsNavButtons.discord and not controls.AlphaSquadDashboardModule3,
-    "Dashboard has two modules; Discord is accessible and Overload has no separate module navigation")
+check(not Shell.settingsNavButtons.overload and not Shell.settingsNavButtons.discord and not controls.AlphaSquadDashboardModule3,
+    "Dashboard has two modules; community links share one About page without redundant navigation")
+check(Shell.settingsNavButtons.community.label.text=="About" and Shell.settingsNavButtons.supportcoverage.label.width>=160,
+    "About has a short label and the sidebar reserves space for the complete Support Coverage name")
 local choice=controls.AlphaSquadThemeChoice.combo
 check(#choice.entries==3 and choice.selected.id=="obsidian" and not choice.sorted,"The native global theme picker defaults to Obsidian and retains curated order")
 choice.entries[1].callback()
 check(AlphaSquadUI.Theme.GetPresetId()=="ember" and choice.selected.id=="ember","Selecting a native theme applies and refreshes the picker immediately")
-check(Shell.settingsPages.dashboard.contentHeight==590 and Shell.settingsPages.discord.contentHeight==590,"Dashboard and Discord fit the shared single-page canvas")
+check(Shell.settingsPages.dashboard.contentHeight==590 and Shell.settingsPages.community.contentHeight==590,"Dashboard and About fit the shared single-page canvas")
 check(controls.AlphaSquadLibraryStatus1.text=="MISSING","Missing transport is clearly identified")
 check(controls.AlphaSquadLibraryShare1Button.label.text=="N/A","Missing sharing controls cannot be mistaken for a confirmed OFF setting")
+check(controls.AlphaSquadLibraryShare1Button.track:IsHidden() and controls.AlphaSquadLibraryShare1Button.thumb:IsHidden(),
+    "Unavailable library controls hide the switch rail and thumb together")
 check(controls.AlphaSquadLibraryNativeSettings==nil,"Sharing never offers a button that navigates to another addon panel")
 LibGroupBroadcast={};Settings.RefreshMain()
 check(controls.AlphaSquadLibraryStatus1.text=="INSTALLED","Installed library state refreshes when settings are shown")
@@ -148,6 +152,8 @@ AlphaSquadUI.Sharing={IsEnabled=function() return sharingOn end,
     SetEnabled=function(_,value) sharingOn=value;return true end}
 Settings.RefreshMain()
 check(controls.AlphaSquadLibraryShare2Button.label.text=="ON","Libraries reflects an enabled native sharing setting")
+check(not controls.AlphaSquadLibraryShare2Button.track:IsHidden() and controls.AlphaSquadLibraryShare2Button.label.width==40,
+    "A library becoming available restores a separate text label and switch without overlap")
 controls.AlphaSquadLibraryShare2Button.handlers.OnMouseUp(nil,MOUSE_BUTTON_INDEX_LEFT,true)
 check(not sharingOn and controls.AlphaSquadLibraryShare2Button.label.text=="OFF" and not Shell.settingsWindow:IsHidden(),
     "Sharing toggles and refreshes in place without leaving the Alpha Squad window")
@@ -160,10 +166,12 @@ check(Settings.OpenLink("https://minion.mmoui.com/") and #requested==1 and not S
     "A link requests the native confirmation without closing the addon or redirecting settings")
 check(not Settings.OpenLink("javascript:alert(1)") and not Settings.OpenLink("https://example.org/\npath") and #requested==1,
     "Unsupported schemes and control characters never reach the external URL request")
-Settings.OpenPage("discord")
-controls.AlphaSquadDiscordJoin.handlers.OnMouseUp(nil,MOUSE_BUTTON_INDEX_LEFT,true)
-check(requested[2]=="https://discord.com/widget?id=1524092356696084690&theme=dark" and not Shell.settingsWindow:IsHidden(),
-    "Discord opens the supplied community widget through the normal native confirmation")
+Settings.OpenPage("community")
+controls.AlphaSquadCommunityDiscordButton.handlers.OnMouseUp(nil,MOUSE_BUTTON_INDEX_LEFT,true)
+check(requested[2]==AlphaSquadUI.discord and not Shell.settingsWindow:IsHidden(),
+    "About opens the configured Discord invitation directly through the normal native confirmation")
+check(not Settings.GetPageBuilder("discord") and controls.AlphaSquadCommunityTitle.text=="ABOUT",
+    "Community information uses one About page without an intermediate Discord widget page")
 check(confirmationCount==0,"The addon never confirms an external URL on the player's behalf")
 Settings.layout={x=120,y=75}
 Shell:CloseSettingsWindow();Shell:ToggleSettingsWindow()
@@ -186,6 +194,12 @@ Shell:RegisterDirectSettingsPanel()
 check(entries[1]==native and entries[2]==Shell.directSettingsPanelData and entries[3]==otherAddon,
     "Only the own panel moves ahead of an identified addon; native settings keep their position")
 check(KEYBOARD_OPTIONS.panelNames[110]=="Ąlpha Şquad UI","Native settings metadata uses the full addon name")
+SCENE_MANAGER={RemoveFragment=function()end}
+Settings.OpenPage("community")
+Shell.directSettingsPanelData.unselectedCallback()
+check(Shell.settingsWindow:IsHidden() and not Settings.AnyExclusiveWindowVisible(),
+    "Selecting another native Settings category dismisses a restored raw addon window")
+SCENE_MANAGER=nil
 
 -- Configuration must retain access to currently shared skills plus saved filters.
 local ULT={COLORS=nil,Group={sv={trackedAbilities={}},ApplyConfigWindowScale=function() end}}

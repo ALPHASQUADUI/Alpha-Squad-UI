@@ -41,7 +41,7 @@ ULT.Refresh=function() end;ULT.RefreshSettings=function() end
 ULT.bars.primary={key="primary",category=1,abilityId=101,name="Meteor",icon="native/meteor.dds",ready=false}
 ULT.bars.backup={key="backup",category=2,abilityId=30366,name="Power Overload",icon="native/power_overload.dds",ready=false}
 O:Migrate()
-check(ULT.sv.overload.enabled and ULT.sv.overload.reserveThreshold==130,"New installs initialize the optional Overload behavior")
+check(ULT.sv.overload.enabled and ULT.sv.overload.reserveWarningThreshold==160,"New installs initialize the optional Overload behavior")
 check(AlphaSquadUI.Modules.Overload==nil,"No second Overload module or HUD is created")
 check(O:GetPriorityBar()=="backup" and ULT:ShouldTrackBar("backup") and not ULT:ShouldTrackBar("primary"),"AUTO prioritizes actually slotted Overload on the other bar")
 ULT.sv.trackMode="main"
@@ -64,34 +64,31 @@ check(buffScans==previousScans,"Power-only updates reuse native effect evidence 
 buffs={{name="Native Overload",icon="native/power_overload.dds",id=30366,canClickOff=true}}
 toggles[2]=true
 O:Update(150,"effect")
-check(O.active and O.level=="warning" and #cancellations==0,"Low reserve warns before the cutoff without cancelling early")
-O:Update(125,"power")
-check(O.level=="critical" and #cancellations==1 and cancellations[1]==1,"Cutoff cancels only the freshly verified native click-off buff index")
-O:Update(120,"power")
-check(#cancellations==1,"One critical episode makes one automatic cancellation request")
-buffs[1].canClickOff=false
-check(not O:TryCancel("manual") and #cancellations==1,"Non-click-off effects never reach CancelBuff")
-buffs={}
-check(not O:TryCancel("manual") and #cancellations==1,"Previously cached effects cannot authorize cancellation after removal")
+check(O.active and O.level=="warning" and #cancellations==0,"Active low reserve warns without changing Overload")
+O:Update(125,"power");O:Update(120,"power")
+check(O.level=="warning" and #cancellations==0,"Crossing the former cutoff cannot cancel a native effect")
+check(O.TryCancel==nil,"No manual or automatic cancellation method remains")
 local moving=true
 AlphaSquadUI.Layout={IsMoving=function(module) return moving and module==ULT end}
 buffs={{name="Native Overload",icon="native/power_overload.dds",id=30366,canClickOff=true}}
-O.cancelAttempted=false;local beforeSounds=sounds
+local beforeSounds=sounds
 O:Update(125,"layout")
-check(#cancellations==1 and sounds==beforeSounds and not O:TryCancel("preview"),"Placement never cancels or plays alarms")
+check(#cancellations==0 and sounds==beforeSounds,"Placement never cancels or plays alarms")
 moving=false;ULT.loading=true;O:UpdateRuntime()
-check(events.AlphaSquadUI_ULTTracker_OverloadEffect==nil and not O:TryCancel("loading"),"Loading removes effect subscriptions and blocks native actions")
+check(events.AlphaSquadUI_ULTTracker_OverloadEffect==nil,"Loading removes effect subscriptions and blocks native actions")
 ULT.loading=false;ULT.sv.enabled=false;O:UpdateRuntime()
 check(events.AlphaSquadUI_ULTTracker_OverloadEffect==nil,"Parent OFF removes specialized tracking while retaining settings")
 ULT.sv.enabled=true;O:UpdateRuntime()
 check(events.AlphaSquadUI_ULTTracker_OverloadEffect~=nil,"Parent activation restores the filtered effect subscription")
 O:SetOption("disableInPvP",true);IsInCampaign=function() return true end
-check(O:Suppressed() and not O:TryCancel("PvP"),"Optional PvP suppression blocks specialized actions")
+check(O:Suppressed(),"Optional PvP suppression blocks specialized actions")
 IsInCampaign=nil;O:SetOption("disableInPvP",false)
-O:SetOption("reserveThreshold",175)
-check(ULT.sv.overload.reserveWarningThreshold>=ULT.sv.overload.reserveThreshold,"Warning never falls below cutoff")
-O:SetOption("reserveThreshold",0/0);O:SetOption("readyReminderThreshold",math.huge)
-check(ULT.sv.overload.reserveThreshold==130 and ULT.sv.overload.readyReminderThreshold==400,"Malformed numeric options recover to bounded defaults")
+check(not O:SetOption("reserveThreshold",175),"Removed cutoff settings cannot enable a hidden action")
+O:SetOption("reserveWarningThreshold",0/0);O:SetOption("readyReminderThreshold",math.huge)
+check(ULT.sv.overload.reserveWarningThreshold==160 and ULT.sv.overload.readyReminderThreshold==400,"Malformed numeric options recover to bounded defaults")
+ULT.sv.overload.reserveCutoffEnabled=false;ULT.sv.overload.reserveThreshold=140;ULT.sv.overload.reserveAlertsEnabled=nil
+O:Migrate()
+check(ULT.sv.overload.reserveAlertsEnabled==false and ULT.sv.overload.reserveCutoffEnabled==nil and ULT.sv.overload.reserveThreshold==nil,"Existing warning OFF survives removal of cancellation preferences")
 O:RegisterCommands();SLASH_COMMANDS["/asoverload"]("off")
 check(not ULT.sv.overload.enabled and ULT.sv.enabled,"Legacy OFF disables only specialized behavior")
 SLASH_COMMANDS["/asoverload"]("on")

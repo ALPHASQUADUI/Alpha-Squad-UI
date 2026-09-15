@@ -113,9 +113,11 @@ local function ContributorTooltip(data)
 end
 function SC:GetCoverageContributorTooltip(data)return ContributorTooltip(data)end
 function SC:CreateMatrixWindow()
-    local win=UI.Window("AlphaSquadSupportCoverageMatrix","Ąlpha Şquad UI  •  Coverage",function() SC:CloseMatrix() end)
+    local win=UI.Window("AlphaSquadSupportCoverageMatrix","Ąlpha Şquad UI  •  Coverage",function()
+        UI.CloseWindow("supportCoverage",function() SC:CloseMatrix() end)
+    end)
     win.hasContentLayout=true
-    self.matrixWindow=win;UI.RegisterWindow("supportCoverage",win,function() SC:CloseMatrix() end)
+    self.matrixWindow=win;UI.RegisterWindow("supportCoverage",win,function() SC:CloseMatrix() end,function() SC:RefreshMatrix() end)
     win.trial=UI.Button(win,"AlphaSquadSupportTrial","TRIAL",90,28,function() SC:SetActiveProfile("trial") end)
     win.trial:SetAnchor(TOPLEFT,win,TOPLEFT,18,82)
     win.dungeon=UI.Button(win,"AlphaSquadSupportDungeon","DUNGEON",104,28,function() SC:SetActiveProfile("dungeon") end)

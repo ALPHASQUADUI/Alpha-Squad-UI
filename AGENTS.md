@@ -17,7 +17,7 @@ Read the existing implementation and the maintainer's current request before edi
 - Keep HUD placement centralized. Corners scale proportionally, edges reshape/reflow content, and the toolbar owns background opacity, scale, fit and reset. Preserve disabled modules and normal visibility choices; save/lock on completion and stop placement during combat/loading.
 - Preserve existing Ultimate display choices, especially BOTH. AUTO is the fresh-install default. Overload uses the same personal HUD and an independent behavior toggle.
 - Apply saved Ember Classic, Tactical Compact and Obsidian Studio themes across the suite; Obsidian is the default. Preserve semantic readiness, quality and Champion colors.
-- Discord opens the configured widget through ESO's native URL confirmation. Do not embed HTML, fabricate invite URLs/member counts or send build data through community links.
+- The About page opens the verified Discord invitation through ESO's native URL confirmation. Do not embed HTML, use a widget as an invitation, fabricate live member counts or send build data through community links.
 - Champion visuals use native discipline stars; descriptions use the inspected player's allocated points.
 - Keep native tooltips in front of addon windows and restore their original draw state afterward.
 - Group readiness is a precombat availability check. Do not reintroduce uptime, pull history or a combat-log sampler.

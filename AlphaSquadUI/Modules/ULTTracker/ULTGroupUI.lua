@@ -396,7 +396,6 @@ function Group:ApplyVisibility()
         ULT.loading == true
         or not ULT.sv.enabled
         or not self.sv.enabled
-        or (not self.sv.visible and not moving)
         or sharedSettingsVisible
         or configVisible
         or (self.sv.hideInMenus and ULT.uiObscured and not moving)
@@ -575,7 +574,7 @@ function Group:RefreshHUD()
 
     self.window.empty:SetHidden(count > 0)
     if count == 0 then
-        self.window.empty:SetText(self:GetTrackedAbilityCount() == 0 and "Select Ultimates to track" or "No matching players")
+        self.window.empty:SetText(self:GetEmptyMessage())
     end
 
     self:ApplyAppearance()

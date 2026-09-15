@@ -30,6 +30,7 @@ GuiRoot=Control();GuiRoot:SetDimensions(1920,1080)
 WINDOW_MANAGER={CreateControl=function(_,_,parent)return Control(parent)end,CreateTopLevelWindow=function()return Control()end}
 EVENT_PLAYER_DEACTIVATED,EVENT_PLAYER_COMBAT_STATE,EVENT_GLOBAL_MOUSE_UP,EVENT_SCREEN_RESIZED=1,2,3,4
 EVENT_ALL_GUI_SCREENS_RESIZE_STARTED,EVENT_ALL_GUI_SCREENS_RESIZED=6,7
+EVENT_PLAYER_ACTIVATED=8
 SCENE_SHOWING=5
 EVENT_MANAGER={RegisterForEvent=function(_,_,event,callback)events[event]=callback end,
     UnregisterForEvent=function(_,_,event)events[event]=nil end,
@@ -128,6 +129,8 @@ check(not L.active and not L.drag,'Combat cancels placement and resizing immedia
 L.Start();local refreshes=ult.refreshes
 events[EVENT_PLAYER_DEACTIVATED]()
 check(not L.active and ult.refreshes==refreshes,'Loading saves placement without rendering dormant modules')
+check(not L.Start(),'The editor cannot restart between deactivation and player activation')
+events[EVENT_PLAYER_ACTIVATED]()
 L.Start();GuiRoot:SetDimensions(640,480);events[EVENT_SCREEN_RESIZED]()
 check(L.toolbar.scale<1 and L.toolbar.width*L.toolbar.scale<=616,'Toolbar fits narrow screens proportionally')
 L.Finish()

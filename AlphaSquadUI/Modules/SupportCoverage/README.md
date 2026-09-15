@@ -1,6 +1,6 @@
 # Support Coverage
 
-Precombat group preparation and visual build inspection for **Ąlpha Şquad UI 3.1.0** (`30100`).
+Precombat group preparation and visual build inspection for **Ąlpha Şquad UI 3.2.0** (`30200`).
 
 ## Prepare your group
 

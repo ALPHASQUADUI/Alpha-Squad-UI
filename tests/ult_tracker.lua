@@ -91,7 +91,7 @@ check(Group:SetAbilityTracked(100, true) == false, "The tracked Ultimate cap is 
 
 ULT.sv.group.enabled="yes";ULT.sv.group.visible=1;ULT.sv.group.x=0/0;ULT.sv.group.y=math.huge
 Group:EnsureSavedVariables()
-check(type(Group.sv.enabled)=="boolean" and type(Group.sv.visible)=="boolean", "Corrupt group booleans recover to defaults")
+check(type(Group.sv.enabled)=="boolean" and Group.sv.visible==nil, "Corrupt group booleans recover to defaults")
 check(Group.sv.x==Group.sv.x and Group.sv.y~=math.huge, "Corrupt group coordinates recover to finite values")
 check(Group:UpdateEntryFromUltData("group1", "invalid") == false, "Malformed group Ultimate payloads are rejected")
 
@@ -104,13 +104,13 @@ Group.roster = {}
 local available = Group:GetAvailableAbilities()
 check(#available == 1 and available[1].id == 101 and available[1].tracked, "Tracked Ultimates remain configurable when absent from the roster")
 
-groupSize = 2
+groupSize = 3
 Group.lgcs = {GetUnitULT=function(_, tag)
     return {ultValue=100, ult1ID=101, ult2ID=0, ult1Cost=100, ult2Cost=0, _lastUpdated=10000}
 end}
 Group.previousUltValues.ghost = 200
 Group.recentlyUsedUntil.ghost = 20000
-deadTag = "group2"
+deadTag = "group3"
 Group:BuildRoster()
 check(Group.previousUltValues.ghost == nil and Group.recentlyUsedUntil.ghost == nil, "Departed players cannot retain Ultimate state")
 Group.previousUltValues.group1 = 100
@@ -123,22 +123,24 @@ Group.lgcs = {GetUnitULT=function(_, tag)
     return {ultValue=100, ult1ID=101, ult2ID=0, ult1Cost=100, ult2Cost=0, _lastUpdated=10000}
 end}
 Group:BuildRoster()
-local originalUlt = Group.byUnitTag.group1.ultValue
-check(Group:UpdateEntryFromUltData("group1", {ultValue=-1,ult1ID=101,ult1Cost=100}) == false, "Negative shared Ultimate values are rejected")
-check(Group:UpdateEntryFromUltData("group1", {ultValue=0/0,ult1ID=101,ult1Cost=100}) == false, "Non-finite shared Ultimate values are rejected")
-check(Group:UpdateEntryFromUltData("group1", {ultValue=50,ult1ID=1.5,ult1Cost=100}) == false, "Malformed shared Ultimate ability IDs are rejected")
-check(Group.byUnitTag.group1.ultValue == originalUlt, "Rejected Ultimate payloads leave the roster unchanged")
-check(Group:UpdateEntryFromUltData("group1", {ultValue=125,ult1ID=101,ult2ID=0,ult1Cost=100,ult2Cost=0}) == true, "Valid shared Ultimate payloads are accepted")
-check(Group.byUnitTag.group1.ultValue == 125, "Valid shared Ultimate values update the roster")
+local originalUlt = Group.byUnitTag.group2.ultValue
+check(Group:UpdateEntryFromUltData("group2", {ultValue=-1,ult1ID=101,ult1Cost=100}) == false, "Negative shared Ultimate values are rejected")
+check(Group:UpdateEntryFromUltData("group2", {ultValue=0/0,ult1ID=101,ult1Cost=100}) == false, "Non-finite shared Ultimate values are rejected")
+check(Group:UpdateEntryFromUltData("group2", {ultValue=50,ult1ID=1.5,ult1Cost=100}) == false, "Malformed shared Ultimate ability IDs are rejected")
+check(Group.byUnitTag.group2.ultValue == originalUlt, "Rejected Ultimate payloads leave the roster unchanged")
+check(Group:UpdateEntryFromUltData("group2", {ultValue=125,ult1ID=101,ult2ID=0,ult1Cost=100,ult2Cost=0}) == true, "Valid shared Ultimate payloads are accepted")
+check(Group.byUnitTag.group2.ultValue == 125, "Valid shared Ultimate values update the roster")
 Group.sv.includeSelf = true
+check(Group.byUnitTag.group1==nil and #Group.roster==2,"Own character never enters the group roster, even with a legacy self preference")
+check(not Group:UpdateEntryFromUltData("player",{ultValue=200}),"A local-player callback cannot reinsert self tracking")
 local tracked = Group:GetTrackedEntries()
 check(#tracked == 2, "Unavailable players remain visible for raidlead context")
 check(tracked[1].anyReady == true and tracked[1].unavailable == false, "Usable READY players sort first")
 check(tracked[2].anyReady == false and tracked[2].unavailable == true, "Dead players are not actionable READY entries")
-groupSize=0;Group.previousUltValues.persist=100;Group.recentlyUsedUntil.persist=20000;Group.readyState.persist=true
+groupSize=0;Group.previousUltValues.persist=100;Group.recentlyUsedUntil.persist=20000
 Group:BuildRoster()
-check(next(Group.previousUltValues)==nil and next(Group.recentlyUsedUntil)==nil and next(Group.readyState)==nil, "Disband clears all transient group Ultimate state")
-groupSize=2;Group:BuildRoster()
+check(next(Group.previousUltValues)==nil and next(Group.recentlyUsedUntil)==nil, "Disband clears all transient group Ultimate state")
+groupSize=3;Group:BuildRoster()
 
 ULT.window = Window()
 Group.window = nil
@@ -192,22 +194,22 @@ check(updates.AlphaSquadUI_ULTTracker_Safety==nil and updates.AlphaSquadUI_ULTGr
 AlphaSquadUI.Settings.AnyExclusiveWindowVisible=function() return false end
 ULT:ApplyVisibility()
 check(not ULT.window:IsHidden() and not Group.window:IsHidden(), "Closing shared configuration restores enabled Ultimate HUDs")
-Group.sv.visible = false
+Group.sv.enabled = false
 Group:ApplyVisibility()
 check(updates.AlphaSquadUI_ULTGroup_Safety == nil, "Hidden group tracker stops its recovery sync")
 
 local readyRow = Window()
 readyRow.ready, readyRow.recentlyUsed = true, false
 Group.window.rows = {readyRow}
-Group.sv.visible = true
+Group.sv.enabled = true
 Group:ApplyVisibility()
 check(updates.AlphaSquadUI_ULTGroup_ReadyPulse ~= nil, "Showing a READY group row restarts its pulse immediately")
 readyRow.ready = false
-Group.sv.visible = false
+Group.sv.enabled = false
 Group:ApplyVisibility()
 check(updates.AlphaSquadUI_ULTGroup_ReadyPulse == nil, "Hiding the group tracker stops its READY pulse")
 
-ULT.loading=true;ULT.sv.hideInMenus=false;Group.sv.hideInMenus=false;Group.sv.visible=true
+ULT.loading=true;ULT.sv.hideInMenus=false;Group.sv.hideInMenus=false;Group.sv.enabled=true
 ULT:ApplyVisibility();Group:ApplyVisibility()
 check(ULT.window:IsHidden() and Group.window:IsHidden(),"Loading hides both HUDs regardless of menu visibility preferences")
 check(updates.AlphaSquadUI_ULTTracker_Safety==nil and updates.AlphaSquadUI_ULTGroup_Safety==nil and updates.AlphaSquadUI_ULTGroup_ReadyPulse==nil,
@@ -238,7 +240,7 @@ AlphaSquadUI.Layout = {
 }
 ULT.sv.enabled, ULT.sv.visible, ULT.uiObscured = true, true, false
 ULT.sv.hideInMenus, Group.sv.hideInMenus = true, true
-Group.sv.enabled, Group.sv.visible = true, true
+Group.sv.enabled, Group.sv.enabled = true, true
 ULT:ApplyVisibility()
 check(not ULT.window:IsHidden() and not Group.window:IsHidden(), "Legacy suppression cannot hide the unified personal HUD")
 check(updates.AlphaSquadUI_ULTTracker_Safety~=nil, "One personal recovery timer serves the unified HUD")
@@ -252,16 +254,17 @@ suppressed=false
 ULT:ApplyVisibility()
 check(not ULT.window:IsHidden() and updates.AlphaSquadUI_ULTTracker_Safety~=nil, "Releasing Overload ownership restores personal ULT presentation")
 moving=true
-ULT.sv.visible, Group.sv.visible, ULT.uiObscured = false, false, true
+ULT.sv.visible, ULT.uiObscured = false, true
 ULT:ApplyVisibility()
 check(not ULT.window:IsHidden() and not Group.window:IsHidden(), "Global move mode exposes both enabled HUDs without editing hidden preferences")
-check(not ULT.sv.visible and not Group.sv.visible, "Preview never permanently changes HUD visibility")
+check(not ULT.sv.visible and Group.sv.enabled, "Preview never permanently changes HUD visibility")
 check(updates.AlphaSquadUI_ULTTracker_Safety==nil and updates.AlphaSquadUI_ULTGroup_Safety==nil,
     "Placement does not run personal or group recovery timers")
 local sounds=0
 PlaySound=function() sounds=sounds+1 end; SOUNDS={ABILITY_ULTIMATE_READY=1}
-ULT.sv.readySound, Group.sv.readySound = true, true
-ULT:PlayReadySound();Group:PlayReadySound()
+ULT.sv.readySound = true
+ULT:PlayReadySound()
+check(Group.PlayReadySound==nil,"Group readiness no longer owns a redundant sound behavior")
 check(sounds==0, "Dragging previews never produces Ultimate-ready sounds")
 moving=false
 ULT:ApplyVisibility()
@@ -277,7 +280,7 @@ SLASH_COMMANDS["/asult"]("move")
 check(ULT.sv.enabled and ULT.sv.visible and not ULT.sv.locked, "Personal move command activates and exposes the HUD")
 ULT.sv.enabled, Group.sv.enabled, Group.sv.visible, Group.sv.locked = false, false, false, true
 SLASH_COMMANDS["/asult"]("group move")
-check(ULT.sv.enabled and Group.sv.enabled and Group.sv.visible and not Group.sv.locked, "Group move command activates and exposes the HUD")
+check(ULT.sv.enabled and Group.sv.enabled and not Group.sv.locked, "Group move command activates and exposes the HUD")
 
 local savedBuildRoster=Group.BuildRoster
 local rosterScans=0

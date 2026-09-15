@@ -5,6 +5,11 @@ ASUI.Shell=Shell
 local COLORS=ASUI.Theme.colors
 local SETTINGS_MENU_NAME=ASUI.Theme.Brand()
 local VERSION=ASUI.version
+local WINDOW_WIDTH,WINDOW_HEIGHT=1350,720
+local SIDEBAR_WIDTH=236
+local NAV_WIDTH=SIDEBAR_WIDTH-24
+local CONTENT_X=SIDEBAR_WIDTH+10
+local CONTENT_WIDTH=WINDOW_WIDTH-CONTENT_X-10
 local Clamp=ASUI.Utils.Clamp
 local LogicalWidth=ASUI.Utils.GetLogicalWidth
 local LogicalHeight=ASUI.Utils.GetLogicalHeight
@@ -84,11 +89,11 @@ end
 
 function Shell:ApplySettingsGeometry()
     if not self.settingsWindow or not GuiRoot then return end
-    local scale=math.max(0.1,math.min(1,(GuiRoot:GetWidth()-40)/1350,(GuiRoot:GetHeight()-40)/720))
-    local height=720
+    local scale=math.max(0.001,math.min(1,(GuiRoot:GetWidth()-40)/WINDOW_WIDTH,(GuiRoot:GetHeight()-40)/WINDOW_HEIGHT))
+    local height=WINDOW_HEIGHT
     if self.settingsAppliedScale==scale then return end
     self.settingsAppliedScale=scale
-    self.settingsWindow:SetDimensions(1350, height)
+    self.settingsWindow:SetDimensions(WINDOW_WIDTH, height)
     self.settingsWindow:SetScale(scale)
     if self.settingsSidebar then self.settingsSidebar:SetHeight(height - 64) end
     if self.settingsSaveNote then self.settingsSaveNote:SetHidden(height < 490) end
@@ -152,7 +157,7 @@ end
 function Shell:RefreshNavigation()
     if not self.settingsNavButtons then return end
     local y=50
-    for _,id in ipairs({"dashboard","ulttracker","supportcoverage","libraries","community","discord"}) do
+    for _,id in ipairs({"dashboard","ulttracker","supportcoverage","libraries","community"}) do
         local button=self.settingsNavButtons[id]
         local visible=not AlphaSquadUI.Settings.modulePages[id] or AlphaSquadUI.Settings.IsModuleEnabled(id)
         if button then
@@ -176,7 +181,7 @@ function Shell:CreateSettingsWindow()
     ASUI.Settings.AttachShell(win,
         function(pageId) Shell:ShowSettingsPage(pageId) end,
         function() Shell:RefreshSettingsWindow() end)
-    win:SetDimensions(1350, 720)
+    win:SetDimensions(WINDOW_WIDTH, WINDOW_HEIGHT)
     win:SetAnchor(CENTER, GuiRoot, CENTER, 0, 0)
     if AlphaSquadUI.Preferences then
         local layout=AlphaSquadUI.Preferences.Open("Shell","AlphaSquadUISettingsSavedVariables",(GetWorldName and GetWorldName() or "Default")..":Layout",{})
@@ -212,7 +217,7 @@ function Shell:CreateSettingsWindow()
     if ASUI.Theme.RegisterSurface then ASUI.Theme.RegisterSurface(win,win.bg,"window") end
 
     local header = WINDOW_MANAGER:CreateControl("AlphaSquadSettingsHeader", win, CT_CONTROL)
-    header:SetDimensions(1350, 64)
+    header:SetDimensions(WINDOW_WIDTH, 64)
     header:SetAnchor(TOPLEFT, win, TOPLEFT, 0, 0)
     header:SetMouseEnabled(true)
     header:SetHandler("OnMouseDown", function(_, button)
@@ -252,7 +257,7 @@ function Shell:CreateSettingsWindow()
     -- Sidebar: intentionally simple and static. It has no OnUpdate handler.
     local sidebar = WINDOW_MANAGER:CreateControl("AlphaSquadSettingsSidebar", win, CT_CONTROL)
     self.settingsSidebar = sidebar
-    sidebar:SetDimensions(190, 656)
+    sidebar:SetDimensions(SIDEBAR_WIDTH, WINDOW_HEIGHT-64)
     sidebar:SetAnchor(TOPLEFT, win, TOPLEFT, 0, 64)
     CreateSolid(sidebar,"AlphaSquadSettingsSidebarBG",COLORS.sidebar or COLORS.bg)
     local sideLine = WINDOW_MANAGER:CreateControl("AlphaSquadSettingsSidebarLine", sidebar, CT_TEXTURE)
@@ -262,13 +267,13 @@ function Shell:CreateSettingsWindow()
     sideLine:SetColor(COLORS.orange[1], COLORS.orange[2], COLORS.orange[3], 0.18)
 
     local modulesHeader = CreateLabel(sidebar, "AlphaSquadModulesHeader", "ZoFontGameBold", "WORKSPACE", COLORS.orange)
-    modulesHeader:SetDimensions(158, 24)
+    modulesHeader:SetDimensions(SIDEBAR_WIDTH-36, 24)
     modulesHeader:SetAnchor(TOPLEFT, sidebar, TOPLEFT, 18, 18)
     modulesHeader:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
 
     local function AddNavButton(id, text, y)
         local button = WINDOW_MANAGER:CreateControl("AlphaSquadNav_" .. id, sidebar, CT_CONTROL)
-        button:SetDimensions(166, 40)
+        button:SetDimensions(NAV_WIDTH, 40)
         button:SetAnchor(TOPLEFT, sidebar, TOPLEFT, 12, y)
         button:SetMouseEnabled(true)
         button.bg = CreateSolid(button, "AlphaSquadNav_" .. id .. "BG", COLORS.panel)
@@ -283,7 +288,8 @@ function Shell:CreateSettingsWindow()
             button.icon:SetDimensions(23,23);button.icon:SetAnchor(LEFT,button,LEFT,8,0);button.icon:SetTexture(nativeIcon)
         end
         button.label:SetAnchor(TOPLEFT, button, TOPLEFT, nativeIcon and 37 or 14, 0)
-        button.label:SetDimensions(nativeIcon and 123 or 142, 40)
+        button.label:SetDimensions(NAV_WIDTH-(nativeIcon and 47 or 24), 40)
+        button.label:SetMaxLineCount(1)
         button.label:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
         button:SetHandler("OnMouseEnter", function()
             if Shell.activeSettingsPage ~= id and not (id=="ulttracker" and Shell.activeSettingsPage=="ultoverload") then SetColor(button.bg,COLORS.hover or COLORS.panelActive) end
@@ -304,18 +310,17 @@ function Shell:CreateSettingsWindow()
     AddNavButton("supportcoverage", "Support Coverage", 138)
     AddNavButton("libraries", "Libraries", 182)
 
-    AddNavButton("community", "Website & About", 314)
-    AddNavButton("discord", "Discord", 358)
+    AddNavButton("community", "About", 226)
 
     local future = CreateLabel(sidebar, "AlphaSquadFutureModules", "ZoFontGameSmall",
         "Changes are saved\nautomatically.", COLORS.muted)
-    future:SetDimensions(154, 48)
+    future:SetDimensions(SIDEBAR_WIDTH-36, 48)
     future:SetAnchor(TOPLEFT, sidebar, TOPLEFT, 18, 328)
     future:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
     future:SetVerticalAlignment(TEXT_ALIGN_TOP)
     self.settingsSaveNote = future
 
-    self.settingsMoveButton = CreateButton(sidebar, "AlphaSquadMoveHUD", "MOVE HUD", 12, 0, 166, 38, function()
+    self.settingsMoveButton = CreateButton(sidebar, "AlphaSquadMoveHUD", "MOVE HUD", 12, 0, NAV_WIDTH, 38, function()
         if AlphaSquadUI.Layout then AlphaSquadUI.Layout.Start() end
     end)
     self.settingsMoveButton:ClearAnchors()
@@ -329,18 +334,18 @@ function Shell:CreateSettingsWindow()
 
     local content
     if AlphaSquadUI.Settings.CreateScrollArea then
-        content, self.settingsScroll = AlphaSquadUI.Settings.CreateScrollArea(win, "AlphaSquadSettingsContent", 200, 70, 1140, 640, 640)
+        content, self.settingsScroll = AlphaSquadUI.Settings.CreateScrollArea(win, "AlphaSquadSettingsContent", CONTENT_X, 70, CONTENT_WIDTH, 640, 640)
     else
         content = WINDOW_MANAGER:CreateControl("AlphaSquadSettingsContent", win, CT_CONTROL)
-        content:SetDimensions(1140, 640)
-        content:SetAnchor(TOPLEFT, win, TOPLEFT, 200, 70)
+        content:SetDimensions(CONTENT_WIDTH, 640)
+        content:SetAnchor(TOPLEFT, win, TOPLEFT, CONTENT_X, 70)
     end
     self.settingsContent = content
 
     local function CreatePage(id)
         local page = WINDOW_MANAGER:CreateControl("AlphaSquadPage_" .. id, content, CT_CONTROL)
         page:SetAnchor(TOPLEFT, content, TOPLEFT, 0, 0)
-        page:SetDimensions(1124, 640)
+        page:SetDimensions(CONTENT_WIDTH-16, 640)
         page:SetHidden(true)
         self.settingsPages[id] = page
         return page
@@ -377,8 +382,13 @@ function Shell:CreateSettingsWindow()
             Shell:RefreshSettingsWindow()
         end
         local button = CreateButton(parent, name .. "Button", "", LogicalWidth(parent) - 96, y, 80, 30, Toggle)
+        button.track=CreateSolid(button,name.."Track",COLORS.bg)
+        button.track:SetDimensions(28,14);button.track:ClearAnchors()
+        button.track:SetAnchor(RIGHT,button,RIGHT,-7,0)
         button.thumb=CreateSolid(button,name.."Thumb",COLORS.muted)
-        button.thumb:SetDimensions(18,18);button.thumb:ClearAnchors()
+        button.thumb:SetDimensions(10,10);button.thumb:ClearAnchors()
+        button.label:ClearAnchors();button.label:SetAnchor(TOPLEFT,button,TOPLEFT,3,0)
+        button.label:SetDimensions(40,30)
         button.help = help or (labelText .. "\n\nClick the label or switch to change this setting. Changes are saved automatically.")
         if ASUI.Input then ASUI.Input.Register(button, {activate = Toggle, label = labelText}) end
         label:SetMouseEnabled(true)
@@ -397,9 +407,7 @@ function Shell:CreateSettingsWindow()
             local c = enabled and COLORS.green or COLORS.muted
             button.label:SetColor(c[1], c[2], c[3], 1)
             button.thumb:SetHidden(false);button.thumb:ClearAnchors()
-            button.thumb:SetAnchor(LEFT,button,LEFT,enabled and 55 or 7,0);SetColor(button.thumb,c)
-            button.label:ClearAnchors();button.label:SetAnchor(TOPLEFT,button,TOPLEFT,enabled and 4 or 26,0)
-            button.label:SetDimensions(50,30)
+            button.thumb:SetAnchor(LEFT,button.track,LEFT,enabled and 16 or 2,0);SetColor(button.thumb,c)
             button.restingColor = enabled and (COLORS.selected or COLORS.panelActive) or COLORS.panel
             local bg = button.restingColor
             button.bg:SetColor(bg[1], bg[2], bg[3], bg[4])
@@ -456,7 +464,7 @@ function Shell:CreateSettingsWindow()
         RegisterRefresher=function(fn) table.insert(self.settingsRefreshers,fn) end,
     }
     self.pageUI=pageUI
-    for _,id in ipairs({"dashboard","ulttracker","ultoverload","supportcoverage","libraries","community","discord"}) do
+    for _,id in ipairs({"dashboard","ulttracker","ultoverload","supportcoverage","libraries","community"}) do
         local page=CreatePage(id)
         local builder=AlphaSquadUI.Settings.GetPageBuilder(id)
         if builder then builder(page,pageUI) end
@@ -509,6 +517,10 @@ function Shell:RegisterDirectSettingsPanel()
         end
         Shell.settingsOpenedFromGameMenu = false
         Shell.settingsWindow:SetMovable(true)
+        -- A Back action may have restored a raw window after its native fragment
+        -- was removed. Leaving this native Settings category must dismiss that
+        -- window too, instead of leaving it over the newly selected category.
+        if ASUI.Settings.DismissAllWindows then ASUI.Settings.DismissAllWindows() end
         zo_callLater(function()
             Shell:ApplyVisualSettings()
         end, 0)
@@ -540,7 +552,11 @@ end
 
 function Shell:ToggleSettingsWindow()
     if not self.settingsWindow then return end
-    if not self.settingsWindow:IsHidden() then self:CloseSettingsWindow(); return end
+    if not self.settingsWindow:IsHidden() then
+        if ASUI.Settings.CloseExclusiveWindow then ASUI.Settings.CloseExclusiveWindow("settings")
+        else self:CloseSettingsWindow() end
+        return
+    end
     if self.settingsOpenedFromGameMenu and self.settingsFragment then
         SCENE_MANAGER:RemoveFragment(self.settingsFragment)
         self.settingsOpenedFromGameMenu = false

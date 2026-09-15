@@ -87,7 +87,7 @@ local liveEntries=entries
 G:SetLayoutPreview("mixed");G:RefreshHUD()
 local demos=G:GetHUDEntries()
 check(#demos==12 and demos[1].displayName=="@Tank01" and demos[12].displayName=="@Damage08","Move HUD supplies twelve clearly fictional accounts")
-check(G:GetTrackedEntries()==liveEntries and #G.roster==0 and next(G.readyState)==nil,"Group examples never enter live roster, filters or readiness state")
+check(G:GetTrackedEntries()==liveEntries and #G.roster==0 and next(G.previousUltValues)==nil,"Group examples never enter live roster, filters or readiness state")
 check(demos[7].recentlyUsed and demos[8].previewState=="off" and demos[9].previewState=="missing" and demos[10].connected==false,"The group preview includes spent, sharing-off, missing and offline states")
 check(not G.window.rows[9].icon.hidden,"Missing Ultimate examples still show a native empty-slot frame")
 G:SetLayoutOrientation("horizontal")

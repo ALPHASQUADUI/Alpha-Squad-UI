@@ -2,6 +2,10 @@
 
 All notable changes to Ąlpha Şquad UI are documented here.
 
+## 3.2.0 — 2026-09-15
+
+Repaired MOVE HUD entry across native scene transitions and restored return navigation from secondary windows. Widened Workspace navigation, gave the style dropdown an opaque native backdrop, and replaced the separate Discord page with a direct invitation in About. Overload keeps reserve warnings and manual activation without automatic cancellation. Group Ultimate controls are consolidated in the parent page and the group view excludes the local player. Support Coverage coalesces resize bursts into one deferred refresh. See [release notes](releases/3.2.0.md) and the [video review](docs/VIDEO_REVIEW_3.2.0.md).
+
 ## 3.1.0 — 2026-09-15
 
 Corrected inherited-scale calculations across HUD placement, Builds, settings and tooltips. Added compact personal Ultimate defaults, stable horizontal/vertical layouts, isolated twelve-player editor previews, and scoped keyboard/gamepad navigation with a native gamepad Settings entry. Coverage artwork has native fallbacks, equipment alignment preserves the mannequin's proportions, and catalog and incoming-build validation reject additional false source matches. See [release notes](releases/3.1.0.md) and the [engineering audit](docs/AUDIT_3.1.0.md).

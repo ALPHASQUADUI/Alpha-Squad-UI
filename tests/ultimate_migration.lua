@@ -23,7 +23,7 @@ Reset();O:Migrate()
 check(ULT.sv.enabled and ULT.sv.visible,"An actively used legacy Overload HUD survives an old disabled standard tracker")
 check(ULT.sv.x==123 and ULT.sv.y==456 and ULT.sv.scale==115,"A used slotted Overload position and size become the common personal layout")
 check(ULT.sv.trackMode=="both","An existing explicit Both choice is preserved")
-check(ULT.sv.overload.reserveThreshold==140 and ULT.sv.overload.reserveWarningThreshold==175 and not ULT.sv.overload.reserveSound,"Legacy reserve values and an explicit silent preference are copied")
+check(ULT.sv.overload.reserveThreshold==nil and ULT.sv.overload.reserveWarningThreshold==175 and not ULT.sv.overload.reserveSound,"Legacy reserve values and an explicit silent preference are copied")
 check(account.x==123 and account.reserveThreshold==140 and account.addonEnabled,"Migration never deletes or mutates the legacy profile")
 ULT.sv.enabled=false;ULT.sv.visible=false;ULT.sv.x=850;ULT.sv.overload.enabled=false
 O:Migrate()
@@ -36,14 +36,14 @@ check(not ULT.sv.overload.enabled and not ULT.sv.enabled and ULT.sv.x==500,"An e
 AlphaSquadUI.Preferences.sv.crossSync=false
 character={crossSyncSeeded=true,addonEnabled=true,visible=true,x=800,y=240,scale=90,positionSaved=true,reserveThreshold=125}
 Reset();O:Migrate()
-check(ULT.sv.x==800 and ULT.sv.y==240 and ULT.sv.overload.reserveThreshold==125,"Cross-sync OFF migrates this character's legacy profile")
+check(ULT.sv.x==800 and ULT.sv.y==240 and ULT.sv.overload.reserveThreshold==nil,"Cross-sync OFF migrates this character's legacy profile")
 AlphaSquadUI.Preferences.sv.crossSync=true
 Reset();O:Migrate()
-check(not ULT.sv.overload.enabled and ULT.sv.overload.reserveThreshold==150,"A fresh account profile uses the account-wide legacy settings independently")
+check(not ULT.sv.overload.enabled and ULT.sv.overload.reserveThreshold==nil,"A fresh account profile uses the account-wide legacy settings independently")
 account={addonEnabled=true,visible=true,x=0/0,y=math.huge,scale=-999,reserveThreshold=0/0,reserveWarningThreshold=-math.huge}
 Reset();O:Migrate()
 check(ULT.sv.x==500 and ULT.sv.y==100 and ULT.sv.scale>=40,"Non-finite legacy geometry cannot corrupt the common HUD")
-check(ULT.sv.overload.reserveThreshold==130 and ULT.sv.overload.reserveWarningThreshold>=130,"Corrupt legacy reserve values recover to safe bounded defaults")
+check(ULT.sv.overload.reserveThreshold==nil and ULT.sv.overload.reserveWarningThreshold==160,"Corrupt legacy reserve values recover to safe bounded defaults")
 account={addonEnabled=true,visible=true,x=222,y=333,scale=110}
 Reset();ULT.bars.primary.abilityId=0;ULT.bars.primary.icon=""
 O:Migrate(false)

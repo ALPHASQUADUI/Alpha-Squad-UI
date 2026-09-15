@@ -27,6 +27,22 @@ local function Enabled(module)
     end
     return module.sv.enabled==true
 end
+local function GameplayScene(scene)
+    local name=scene and scene.GetName and scene:GetName()
+    return name=="hud" or name=="hudui"
+end
+local function CanStart()
+    if Layout.loading or (ASUI.Input and ASUI.Input.loading)
+        or (IsUnitInCombat and IsUnitInCombat("player"))
+        or (ZO_Dialogs_IsShowingDialog and ZO_Dialogs_IsShowingDialog())
+        or (ZO_GenericGamepadDialog_IsShowing and ZO_GenericGamepadDialog_IsShowing()) then return false end
+    local hasHUD=false
+    for _,module in ipairs(Modules()) do
+        if module.loading then return false end
+        if Enabled(module) and module.window then hasHUD=true end
+    end
+    return hasHUD
+end
 function Layout.IsMoving(module)
     return Layout.active and Layout.participants[module]==true and Enabled(module) or false
 end
@@ -223,6 +239,7 @@ end
 function Layout.BeginResize(module,horizontal,vertical,handle)
     if not Layout.IsMoving(module) or not GetUIMousePosition or not handle then return false end
     Layout.EndResize();Layout.Select(module)
+    if ASUI.Tooltips then ASUI.Tooltips.Hide() end
     local x,y=GetUIMousePosition();x,y=Finite(x),Finite(y)
     if not x or not y then return false end
     local win=module.window;local width,height=Layout.GetLogicalDimensions(module)
@@ -343,8 +360,15 @@ function Layout.ResetSelected()
     if (x==nil or y==nil) and module.GetDefaultPosition then x,y=module:GetDefaultPosition() end
     Place(module,x,y);Layout.RefreshToolbar()
 end
-function Layout.Finish(skipRefresh)
-    if not Layout.active then return end
+function Layout.Finish(skipRefresh,restoreOrigin)
+    local returnTarget=Layout.returnTarget or (Layout.pending and Layout.pending.returnTarget)
+    Layout.pending,Layout.returnTarget=nil,nil
+    if not Layout.active then
+        if restoreOrigin==true and returnTarget and ASUI.Settings and ASUI.Settings.RestoreReturnTarget then
+            ASUI.Settings.RestoreReturnTarget(returnTarget)
+        end
+        return
+    end
     Layout.EndResize();Layout.active=false
     local previous=Layout.participants;Layout.participants={};Layout.selected=nil
     for module in pairs(previous) do
@@ -359,6 +383,16 @@ function Layout.Finish(skipRefresh)
         else Layout.toolbar:SetHidden(true) end
     end
     if skipRefresh~=true then Layout.Refresh() end
+    -- The shared navigation bridge restores the originating page and cursor
+    -- after ESO releases the editor's native top-level mouse ownership.
+    if restoreOrigin==true and returnTarget and ASUI.Settings and ASUI.Settings.RestoreReturnTarget then
+        ASUI.Settings.RestoreReturnTarget(returnTarget)
+    end
+end
+-- Only deliberate Done/Back navigation returns to the originating addon page.
+-- Scene changes, loading, combat and programmatic hides must never reopen it.
+function Layout.Done()
+    Layout.Finish(false,true)
 end
 function Layout.CreateToolbar()
     if Layout.toolbar then return Layout.toolbar end
@@ -403,41 +437,63 @@ function Layout.CreateToolbar()
     Button("FIT",684,58,function()
         local module=Layout.selected;if Layout.IsMoving(module) then RefreshModule(module);Place(module,module.window:GetLeft(),module.window:GetTop()) end
     end)
-    Button("DONE",754,92,Layout.Finish)
+    Button("DONE",754,92,Layout.Done)
     win.orientation=Button("HORIZONTAL",14,170,function()Layout.CycleOrientation(1)end,74)
     win.preview=Button("PREVIEW: MIXED",194,216,function()Layout.CyclePreview(1)end,74)
     Label("Corners scale. Edges reshape. Esc / Back saves.",420,78,430)
     win.values=Label("",14,106,830)
     win.inputHint=Label("",14,130,830)
     win:SetHandler("OnHide",Layout.Finish)
-    if ASUI.Input and ASUI.Input.RegisterWindow then ASUI.Input.RegisterWindow(win,{layout=true,close=Layout.Finish}) end
+    if ASUI.Input and ASUI.Input.RegisterWindow then ASUI.Input.RegisterWindow(win,{layout=true,close=Layout.Done,dismiss=Layout.Finish}) end
     if SCENE_MANAGER and SCENE_MANAGER.RegisterTopLevel then SCENE_MANAGER:RegisterTopLevel(win,true) end
     Layout.toolbar=win;Layout.RefreshToolbar();return win
 end
-function Layout.Start()
-    if Layout.active then return true end
-    if IsUnitInCombat and IsUnitInCombat("player") then return false end
-    local hasHUD=false
-    for _,module in ipairs(Modules()) do
-        if module.loading then return false end
-        if Enabled(module) and module.window then hasHUD=true end
-    end
-    if not hasHUD then return false end
-    local toolbar=Layout.CreateToolbar();local settings=ASUI.Settings
-    for _,entry in pairs(settings and settings.exclusiveWindows or {}) do
-        if entry.control and not entry.control:IsHidden() then if entry.close then entry.close() else entry.control:SetHidden(true) end end
-    end
-    if settings and settings.CloseMain then settings.CloseMain() end
-    if SCENE_MANAGER and SCENE_MANAGER.ShowBaseScene then SCENE_MANAGER:ShowBaseScene() end
+local function ActivatePending()
+    local pending=Layout.pending
+    if not pending then return false end
+    if not CanStart() then Layout.Finish();return false end
+    Layout.pending=nil;Layout.returnTarget=pending.returnTarget
     Layout.active=true
     for _,module in ipairs(Modules()) do
         if Enabled(module) and module.window then Layout.participants[module]=true;module.sv.locked=false end
     end
-    if SCENE_MANAGER and SCENE_MANAGER.ShowTopLevel then SCENE_MANAGER:ShowTopLevel(toolbar) else toolbar:SetHidden(false) end
+    if SCENE_MANAGER and SCENE_MANAGER.ShowTopLevel then SCENE_MANAGER:ShowTopLevel(Layout.toolbar)
+    else Layout.toolbar:SetHidden(false) end
     Layout.Refresh();return true
 end
+function Layout.Start()
+    if Layout.active or Layout.pending then return true end
+    if not CanStart() then return false end
+    Layout.CreateToolbar();local settings=ASUI.Settings
+    local returnTarget=settings and settings.CaptureReturnTarget and settings.CaptureReturnTarget()
+    if settings and settings.DismissAllWindows then settings.DismissAllWindows()
+    else
+        for _,entry in pairs(settings and settings.exclusiveWindows or {}) do
+            if entry.control and not entry.control:IsHidden() then if entry.close then entry.close() else entry.control:SetHidden(true) end end
+        end
+        if settings and settings.CloseMain then settings.CloseMain() end
+    end
+    Layout.pending={returnTarget=returnTarget}
+    -- Native scene transitions are asynchronous. Showing a top-level before
+    -- the previous menu finishes hiding lets its scene cleanup close the editor.
+    -- One permanent scene callback completes/cancels this request; no polling,
+    -- queued CallWhen closures or permanent frame updates are needed.
+    local current=SCENE_MANAGER and SCENE_MANAGER.GetCurrentScene and SCENE_MANAGER:GetCurrentScene()
+    if not current or (GameplayScene(current) and (not current.GetState or current:GetState()==SCENE_SHOWN)) then
+        if SCENE_MANAGER and SCENE_MANAGER.ShowBaseScene then SCENE_MANAGER:ShowBaseScene() end
+        if Layout.active then return true end
+        -- A minimal compatibility host may not publish scene transitions.
+        if not current or not current.GetState then return ActivatePending() end
+        current=SCENE_MANAGER:GetCurrentScene()
+        if GameplayScene(current) and current:GetState()==SCENE_SHOWN then return ActivatePending() end
+        return true
+    end
+    if SCENE_MANAGER and SCENE_MANAGER.ShowBaseScene then SCENE_MANAGER:ShowBaseScene() end
+    return true
+end
 if EVENT_MANAGER then
-    if EVENT_PLAYER_DEACTIVATED then EVENT_MANAGER:RegisterForEvent("AlphaSquadUI_Layout_Loading",EVENT_PLAYER_DEACTIVATED,function()Layout.Finish(true)end) end
+    if EVENT_PLAYER_DEACTIVATED then EVENT_MANAGER:RegisterForEvent("AlphaSquadUI_Layout_Loading",EVENT_PLAYER_DEACTIVATED,function()Layout.loading=true;Layout.Finish(true)end) end
+    if EVENT_PLAYER_ACTIVATED then EVENT_MANAGER:RegisterForEvent("AlphaSquadUI_Layout_Activated",EVENT_PLAYER_ACTIVATED,function()Layout.loading=false end) end
     if EVENT_PLAYER_COMBAT_STATE then EVENT_MANAGER:RegisterForEvent("AlphaSquadUI_Layout_Combat",EVENT_PLAYER_COMBAT_STATE,function(_,combat)if combat then Layout.Finish()end end) end
     if EVENT_SCREEN_RESIZED then EVENT_MANAGER:RegisterForEvent("AlphaSquadUI_Layout_Screen",EVENT_SCREEN_RESIZED,function()if Layout.active then Layout.EndResize();Layout.Refresh() end end) end
     -- Custom UI scale may apply after its setting notification. Observe the
@@ -453,8 +509,10 @@ if EVENT_MANAGER then
 end
 if SCENE_MANAGER and SCENE_MANAGER.RegisterCallback then
     SCENE_MANAGER:RegisterCallback("SceneStateChanged",function(scene,_,newState)
-        if Layout.active and newState==SCENE_SHOWING and scene and scene.GetName then
-            local name=scene:GetName();if name~="hud" and name~="hudui" then Layout.Finish() end
+        if Layout.pending and newState==SCENE_SHOWN and GameplayScene(scene) then
+            ActivatePending()
+        elseif (Layout.active or Layout.pending) and newState==SCENE_SHOWING and scene and scene.GetName then
+            if not GameplayScene(scene) then Layout.Finish() end
         end
     end)
 end

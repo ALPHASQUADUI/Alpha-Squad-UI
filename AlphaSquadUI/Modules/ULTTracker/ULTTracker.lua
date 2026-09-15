@@ -109,6 +109,28 @@ function ULT:GetActiveBarCategory()
     return nil
 end
 
+-- ESO replaces both weapon bars while a transformation or temporary action bar
+-- is active. Keep the saved Front/Back choice intact and expose that live bar.
+function ULT:HasSpecialActiveBar()
+    local category=self:GetActiveBarCategory()
+    return type(category)=="number" and category==category
+        and category~=HOTBAR_CATEGORY_PRIMARY and category~=HOTBAR_CATEGORY_BACKUP
+end
+
+function ULT:GetLiveBar(key)
+    if key=="primary" and self:HasSpecialActiveBar() and self.specialBar then return self.specialBar end
+    return self.bars[key]
+end
+
+function ULT:ReadSpecialBar()
+    if not self:HasSpecialActiveBar() then self.specialBar=nil;return end
+    local category=self:GetActiveBarCategory()
+    if not self.specialBar or self.specialBar.category~=category then
+        self.specialBar={key="primary",label="ACTIVE BAR",category=category,ready=false,recentlyUsedUntil=0}
+    end
+    self:ReadBar(self.specialBar)
+end
+
 function ULT:GetEffectiveAbilityId(boundId, category)
     boundId = FiniteOr(boundId, 0)
     if boundId <= 0 or boundId > 2147483647 or boundId % 1 ~= 0 then return 0 end
@@ -159,6 +181,12 @@ function ULT:ReadBar(bar)
         return
     end
 
+    local actionType=GetSlotType and GetSlotType(ULTIMATE_SLOT,category) or nil
+    if actionType and ACTION_TYPE_ABILITY and actionType~=ACTION_TYPE_ABILITY then
+        if ACTION_TYPE_CRAFTED_ABILITY and actionType==ACTION_TYPE_CRAFTED_ABILITY and GetAbilityIdForCraftedAbilityId then
+            boundId=FiniteOr(GetAbilityIdForCraftedAbilityId(boundId),0)
+        else boundId=0 end
+    end
     local effectiveId = self:GetEffectiveAbilityId(boundId, category)
     local name = GetSlotName and GetSlotName(ULTIMATE_SLOT, category) or ""
     local icon = GetSlotTexture and select(1, GetSlotTexture(ULTIMATE_SLOT, category)) or ""
@@ -170,15 +198,21 @@ function ULT:ReadBar(bar)
         icon = GetAbilityIcon(effectiveId) or ""
     end
 
+    -- Slot replacement must not inherit the previous Ultimate's spent state.
+    if bar.abilityId~=effectiveId then bar.recentlyUsedUntil=0;bar.ready=false end
     bar.abilityId = effectiveId
     bar.name = name or ""
     bar.icon = icon or ""
     bar.isOverload = self.Overload and self.Overload:IsAbility(effectiveId, name, icon) or false
     bar.cost = self:GetUltimateCost(category, effectiveId)
     bar.toggled = IsSlotToggled and IsSlotToggled(ULTIMATE_SLOT, category) == true or false
+    bar.effectRemaining=GetActionSlotEffectTimeRemaining and math.max(0,FiniteOr(GetActionSlotEffectTimeRemaining(ULTIMATE_SLOT,category),0)) or 0
 end
 
 function ULT:ShouldTrackBar(key)
+    local moving=AlphaSquadUI.Layout and AlphaSquadUI.Layout.IsMoving(self)
+    local preview=moving and AlphaSquadUI.Preview and AlphaSquadUI.Preview.GetMode and AlphaSquadUI.Preview.GetMode()~="live"
+    if not preview and self:HasSpecialActiveBar() then return key=="primary" end
     local mode = self.sv and self.sv.trackMode or "auto"
     if mode == "both" then return true end
     local priority = self.Overload and self.Overload:GetPriorityBar()
@@ -188,9 +222,10 @@ function ULT:ShouldTrackBar(key)
     return key == (self:GetActiveBarCategory() == HOTBAR_CATEGORY_BACKUP and "backup" or "primary")
 end
 function ULT:NeedsPulse()
-    for key,bar in pairs(self.bars) do
+    for _,key in ipairs({"primary","backup"}) do
+        local bar=self:GetLiveBar(key)
         if self:ShouldTrackBar(key) then
-            if bar.overload and (bar.overloadState == "warning" or bar.overloadState == "critical" or bar.overloadState == "ready") then return true end
+            if bar.overload and (bar.overloadState == "warning" or bar.overloadState == "ready") then return true end
             if not bar.overload and bar.ready and self.sv.readyFlash then return true end
         end
     end
@@ -206,7 +241,7 @@ function ULT:ComputeBarState(bar, current)
         return "empty"
     end
 
-    if bar.toggled then
+    if bar.toggled or (bar.effectRemaining or 0)>0 then
         bar.ready = false
         return "active"
     end
@@ -272,31 +307,25 @@ function ULT:Refresh(reason, observedUltimate)
     if currentUltimate == nil then currentUltimate = self:GetUltimatePower() end
     self.currentUltimate = math.min(1000000, math.max(0, currentUltimate))
 
-    local previousPrimaryReady = self.bars.primary.ready
-    local previousBackupReady = self.bars.backup.ready
+    local previousPrimary=self:GetLiveBar("primary")
+    local previousBackup=self:GetLiveBar("backup")
+    local previousPrimaryReady=previousPrimary and previousPrimary.ready
+    local previousBackupReady=previousBackup and previousBackup.ready
+    local previousPrimaryId=previousPrimary and previousPrimary.abilityId
+    local previousBackupId=previousBackup and previousBackup.abilityId
 
     self:ReadBar(self.bars.primary)
     self:ReadBar(self.bars.backup)
+    self:ReadSpecialBar()
     if self.Overload then self.Overload:Update(self.currentUltimate, reason) end
-
-    local primaryState = self:ComputeBarState(self.bars.primary, self.currentUltimate)
-    local backupState = self:ComputeBarState(self.bars.backup, self.currentUltimate)
-
-    self.bars.primary.state = primaryState
-    self.bars.backup.state = backupState
-
-    local primaryReadyTransition =
-        self:ShouldTrackBar("primary") and self.bars.primary.ready and not previousPrimaryReady
-    local backupReadyTransition =
-        self:ShouldTrackBar("backup") and self.bars.backup.ready and not previousBackupReady
-
-    if primaryReadyTransition or backupReadyTransition then
-        self:PlayReadySound()
-    end
-
-    local anyReady =
-        (self:ShouldTrackBar("primary") and self.bars.primary.ready)
-        or (self:ShouldTrackBar("backup") and self.bars.backup.ready)
+    for _,bar in pairs(self.bars) do bar.state=self:ComputeBarState(bar,self.currentUltimate) end
+    if self.specialBar then self.specialBar.state=self:ComputeBarState(self.specialBar,self.currentUltimate) end
+    local primary,backup=self:GetLiveBar("primary"),self:GetLiveBar("backup")
+    local primaryReadyTransition=self:ShouldTrackBar("primary") and primary.ready
+        and not (previousPrimaryReady and previousPrimaryId==primary.abilityId)
+    local backupReadyTransition=self:ShouldTrackBar("backup") and backup.ready
+        and not (previousBackupReady and previousBackupId==backup.abilityId)
+    if primaryReadyTransition or backupReadyTransition then self:PlayReadySound() end
 
     local hudVisible = self.sv.visible and not self.uiObscured
     if hudVisible and self.window and self.window.IsHidden then
@@ -321,6 +350,9 @@ function ULT:OnUltimateUsed(slotNum)
     elseif activeCategory == HOTBAR_CATEGORY_BACKUP then
         self.bars.backup.ready = false
         self.bars.backup.recentlyUsedUntil = now + 1200
+    elseif self.specialBar and self.specialBar.category==activeCategory then
+        self.specialBar.ready=false
+        self.specialBar.recentlyUsedUntil=now+1200
     end
 
     if self.RefreshHUD then self:RefreshHUD() end
@@ -470,6 +502,17 @@ function ULT:RegisterEvents()
             if slotNum == ULTIMATE_SLOT then
                 ULT:ScheduleSlotRefresh("slot state")
             end
+        end)
+    end
+
+    if EVENT_ACTION_SLOT_EFFECT_UPDATE then
+        EM:RegisterForEvent(prefix.."_SlotEffect",EVENT_ACTION_SLOT_EFFECT_UPDATE,function(_,_,slotNum)
+            if slotNum==ULTIMATE_SLOT then ULT:ScheduleSlotRefresh("ultimate duration") end
+        end)
+    end
+    if EVENT_ACTION_SLOT_EFFECTS_CLEARED then
+        EM:RegisterForEvent(prefix.."_EffectsCleared",EVENT_ACTION_SLOT_EFFECTS_CLEARED,function()
+            ULT:ScheduleSlotRefresh("ultimate effects cleared")
         end)
     end
 

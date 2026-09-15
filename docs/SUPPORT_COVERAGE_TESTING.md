@@ -1,6 +1,6 @@
 # ESO acceptance checklist
 
-Version **3.1.0** / **30100**. This checklist is not a record of completed in-game tests.
+Version **3.2.0** / **30200**. This checklist is not a record of completed in-game tests.
 
 ## Native Add-Ons menu
 
@@ -38,23 +38,26 @@ Check a fresh installation separately from migrated preferences. Fresh supported
 | Missing dependency | Missing/update states are red; installed valid states are green; installing the dependency allows pending setup without a retry storm |
 | Native option identity | Unknown or ambiguous protocol controls fail closed; unrelated settings, set-incognito choices and other addons' callbacks remain untouched |
 | Independent tracking | Disable each Dashboard module: its navigation and gameplay HUD disappear; permitted grouped sharing remains available |
-| MOVE HUD | Click the sidebar action or `/asmove`: settings close, normal action bar/gameplay interfaces remain visible, enabled panels can be positioned |
+| MOVE HUD entry | Open from keyboard Settings, gamepad Settings and `/asmove`: wait for native Settings to finish closing, then show one editor with the normal action bar; repeated clicks create no duplicate or stranded pending request |
 | Placement preferences | Disabled modules stay disabled; temporary placement previews do not permanently enable hidden HUDs |
-| Placement completion | Done or Escape saves positions and locks panels; combat, loading or another menu ends placement safely |
+| Placement completion | Done or Back/Escape saves, locks and restores the originating addon window; combat, loading or another game menu ends placement without reopening settings |
+| Placement scene changes | Enter and leave cursor mode (`hud`/`hudui`) while arranging panels: placement and its input remain usable; an unrelated game menu cancels active or pending placement |
+| Secondary Close/Back | Open Group configuration, Coverage and Builds through settings and through each other; X/CLOSE and keyboard/controller Back restore the preceding addon window, without leaving a blank native Settings category |
+| Navigation cleanup | Combat, loading and forced scene cleanup must not reopen a prior addon window; repeated Coverage/Builds round trips do not accumulate duplicate history |
 | Empty group placement | Group HUD can be positioned with no matching players without inventing actual group evidence |
 | Cross-sync ON | Move panels and change settings, then reload and change character on the same account/server: positions/settings remain shared |
 | Cross-sync OFF | Two character profiles remain separate; switching mode keeps the active layout without requiring reload |
 | Unified Ultimate migration | Existing FRONT/BACK/BOTH preferences survive; new settings default to AUTO; supported Overload options and applicable legacy placement migrate into the one personal HUD |
 | AUTO and Overload | AUTO follows the active bar; optional applicable Overload takes priority outside BOTH mode; toggling specialized behavior OFF restores normal Ultimate behavior without a second panel |
 | BOTH mode | Both cards remain visible with an Overload morph; the saved horizontal/vertical layout remains stable while resizing |
-| Independent shell | Main settings, Libraries, Website & About and Discord remain usable with every gameplay module disabled |
-| Theme selection | Ember Classic, Tactical Compact and default Obsidian Studio repaint existing menu/HUD surfaces immediately, preserve status/quality/discipline colors, and survive reload/profile changes |
+| Independent shell | Main settings, Libraries and About remain usable with every gameplay module disabled |
+| Theme selection | Ember Classic, Tactical Compact and default Obsidian Studio repaint existing menu/HUD surfaces immediately, preserve status/quality/discipline colors, and survive reload/profile changes; the open dropdown has an opaque backdrop and its options remain readable over the page |
 | Resize corners | Drag every corner proportionally with icons/text intact; release, Escape, combat and loading remove temporary resize callbacks |
 | Resize edges | Edge drags reshape personal/group/Support HUD contents without stretching icons; minimum/maximum bounds and screen fitting remain correct |
 | Placement toolbar | Selected-panel scale/background opacity/reset/fit affect only that panel; icons/text stay opaque and all changes persist |
 | Branding | Ą and Ş render fully in the static orange gradient; UI stays white; @SeRuM1 uses the blue gradient |
-| External links | Website, ESOUI, Minion and Discord confirmations appear above addon windows and can be accepted or cancelled normally; Discord opens only the configured widget externally, without sending build data |
-| Viewport | At 720p, 1080p and ultrawide UI scales, Libraries stays on one page, the main settings shell has no close cross, and long text remains available on hover |
+| External links | Website, ESOUI, Minion and Discord confirmations appear above addon windows and can be accepted or cancelled normally; About's JOIN DISCORD opens the direct verified invitation, without an intermediate page or build data |
+| Viewport | At 720p, 1080p and ultrawide UI scales, Libraries stays on one page, the main settings shell has no close cross, Workspace labels remain readable, and long detail text remains available on hover |
 | Continuous resizing | Repeatedly drag all corners and edges through their range; no sudden half-size change, cumulative shrinking or opposite-edge jump; unchanged pointer positions do not redraw contents |
 | Display transitions | Change fullscreen/windowed/borderless, custom keyboard/gamepad UI scale and viewport dimensions; fitting preserves saved requested sizes/positions and the active drag ends before coordinates change |
 | Preview states | Mixed, ready, missing/charging, Overload and live choices repaint immediately; Group examples contain 12 fictional accounts; changing modes never changes live roster, transport or build snapshots |
@@ -98,6 +101,7 @@ Check a fresh installation separately from migrated preferences. Fresh supported
 | Companion sender | The lightweight companion supplies the compatible format without the suite; new ON, saved OFF and full-suite precedence behave correctly |
 | LibSetDetection peer | Disclosed v5 set/per-bar reports qualify without the full suite; incognito, report age and reconnect invalidation remain correct |
 | LibGroupCombatStats peer | Fresh Ultimate/active-line facts remain limited to their scope; class lines never imply purchased passives or masteries |
+| Unchanged library report | Keep a valid LibGroupCombatStats report unchanged beyond 75 seconds: Builds does not blank it solely due to age; disconnect, identity change and invalid native timestamps still remove actionable facts |
 | Native library OFF | Subsequent matching sends are blocked; other shared protocols/callbacks remain intact; acknowledge the library-owned timer may persist until reload |
 | Malformed data | Invalid sizes, field values, slots, identities, duplicates or contradictory set totals cannot certify a complete build or overwrite accepted evidence |
 | Partial/stale data | Delayed chunks, changed build fingerprints, incomplete senders and stale records never mix old gear into a new complete snapshot |
@@ -105,13 +109,17 @@ Check a fresh installation separately from migrated preferences. Fresh supported
 | Combat | No Support scan or detailed build send during combat; queued invalidation is handled after combat ends; no uptime/report sampler appears |
 | Loading/travel | Overland, housing, dungeon, trial and PvP transitions pause local work during loading, then resume without changing preferences |
 | Personal ULT | AUTO/FRONT/BACK/BOTH, swap, spend, ready sound/pulse, hide/disable, shared Overload behavior and saved geometry remain functional |
-| Group ULT | Filters, readiness sorting, dead/offline players, rejoin and missing-library states remain correct |
-| Overload | All morphs, optional behavior OFF, reserve/reminder behavior, PvP suppression and placement remain functional in the shared personal tracker; hidden/loading/placement states never cancel effects or play alerts |
+| Group ULT controls | The parent Group tracking switch controls the teammate HUD; no group self/HUD-visibility/ready-sound switches or sound behavior remain; saved filters/layout survive and a formerly hidden group HUD migrates to OFF |
+| Group ULT values | Filters, readiness sorting, dead/offline players, rejoin and missing-library states remain correct; the local account never appears, repeated same-ID Ultimates use the lower valid cost, changed IDs discard stale cost and percentages stay below 100 until ready |
+| Personal transformation ULT | Test Vampire and Werewolf forms and other special native hotbars: show the active native Ultimate/morph/icon/cost, use available native effect duration for ACTIVE, then restore the saved ordinary-bar mode after the form ends |
+| Group transformation ULT | Accept the actual transformation Ultimate reported by LibGroupCombatStats without a fixed whitelist; do not infer transformed-bar slots or another player's active form from a front/back report |
+| Overload | All morphs, optional behavior OFF, Warning starts, reserve/reminder behavior and PvP suppression remain functional in the shared personal tracker; no effect-cancellation action or cutoff setting remains, and hidden/loading/placement states play no alerts |
+| Resize bursts | Repeated screen-size notifications coalesce into one deferred Support refresh using current dimensions; no repeated follow-up refreshes remain after the burst ends |
 | Performance/coexistence | Compare frame time/memory and traffic ON/OFF in four- and twelve-player groups alongside the group's existing addons |
 
 ## Release requirements and references
 
-Source availability is not live application or guaranteed recipient coverage. A valid shared snapshot is still a report from its sender; it is not proof against a modified client. Automated checks cannot certify native rendering, protected API permissions, measured FPS or network coexistence.
+Source availability is not live application or guaranteed recipient coverage. A valid shared snapshot is still a report from its sender; it is not proof against a modified client. Automated checks cannot certify native rendering, measured FPS or network coexistence. The 3.1.0 recording documents the reported failures; it is not an after-change acceptance test. See the [3.2.0 video review](VIDEO_REVIEW_3.2.0.md).
 
 The active build protocols **507/510** remain provisional; legacy **508/509** are retired. Formal reservation and coexistence validation remain required before public full-build-sharing release. Completing this checklist does not itself authorize a pull request, merge, tag or release; maintainer approval remains required.
 

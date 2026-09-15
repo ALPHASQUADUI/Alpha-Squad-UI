@@ -500,7 +500,13 @@ function SC:RegisterEvents()
 
     if EVENT_SCREEN_RESIZED then
         EM:RegisterForEvent(prefix .. "_Screen", EVENT_SCREEN_RESIZED, function()
+            -- Window drags can deliver many resize events before the UI settles.
+            -- Read the latest native dimensions once instead of rebuilding every
+            -- HUD and secondary window for each intermediate notification.
+            if SC.screenResizePending then return end
+            SC.screenResizePending = true
             zo_callLater(function()
+                SC.screenResizePending = false
                 if SC and SC.ApplyAppearance then
                     SC:ApplyAppearance()
                     SC:ClampToScreen(true)

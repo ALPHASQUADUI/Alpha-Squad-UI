@@ -10,6 +10,60 @@ Settings.mainWindow = Settings.mainWindow or nil
 Settings.showPageCallback = Settings.showPageCallback or nil
 Settings.refreshCallback = Settings.refreshCallback or nil
 Settings.exclusiveWindows = Settings.exclusiveWindows or {}
+Settings.windowHistory = Settings.windowHistory or {}
+
+local function MainPage()
+    local shell = AlphaSquadUI.Shell
+    return shell and shell.activeSettingsPage or Settings.currentPage or "dashboard"
+end
+
+local function VisibleWindow()
+    for id, entry in pairs(Settings.exclusiveWindows) do
+        if not entry.control:IsHidden() then return id, entry end
+    end
+end
+
+local function CopyHistory(history)
+    local copy = {}
+    for _, item in ipairs(history or {}) do
+        if #copy == 8 then break end
+        if type(item) == "table" and Settings.exclusiveWindows[item.id] then
+            copy[#copy + 1] = {id = item.id, page = item.page}
+        end
+    end
+    return copy
+end
+
+local function NavigationBlocked()
+    if IsUnitInCombat and IsUnitInCombat("player") then return true end
+    if AlphaSquadUI.Input and AlphaSquadUI.Input.loading then return true end
+    for _, module in pairs(AlphaSquadUI.Modules or {}) do
+        if type(module) == "table" and module.loading then return true end
+    end
+    return false
+end
+
+local function RestoreCursor()
+    -- Closing the placement toolbar can release ESO's last native top-level.
+    -- Restore mouse access only in gameplay; native options keep their scene.
+    local manager = SCENE_MANAGER
+    local scene = manager and manager.GetCurrentScene and manager:GetCurrentScene()
+    local name = scene and scene.GetName and scene:GetName()
+    if (name == "hud" or name == "hudui") and manager.SetInUIMode then
+        if manager.IsInUIMode and not manager:IsInUIMode() then Settings.ownsCursor = true end
+        manager:SetInUIMode(true)
+    end
+end
+
+local function ReleaseCursor()
+    local owned = Settings.ownsCursor
+    Settings.ownsCursor = nil
+    if not owned or VisibleWindow() then return end
+    local manager = SCENE_MANAGER
+    local scene = manager and manager.GetCurrentScene and manager:GetCurrentScene()
+    local name = scene and scene.GetName and scene:GetName()
+    if (name == "hud" or name == "hudui") and manager.SetInUIMode then manager:SetInUIMode(false) end
+end
 
 function Settings.RefreshModuleVisibility()
     for _, module in pairs(AlphaSquadUI.Modules or {}) do
@@ -20,10 +74,21 @@ function Settings.RefreshModuleVisibility()
     end
 end
 
-function Settings.RegisterExclusiveWindow(id, control, closeCallback)
+function Settings.RegisterExclusiveWindow(id, control, closeCallback, options)
     if not id or not control then return end
-    Settings.exclusiveWindows[id] = { control = control, close = closeCallback }
-    if AlphaSquadUI.Input then AlphaSquadUI.Input.RegisterWindow(control, {close = closeCallback}) end
+    options = options or {}
+    Settings.exclusiveWindows[id] = { control = control, close = closeCallback,
+        restore = options.restore, fallbackPage = options.fallbackPage }
+    if AlphaSquadUI.Input then
+        AlphaSquadUI.Input.RegisterWindow(control, {
+            close = function() Settings.CloseExclusiveWindow(id) end,
+            dismiss = function()
+                if closeCallback then closeCallback() else control:SetHidden(true) end
+                -- Native scenes own their own mouse mode after a dismissal.
+                if not VisibleWindow() then Settings.ownsCursor = nil end
+            end,
+        })
+    end
 end
 
 function Settings.AnyExclusiveWindowVisible()
@@ -36,6 +101,26 @@ end
 function Settings.ShowExclusiveWindow(id)
     local target = Settings.exclusiveWindows[id]
     if not target then return false end
+    local visible = VisibleWindow()
+    if id == "settings" then
+        Settings.windowHistory = {}
+    elseif visible ~= id then
+        local history = Settings.windowHistory
+        if not visible then
+            history = {{id = "settings", page = target.fallbackPage or MainPage()}}
+        else
+            local previous
+            for index, item in ipairs(history) do if item.id == id then previous = index; break end end
+            if previous then
+                for index = #history, previous, -1 do history[index] = nil end
+            else
+                history[#history + 1] = {id = visible, page = visible == "settings" and MainPage() or nil}
+                -- Window history is transient and bounded even if extensions register more panels.
+                if #history > 8 then table.remove(history, 2) end
+            end
+        end
+        Settings.windowHistory = history
+    end
     if AlphaSquadUI.Layout then AlphaSquadUI.Layout.Finish() end
     for otherId, entry in pairs(Settings.exclusiveWindows) do
         if otherId ~= id and not entry.control:IsHidden() then
@@ -48,10 +133,67 @@ function Settings.ShowExclusiveWindow(id)
     return true
 end
 
+-- Registered close callbacks only tear down a window. Navigation belongs to
+-- explicit user actions, never to combat, loading or native scene dismissal.
+function Settings.DismissAllWindows()
+    Settings.windowHistory = {}
+    for _, entry in pairs(Settings.exclusiveWindows) do
+        if not entry.control:IsHidden() then
+            if type(entry.close) == "function" then entry.close()
+            else entry.control:SetHidden(true) end
+        end
+    end
+    Settings.ownsCursor = nil
+    Settings.RefreshModuleVisibility()
+end
+
+function Settings.CaptureReturnTarget()
+    local id = VisibleWindow()
+    return {id = id or "settings", page = MainPage(), history = CopyHistory(Settings.windowHistory)}
+end
+
+function Settings.RestoreReturnTarget(target)
+    if NavigationBlocked() then return false end
+    target = type(target) == "table" and target or {}
+    local id = Settings.exclusiveWindows[target.id] and target.id or "settings"
+    if id == "settings" then
+        local opened = Settings.OpenPage(target.page or "dashboard")
+        if opened then RestoreCursor() end
+        return opened
+    end
+    if not Settings.ShowExclusiveWindow(id) then return false end
+    Settings.windowHistory = CopyHistory(target.history)
+    if #Settings.windowHistory == 0 then
+        local entry = Settings.exclusiveWindows[id]
+        Settings.windowHistory[1] = {id = "settings", page = entry.fallbackPage or target.page or "dashboard"}
+    end
+    local restore = Settings.exclusiveWindows[id].restore
+    if type(restore) == "function" then restore() end
+    RestoreCursor()
+    return true
+end
+
+function Settings.CloseExclusiveWindow(id)
+    local entry = Settings.exclusiveWindows[id]
+    if not entry or entry.control:IsHidden() then return false end
+    if type(entry.close) == "function" then entry.close() else entry.control:SetHidden(true) end
+    if id == "settings" or NavigationBlocked() then
+        Settings.windowHistory = {}
+        if id == "settings" then ReleaseCursor() else Settings.ownsCursor = nil end
+        Settings.RefreshModuleVisibility()
+        return true
+    end
+    local previous = table.remove(Settings.windowHistory) or {id = "settings", page = entry.fallbackPage or MainPage()}
+    return Settings.RestoreReturnTarget({id = previous.id, page = previous.page,
+        history = Settings.windowHistory})
+end
+
 function Settings.CloseMain()
     local entry = Settings.exclusiveWindows.settings
     if entry and type(entry.close) == "function" then entry.close()
     elseif Settings.mainWindow then Settings.mainWindow:SetHidden(true) end
+    Settings.windowHistory = {}
+    ReleaseCursor()
     Settings.RefreshModuleVisibility()
 end
 
@@ -135,6 +277,7 @@ end
 
 function Settings.OpenPage(id)
     if not Settings.mainWindow then return false end
+    Settings.currentPage = id or "dashboard"
     if Settings.showPageCallback then
         Settings.showPageCallback(id)
     end
@@ -168,8 +311,7 @@ Settings.icons={dashboard="EsoUI/Art/MainMenu/menuBar_map_up.dds",
     ulttracker="EsoUI/Art/MainMenu/menuBar_skills_up.dds",
     supportcoverage="EsoUI/Art/MainMenu/menuBar_social_up.dds",
     libraries="EsoUI/Art/MainMenu/menuBar_collections_up.dds",
-    community="EsoUI/Art/MenuBar/menuBar_help_up.dds",
-    discord="EsoUI/Art/MainMenu/menuBar_social_up.dds"}
+    community="EsoUI/Art/MenuBar/menuBar_help_up.dds"}
 function Settings.IsModuleEnabled(id)
     local module=ASUI.Modules[Settings.modulePages[id]]
     if not module or not module.sv then return false end
@@ -198,6 +340,7 @@ local function PresetDropdown(parent,ui,width)
     container:SetAnchor(TOPLEFT,parent,TOPLEFT,14,47);container:SetDimensions(width-28,32)
     local combo=ZO_ComboBox_ObjectFromContainer(container)
     combo:SetSortsItems(false)
+    if theme.ConfigureDropdown then theme.ConfigureDropdown(combo) end
     local description=Label(ui,parent,"AlphaSquadThemeDescription","",14,88,width-28,50)
     for _,preset in ipairs(theme.GetPresets()) do
         local id=preset.id
@@ -275,8 +418,13 @@ Settings.RegisterPage("libraries",function(page,ui)
                 if not available then
                     switch.label:SetText("N/A")
                     if switch.thumb then switch.thumb:SetHidden(true) end
+                    if switch.track then switch.track:SetHidden(true) end
                     switch.label:ClearAnchors();switch.label:SetAnchorFill(switch)
                     switch.label:SetColor(c.red[1],c.red[2],c.red[3],1)
+                elseif switch.track then
+                    switch.track:SetHidden(false)
+                    switch.label:ClearAnchors();switch.label:SetAnchor(TOPLEFT,switch,TOPLEFT,3,0)
+                    switch.label:SetDimensions(40,30)
                 end
             end)
             Label(ui,card,"AlphaSquadLibraryHelp"..index,data.text,14,72,half-28,23)
@@ -298,7 +446,7 @@ end)
 Settings.RegisterPage("community",function(page,ui)
     page.responsiveCards=true;page.contentHeight=590
     local width=LogicalWidth(page)-16;local half=(width-16)/2
-    Label(ui,page,"AlphaSquadCommunityTitle",ASUI.Theme.Brand(),8,2,width,36,ui.colors.white,"ZoFontWinH2")
+    Label(ui,page,"AlphaSquadCommunityTitle","ABOUT",8,2,width,36,ui.colors.orange,"ZoFontWinH2")
     Label(ui,page,"AlphaSquadCommunityIntro","Endgame ESO PvE • Hard Modes • Trifectas • Guides • Community",8,44,width,26)
     local site=ui.CreateCard(page,"AlphaSquadCommunitySite",8,88,width,180,"EXPLORE ALPHA SQUAD",ui.colors.orange)
     Icon(site,"AlphaSquadCommunitySiteIcon",Settings.icons.community,18,48,64)
@@ -310,29 +458,7 @@ Settings.RegisterPage("community",function(page,ui)
     Label(ui,about,"AlphaSquadAboutText","Clear group preparation and one unified Ultimate tracker. Built around native ESO information and controls.\n\nCreated by "..ASUI.Theme.authorText,16,46,half-32,130,ui.colors.muted,"ZoFontGame")
     local discord=ui.CreateCard(page,"AlphaSquadCommunityDiscord",8+half+16,286,half,210,"JOIN THE COMMUNITY",ui.colors.orange)
     Label(ui,discord,"AlphaSquadCommunityDiscordText","Find the Alpha Squad Discord, meet the roster and connect with other players.",16,46,half-32,80,ui.colors.muted,"ZoFontGame")
-    ui.CreateButton(discord,"AlphaSquadCommunityDiscordButton","DISCORD",16,148,190,36,function()Settings.OpenPage("discord")end)
+    local join=ui.CreateButton(discord,"AlphaSquadCommunityDiscordButton","JOIN DISCORD",16,148,190,36,function()OpenLink(ASUI.discord)end)
+    join.help="Open the Alpha Squad server invitation after ESO's normal link confirmation. No build, character or group data is sent through this link."
     Label(ui,page,"AlphaSquadCommunityCommands","/asui  Settings     /asmove  Arrange HUD     /assupport builds  Inspect builds",8,522,width,30,ui.colors.muted,"ZoFontGame")
-end)
-Settings.RegisterPage("discord",function(page,ui)
-    page.responsiveCards=true;page.contentHeight=590
-    local width=LogicalWidth(page)-16;local left=math.floor(width*0.55)
-    Label(ui,page,"AlphaSquadDiscordTitle","ALPHA SQUAD • DISCORD",8,2,width,36,ui.colors.orange,"ZoFontWinH2")
-    Label(ui,page,"AlphaSquadDiscordIntro","The community behind your next clear.",8,44,width,28,ui.colors.muted,"ZoFontGame")
-    local invite=ui.CreateCard(page,"AlphaSquadDiscordInvite",8,94,left,418,"ALPHA SQUAD",ui.colors.cyan)
-    Icon(invite,"AlphaSquadDiscordNativeIcon",Settings.icons.discord,24,56,92)
-    Label(ui,invite,"AlphaSquadDiscordTagline","PLAY TOGETHER.\nPROGRESS TOGETHER.",136,68,left-156,76,ui.colors.white,"ZoFontWinH3")
-    Label(ui,invite,"AlphaSquadDiscordInviteText","Meet the roster, discuss builds and plan your next raid. Open our Discord community to view the server invitation.",24,186,left-48,112,ui.colors.muted,"ZoFontGame")
-    local join=ui.CreateButton(invite,"AlphaSquadDiscordJoin","OPEN DISCORD COMMUNITY",24,332,left-48,46,function()
-        OpenLink("https://discord.com/widget?id=1524092356696084690&theme=dark")
-    end)
-    join.help="Opens the supplied Alpha Squad Discord widget in your browser after ESO's confirmation. Use the invitation shown there to join the server."
-    local about=ui.CreateCard(page,"AlphaSquadDiscordActivities",left+24,94,width-left-16,418,"INSIDE THE COMMUNITY",ui.colors.orange)
-    local w=about:GetWidth()-36
-    Label(ui,about,"AlphaSquadDiscordRaids","RAIDS & PROGRESSION",18,54,w,28,ui.colors.orange,"ZoFontGameBold")
-    Label(ui,about,"AlphaSquadDiscordRaidsInfo","Hard Modes, trifectas and coordinated PvE.",18,88,w,54,ui.colors.muted,"ZoFontGame")
-    Label(ui,about,"AlphaSquadDiscordBuilds","BUILDS & DISCUSSION",18,168,w,28,ui.colors.orange,"ZoFontGameBold")
-    Label(ui,about,"AlphaSquadDiscordBuildsInfo","Share ideas, compare setups and learn together.",18,202,w,62,ui.colors.muted,"ZoFontGame")
-    Label(ui,about,"AlphaSquadDiscordWelcome","WELCOME TO ALPHA SQUAD",18,298,w,28,ui.colors.orange,"ZoFontGameBold")
-    Label(ui,about,"AlphaSquadDiscordWelcomeInfo","Connect with players who enjoy working as a team.",18,332,w,62,ui.colors.muted,"ZoFontGame")
-    Label(ui,page,"AlphaSquadDiscordPrivacy","Opening Discord shares no build, character or group data through this addon.",8,540,width,30)
 end)

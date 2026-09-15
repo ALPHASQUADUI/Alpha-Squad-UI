@@ -151,7 +151,7 @@ function UI.Window(name, title, close)
     drag:SetHeight(44); drag:SetMouseEnabled(true)
     drag:SetHandler("OnMouseDown",function(_,button) if button==MOUSE_BUTTON_INDEX_LEFT then win:StartMoving() end end)
     drag:SetHandler("OnMouseUp",function() win:StopMovingOrResizing() end)
-    win.close=UI.Button(win,name .. "Close","CLOSE",78,30,close)
+    win.close=UI.Button(win,name .. "Close","BACK",78,30,close)
     win.close:SetAnchor(TOPRIGHT,win,TOPRIGHT,-16,14)
     win.footer=UI.Label(win,name .. "Footer","","ZoFontGameSmall",C.muted)
     win.footer:SetAnchor(BOTTOMLEFT,win,BOTTOMLEFT,18,-12); win.footer:SetAnchor(BOTTOMRIGHT,win,BOTTOMRIGHT,-18,-12)
@@ -166,9 +166,17 @@ function UI.FitWindow(win)
     win:SetScale(math.min(1,(rootW-20)/width,(rootH-20)/height))
     return width,height
 end
-function UI.RegisterWindow(id,win,close)
+function UI.RegisterWindow(id,win,close,restore)
     local settings=AlphaSquadUI.Settings
-    if settings and settings.RegisterExclusiveWindow then settings.RegisterExclusiveWindow(id,win,close) end
+    if settings and settings.RegisterExclusiveWindow then
+        settings.RegisterExclusiveWindow(id,win,close,{fallbackPage="supportcoverage",restore=restore})
+    end
+end
+function UI.CloseWindow(id,close)
+    local settings=AlphaSquadUI.Settings
+    if settings and settings.CloseExclusiveWindow then return settings.CloseExclusiveWindow(id) end
+    if close then close() end
+    if settings and settings.OpenPage then return settings.OpenPage("supportcoverage") end
 end
 function UI.ShowWindow(id,win)
     local settings=AlphaSquadUI.Settings

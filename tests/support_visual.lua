@@ -42,7 +42,10 @@ function Settings.CreateScrollArea(parent,name)
     viewport.UpdateBounds=function()end;viewport.scrollbar=slider
     return content,viewport,slider
 end
-function Settings.RegisterExclusiveWindow()end
+local registeredWindows={}
+function Settings.RegisterExclusiveWindow(id,control,close,options)
+    registeredWindows[id]={control=control,close=close,options=options}
+end
 local SC={sv={enabled=true,visible=true,locked=true,opacity=94,scale=100,width=410,rowHeight=30,x=20,y=30,problemsOnly=false},
     roster={},coverage={entries={}},EquipmentSlotDetails={}}
 function SC.Clamp(value,lo,hi)return math.max(lo,math.min(hi,value))end
@@ -104,6 +107,14 @@ SC.inspectorPlayerKey='player1'
 function SC:GetPlayerBuildDetails()return details end
 SC:CreateInspectorWindow();SC.inspectorWindow:SetHidden(false);SC:RefreshInspector()
 local inspector=SC.inspectorWindow
+local backTarget
+Settings.CloseExclusiveWindow=function(id)backTarget=id;return true end
+inspector.close.handlers.OnMouseUp(inspector.close,MOUSE_BUTTON_INDEX_LEFT,true)
+check(backTarget=='supportBuilds' and inspector.close.label.text=='BACK','Builds exposes an explicit Back action through the shared navigation registry')
+check(registeredWindows.supportBuilds.options.fallbackPage=='supportcoverage','Directly opened Builds has a module settings destination')
+local requestsBefore=requests
+registeredWindows.supportBuilds.options.restore()
+check(requests==requestsBefore,'Returning to Builds refreshes its cached view without requesting a new remote build')
 check(#inspector.playerList.rows==12 and inspector.playerList.rows[12].y+inspector.playerList.rows[12].height<=inspector.playerList.height,
     'All twelve group members fit in the compact roster without paging or scrolling')
 check(inspector.playerList.parent==inspector.playerPanel and inspector.playerBG.parent==inspector.playerPanel,

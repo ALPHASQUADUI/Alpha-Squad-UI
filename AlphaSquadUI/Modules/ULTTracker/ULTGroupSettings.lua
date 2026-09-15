@@ -201,6 +201,10 @@ function Group:RefreshConfig()
     end
 
     self.configWindow.empty:SetHidden(#abilities > 0)
+    if #abilities==0 then
+        self.configWindow.empty:SetText(total==0 and "Join a group to see teammates’ Ultimates.\nYour own Ultimate stays in the personal HUD."
+            or "No teammates are sharing Ultimates yet.\nManage your sharing and required libraries in Libraries.")
+    end
 
     for index, row in ipairs(self.configWindow.abilityRows) do
         local ability = abilities[index]
@@ -214,26 +218,13 @@ function Group:RefreshConfig()
                 local col = index <= 12 and 0 or 1
                 local rowIndex = col == 0 and index or (index - 12)
                 row:SetAnchor(TOPLEFT, self.configWindow, TOPLEFT, col == 0 and 22 or 404,
-                    152 + ((rowIndex - 1) * 34))
+                    122 + ((rowIndex - 1) * 34))
             end
         end
     end
     if self.configWindow.abilityContent then
-        self.configWindow.abilityContent:SetHeight(math.max(390, math.min(#abilities, 48) * 34))
+        self.configWindow.abilityContent:SetHeight(math.max(420, math.min(#abilities, 48) * 34))
     end
-
-    local g = self.sv
-    self.configWindow.enabledButton.label:SetText(g.enabled and "GROUP: ON" or "GROUP: OFF")
-    SetColor(self.configWindow.enabledButton.label, g.enabled and COLORS.green or COLORS.red)
-
-    self.configWindow.visibleButton.label:SetText(g.visible and "HUD: SHOW" or "HUD: HIDE")
-    SetColor(self.configWindow.visibleButton.label, g.visible and COLORS.green or COLORS.muted)
-
-    self.configWindow.selfButton.label:SetText(g.includeSelf and "SELF: ON" or "SELF: OFF")
-    SetColor(self.configWindow.selfButton.label, g.includeSelf and COLORS.green or COLORS.muted)
-
-    self.configWindow.soundButton.label:SetText(g.readySound and "READY SOUND: ON" or "READY SOUND: OFF")
-    SetColor(self.configWindow.soundButton.label, g.readySound and COLORS.green or COLORS.muted)
 
 end
 
@@ -259,7 +250,9 @@ end
 
 function Group:ToggleConfig()
     if not self.configWindow then return end
-    if self.configWindow:IsHidden() then self:OpenConfig() else self:CloseConfig() end
+    if self.configWindow:IsHidden() then self:OpenConfig()
+    elseif AlphaSquadUI.Settings and AlphaSquadUI.Settings.CloseExclusiveWindow then AlphaSquadUI.Settings.CloseExclusiveWindow("groupultimate")
+    else self:CloseConfig() end
 end
 
 function Group:CreateConfigWindow()
@@ -278,7 +271,7 @@ function Group:CreateConfigWindow()
     win:SetHidden(true)
     local settings = AlphaSquadUI.Settings
     if settings and settings.RegisterExclusiveWindow then
-        settings.RegisterExclusiveWindow("groupultimate", win, function() Group:CloseConfig() end)
+        settings.RegisterExclusiveWindow("groupultimate", win, function() Group:CloseConfig() end, {fallbackPage="ulttracker"})
     end
 
     win.bg=Solid(win,"AlphaSquadULTGroupConfigBG",Palette("bg"))
@@ -307,13 +300,15 @@ function Group:CreateConfigWindow()
     title:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
 
     local sub = Label(win, "AlphaSquadULTGroupConfigSub", "ZoFontGameSmall",
-        "Choose the Ultimates you want to see. Group members with those abilities appear automatically.", COLORS.muted)
+        "Choose shared Ultimates to track. Your own Ultimate stays in the personal HUD.", COLORS.muted)
     sub:SetDimensions(660, 20)
     sub:SetAnchor(TOPLEFT, win, TOPLEFT, 21, 39)
     sub:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
 
     Button(win, "AlphaSquadULTGroupConfigClose", "X", 730, 15, 32, 28, function()
-        Group:CloseConfig()
+        local settings=AlphaSquadUI.Settings
+        if settings and settings.CloseExclusiveWindow then settings.CloseExclusiveWindow("groupultimate")
+        else Group:CloseConfig() end
     end)
 
     win.source = Label(win, "AlphaSquadULTGroupConfigSource", "ZoFontGameSmall", "", COLORS.muted)
@@ -321,36 +316,15 @@ function Group:CreateConfigWindow()
     win.source:SetAnchor(TOPLEFT, win, TOPLEFT, 22, 68)
     win.source:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
 
-    win.enabledButton = Button(win, "AlphaSquadULTGroupConfigEnabled", "", 22, 96, 120, 28, function()
-        Group:SetEnabled(not Group.sv.enabled)
-        Group:RefreshConfig()
-    end)
-
-    win.visibleButton = Button(win, "AlphaSquadULTGroupConfigVisible", "", 150, 96, 120, 28, function()
-        Group:SetVisible(not Group.sv.visible)
-        Group:RefreshConfig()
-    end)
-
-    win.selfButton = Button(win, "AlphaSquadULTGroupConfigSelf", "", 278, 96, 110, 28, function()
-        Group.sv.includeSelf = not Group.sv.includeSelf
-        Group:Refresh("include self")
-        Group:RefreshConfig()
-    end)
-
-    win.soundButton = Button(win, "AlphaSquadULTGroupReadySound", "", 396, 96, 362, 28, function()
-        Group.sv.readySound = not Group.sv.readySound
-        Group:RefreshConfig()
-    end)
-
     local listHeader = Label(win, "AlphaSquadULTGroupAbilitiesHeader", "ZoFontGameBold",
-        "ULTIMATES AVAILABLE IN CURRENT GROUP", COLORS.orange)
+        "SAVED & SHARED ULTIMATES", COLORS.orange)
     listHeader:SetDimensions(736, 22)
-    listHeader:SetAnchor(TOPLEFT, win, TOPLEFT, 22, 128)
+    listHeader:SetAnchor(TOPLEFT, win, TOPLEFT, 22, 98)
     listHeader:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
 
     win.abilityRows = {}
     if settings and settings.CreateScrollArea then
-        win.abilityContent, win.abilityScroll = settings.CreateScrollArea(win, "AlphaSquadULTGroupAbilityScroll", 22, 152, 736, 390, 390)
+        win.abilityContent, win.abilityScroll = settings.CreateScrollArea(win, "AlphaSquadULTGroupAbilityScroll", 22, 122, 736, 420, 420)
     end
     for index = 1, (win.abilityContent and 48 or 24) do
         win.abilityRows[index] = CreateAbilityRow(win.abilityContent or win, index)
@@ -361,7 +335,7 @@ function Group:CreateConfigWindow()
         win.abilityRows[index]:SetHidden(true)
     end
 
-    win.empty = Label(win, "AlphaSquadULTGroupConfigEmpty", "ZoFontGame", "No shared Ultimates yet.\nJoin a group and enable ULT sharing in LibGroupCombatStats.", COLORS.muted)
+    win.empty = Label(win, "AlphaSquadULTGroupConfigEmpty", "ZoFontGame", "No shared Ultimates yet.\nJoin a group with teammates sharing Ultimates. Manage your sharing in Libraries.", COLORS.muted)
     win.empty:SetDimensions(736, 80)
     win.empty:SetAnchor(TOPLEFT, win, TOPLEFT, 22, 210)
     win.empty:SetHorizontalAlignment(TEXT_ALIGN_CENTER)
@@ -393,9 +367,5 @@ function Group:CreateConfigWindow()
     saveNote:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
     saveNote:SetVerticalAlignment(TEXT_ALIGN_TOP)
 
-    win.enabledButton.help = "Enable or disable group Ultimate tracking. Your selected abilities and HUD settings are kept."
-    win.visibleButton.help = "Show or hide the group Ultimate HUD without clearing your selected abilities."
-    win.selfButton.help = "Include your own character in the group Ultimate list."
-    win.soundButton.help = "Play a notification when a tracked group Ultimate becomes ready."
     self:ApplyConfigWindowScale()
 end

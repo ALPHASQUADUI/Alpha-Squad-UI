@@ -10,7 +10,7 @@ A modular **The Elder Scrolls Online** addon by **@SeRuM1** for group preparatio
 2. Open **Settings → Ąlpha Şquad UI** in keyboard or gamepad mode, or use `/asui`.
 3. In **Dashboard**, choose **ULT Tracker** and **Support Coverage**, then pick an **Interface Style**. Tracking starts enabled; you can switch either module off.
 4. Open **Libraries** to check dependencies and sharing. New installations configure supported sharing **ON** automatically; saved OFF choices are preserved.
-5. Use **MOVE HUD** to choose horizontal/vertical layouts, preview realistic states and arrange your panels. Drag corners to scale, edges to reshape, then choose **DONE** or Back/Escape.
+5. Use **MOVE HUD** to choose horizontal/vertical layouts, preview realistic states and arrange your panels. Drag corners to scale, edges to reshape, then choose **DONE** or Back/Escape to return to your settings.
 6. Open **Support Coverage → Builds** or **Coverage** to prepare your group.
 
 Use [Minion](https://minion.mmoui.com/) to install and update published ESO addons and libraries. Install the full suite or the lightweight Build Share companion according to the features you need; do not nest either folder inside another addon directory.
@@ -35,7 +35,7 @@ Styles change immediately without a reload. Readiness colors, item quality and C
 
 ## Arrange your HUD
 
-Click **MOVE HUD** in the settings sidebar or enter `/asmove` outside combat. Settings close and the normal game view remains visible, including the action bar. Select the personal Ultimate, Group Ultimate or Support Coverage panel, then:
+Click **MOVE HUD** in the settings sidebar or enter `/asmove` outside combat. The editor waits for the native Settings menu to close before opening over the normal game view, including the action bar. Its pending transition cannot start a second editor. Select the personal Ultimate, Group Ultimate or Support Coverage panel, then:
 
 - Drag the panel to move it.
 - Drag a **corner** to scale the whole panel proportionally.
@@ -44,7 +44,7 @@ Click **MOVE HUD** in the settings sidebar or enter `/asmove` outside combat. Se
 - Use **PREVIEW** to choose mixed, ready, missing/charging, Overload or live states. Group previews contain twelve fictional accounts, so every row can be arranged while solo. Support previews show covered, missing, unknown, duplicate and tracking-off examples.
 - Use **SCALE**, **OPACITY**, **RESET PANEL** and **FIT** in the placement toolbar for the selected panel. Opacity changes the background without fading icons or text.
 
-**DONE** or Escape saves and locks the panels. Combat, loading or another menu ends placement safely.
+**DONE** or Back/Escape saves and locks the panels, then returns to the addon window you came from. Combat, loading or another game menu ends placement without reopening settings. The normal HUD/cursor-mode transition keeps placement active.
 
 Placement preserves disabled modules and normal visibility preferences. Personal Ultimate and Overload use the same panel, position and size. Group Ultimate tracking keeps its own panel and selection.
 
@@ -54,7 +54,7 @@ Examples exist only in the editor's presentation. They are never sent, stored as
 
 The gamepad Settings menu includes **Ąlpha Şquad UI**. **Open Alpha Squad UI** and **Move Alpha Squad UI HUD** can also be assigned in Controls without replacing gameplay bindings.
 
-Use arrows or the controller directional input to navigate, Select to activate, and Back to close the current window. Tab/Shift+Tab cycle keyboard focus. Left/right change a focused dropdown or slider. Focus displays the same explanations as mouse hover, including equipment and Champion details, and scrolls overflowing lists into view.
+Use arrows or the controller directional input to navigate, Select to activate, and Back to return from a secondary window. The X/CLOSE controls in Group configuration, Coverage and Builds follow the same return path; they restore the previous addon window instead of leaving a blank settings screen. Tab/Shift+Tab cycle keyboard focus. Left/right change a focused dropdown or slider. Focus displays the same explanations as mouse hover, including equipment and Champion details, and scrolls overflowing lists into view.
 
 In MOVE HUD, the secondary action cycles **Move**, **Scale**, **Width**, **Height** and **Controls**; the shoulder actions change the selected panel. Directional movement is continuous in the geometry modes. Controls mode lets you reach orientation, preview, reset and Done. The on-screen hints identify the active mode. Native confirmation dialogs temporarily receive input; addon navigation resumes afterward. Combat, loading and leaving the addon screen release its input controls.
 
@@ -128,13 +128,15 @@ The personal Ultimate HUD handles normal Ultimates and optional Overload behavio
 - **FRONT** or **BACK** selects a weapon bar; enabled Overload behavior can still take priority.
 - **BOTH** keeps both Ultimate cards visible and does not collapse the view into an Overload-only card.
 
-New installations use AUTO. Existing FRONT, BACK and BOTH choices are preserved. **ULT Tracker → OVERLOAD SETTINGS** controls the specialized reserve warnings, ready reminder, optional safe cancellation and PvP preference. Turn **Use Overload behavior** OFF to retain standard Ultimate tracking. **Reserve alerts and auto-stop** controls the warnings and native cancellation together and starts enabled on new installations. Auto-stop runs only when ESO marks the active effect as removable; it never simulates an Ultimate key press.
+New installations use AUTO. Existing FRONT, BACK and BOTH choices are preserved. **ULT Tracker → OVERLOAD SETTINGS** controls reserve warnings, the ready reminder and the PvP preference. Turn **Use Overload behavior** OFF to retain standard Ultimate tracking. **Warning starts** sets the low-reserve alert threshold. Alerts do not stop Overload: activation and stopping stay under your control through your Ultimate binding. Automatic cancellation and its obsolete settings have been removed.
 
-The group view lets you choose abilities to follow, sorts ready players first and dims recent spends. Group tracking and library sharing remain independent of the personal display mode.
+Use the single **Group tracking** switch in **ULT Tracker → Group Ultimates** to enable or disable the group view. **CONFIGURE** selects which shared Ultimates to follow. The group view shows teammates, sorts ready players first and dims recent spends; your own Ultimate remains in the personal HUD. Repeated copies of the same Ultimate use the lowest verified reported cost; rounded percentages never display 100% before readiness. There are no separate group HUD visibility, self-tracking or group ready-sound switches. Group tracking and library sharing remain independent of the personal display mode.
+
+While a transformation or another special action bar is active, the personal HUD uses that native bar's actual Ultimate, morph, icon and cost. Native remaining-effect time can identify an active timed Ultimate. Your saved AUTO/FRONT/BACK/BOTH selection returns afterward. Group tracking accepts the actual Ultimate identities reported by LibGroupCombatStats, including transformation Ultimates; that library does not independently report a teammate's transformed action bar or active transformation state.
 
 ## Community
 
-Open **Website & About** for the Alpha Squad website or **Discord** for the community page. **OPEN DISCORD COMMUNITY** opens the configured Discord widget in your browser after ESO's confirmation. Use the invitation there if Discord makes one available. The addon does not embed a web page, invent live member counts or send group/build data when you open the link.
+Open **About** for the Alpha Squad website, ESOUI, release notes and the **JOIN DISCORD** button. Discord opens the [Alpha Squad invitation](https://discord.gg/snDyd23h6N) through ESO's native URL confirmation, with no intermediate community page or widget. Opening a community link sends no build or group data.
 
 ## Commands
 
@@ -148,8 +150,8 @@ Open **Website & About** for the Alpha Squad website or **Discord** for the comm
 | `/assupport builds` | Group build inspection |
 | `/assupport matrix` | Coverage columns |
 | `/assupport trial` or `/assupport dungeon` | Coverage context |
-| `/asmove` | Arrange all enabled HUD panels; Done or Escape saves and locks |
+| `/asmove` | Arrange enabled HUD panels; Done or Back/Escape saves, locks and returns |
 
 Shared snapshots are bounded reports from compatible senders, not proof against a modified client. Invalid or contradictory equipment data cannot certify a complete build, and unknown fields remain unknown. The addon never executes received code or automatically equips items, consumes potions or posts group messages.
 
-See [architecture](docs/ARCHITECTURE.md), [performance](docs/PERFORMANCE.md), [validation](docs/SUPPORT_COVERAGE_TESTING.md) and [contributing](CONTRIBUTING.md) for technical details. Screenshots and bug reports should omit private chats, unrelated account information and SavedVariables containing group data.
+See the [3.2.0 video review](docs/VIDEO_REVIEW_3.2.0.md), [architecture](docs/ARCHITECTURE.md), [performance](docs/PERFORMANCE.md), [validation](docs/SUPPORT_COVERAGE_TESTING.md) and [contributing](CONTRIBUTING.md) for technical details. Screenshots and bug reports should omit private chats, unrelated account information and SavedVariables containing group data.

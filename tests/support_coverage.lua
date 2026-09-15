@@ -178,6 +178,38 @@ SC:OnCombatState(false);later[#later].fn()
 check(scans==1 and not SC.scanDirty,'One deferred scan runs after combat')
 SC.ScanLocalPlayer=originalScan
 
+-- Rapid native resize notifications share one deferred UI pass and use the
+-- current viewport, rather than replaying every intermediate window size.
+local resizeMethods={"ApplyAppearance","ClampToScreen","RefreshHUD","ResizeInspector"}
+local originalResize,resizeCalls={},{}
+local appliedViewport
+for _,method in ipairs(resizeMethods) do
+    originalResize[method]=SC[method]
+    local name=method
+    SC[name]=function()
+        resizeCalls[name]=(resizeCalls[name] or 0)+1
+        appliedViewport={GuiRoot:GetWidth(),GuiRoot:GetHeight()}
+    end
+end
+local queuedBefore=#later
+for index=1,200 do events.AlphaSquadUI_SupportCoverage_Screen.fn() end
+check(#later==queuedBefore+1 and SC.screenResizePending,
+    'A burst of resize events retains only one deferred Support UI update')
+check(next(resizeCalls)==nil,'A resize event does not rebuild the UI synchronously')
+GuiRoot:SetDimensions(1280,720)
+later[#later].fn()
+check(not SC.screenResizePending and appliedViewport[1]==1280 and appliedViewport[2]==720,
+    'The deferred pass uses the final native viewport and releases its pending flag')
+for _,method in ipairs(resizeMethods) do
+    check(resizeCalls[method]==1,'A resize burst rebuilds each UI surface once: '..method)
+end
+queuedBefore=#later
+events.AlphaSquadUI_SupportCoverage_Screen.fn()
+check(#later==queuedBefore+1,'A later viewport change can schedule a fresh UI pass')
+later[#later].fn()
+for _,method in ipairs(resizeMethods) do SC[method]=originalResize[method] end
+GuiRoot:SetDimensions(1920,1080)
+
 -- Exact source owners, no role-based suppression, offline/dead owners excluded.
 local function Player(name,source)
     return {key=name,displayName=name,dataQuality='ASUI',capabilitiesComplete=true,connected=true,dead=false,

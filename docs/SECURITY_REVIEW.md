@@ -43,6 +43,10 @@ Both the full addon and the companion wait for `EVENT_PLAYER_ACTIVATED` before s
 
 The companion coalesces equipment, skill and Champion changes into one delayed capture. Food, boon and quickslot updates refresh readiness without rescanning every equipment piece and skill; unchanged heartbeats reuse the captured build. It has no solo heartbeat, combat-log sampler or per-frame scan. Callback generations invalidate delayed captures on loading, opt-out and group reset.
 
+Support Coverage also coalesces native screen-resize notifications into one pending UI pass. A burst of window-size changes cannot queue a separate HUD and inspector rebuild for every intermediate size; the pass reads the current viewport when it runs.
+
+The subsequent video-driven review rechecked payload loops and allocations, sender resolution, transfer cancellation, native sharing controls and companion lifecycle gates. It found no additional injection or external data-transfer path in those reviewed components. This is a scoped review result, not a guarantee that the addon or its dependencies contain no vulnerabilities.
+
 ## Verification and remaining client checks
 
 Regression suites include `build_codec.lua`, `build_sharing.lua`, `scanner_details.lua`, `sharing_controls.lua`, `support_coverage.lua` and `companion_package.lua`. They cover malformed records, exact item-link preservation, native slot checks, stale data, offline identity, conflicting registration, partial transfers, late packets, consent, loading and scan coalescing. Package validation runs the same companion sources after extraction from its installable ZIP.

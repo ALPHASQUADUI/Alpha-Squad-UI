@@ -1,6 +1,6 @@
 # Downloads and installation
 
-[Release downloads](https://github.com/ALPHASQUADUI/Alpha-Squad-UI/releases) · [Build artifacts](https://github.com/ALPHASQUADUI/Alpha-Squad-UI/actions) · [Version 3.1.0 notes](3.1.0.md)
+[Release downloads](https://github.com/ALPHASQUADUI/Alpha-Squad-UI/releases) · [Build artifacts](https://github.com/ALPHASQUADUI/Alpha-Squad-UI/actions) · [Version 3.2.0 notes](3.2.0.md)
 
 ## Install
 
@@ -12,9 +12,13 @@
 
 The optional **AlphaSquadBuildShare.zip** installs a separate `AlphaSquadBuildShare` directory for players who want to share supported builds without the tracking interface. It requires LibGroupBroadcast, starts sharing on a new installation and preserves an existing OFF preference. Use `/asbuildshare off`, `/asbuildshare on` and `/asbuildshare status` to control it. Install the appropriate package; the full suite already includes build sharing.
 
-## Updating to 3.1.0
+## Updating to 3.2.0
 
-Existing supported settings and FRONT/BACK/BOTH selections remain intact; new installations start in AUTO. Overload remains integrated into the personal Ultimate HUD, with its optional behavior under **ULT Tracker → OVERLOAD SETTINGS**. The resized HUDs now use explicit Horizontal/Vertical layouts and preserve each orientation's dimensions. Review their positions once with Move HUD and choose Done to save. Preview states are temporary and never shared with the group.
+Existing supported settings and FRONT/BACK/BOTH selections remain intact; new installations start in AUTO. Overload remains integrated into the personal Ultimate HUD, with **Warning starts** and optional alerts under **ULT Tracker → OVERLOAD SETTINGS**. Automatic cancellation has been removed; you stop Overload using your Ultimate binding. Group tracking has one ON/OFF switch in the parent ULT settings and excludes your own character. A previously hidden group HUD migrates to Group tracking OFF, while filters and layout remain saved.
+
+MOVE HUD now waits for the native menu transition before opening. Select Horizontal or Vertical, adjust the twelve-player preview, and choose Done or Back to save and return to the addon window you came from. Closing Group configuration, Coverage or Builds also returns to the previous addon window. Safety stops caused by combat, loading or another game menu do not reopen settings. Preview states remain temporary and are never shared.
+
+About contains the website and direct Discord invitation. No separate Discord page or widget is required.
 
 Keyboard and controller navigation use the same settings and tooltips. Controller access is available through the native gamepad settings category; suite navigation releases input when closed or when native dialogs, combat or loading take over. The companion package obtains its version and API metadata from the full suite during packaging.
 

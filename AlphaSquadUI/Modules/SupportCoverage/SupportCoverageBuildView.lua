@@ -112,9 +112,12 @@ local function SourceAge(updatedAt)
     if age<60000 then return "Last reported "..math.floor(age/1000).."s ago" end
     return "Last reported "..math.floor(age/60000).."m ago"
 end
-local function Fresh(updatedAt)
-    if not Number(updatedAt) or not SC.NowMs then return false end
-    local age=SC.NowMs()-updatedAt;return age>=0 and age<=75000
+local function ValidLibraryReport(updatedAt)
+    if not Number(updatedAt) or updatedAt<=0 or not SC.NowMs then return false end
+    -- LGCS sends changes, not a heartbeat for unchanged slots or class lines.
+    -- The adapter validates current membership and cache identity; presentation
+    -- must not erase those facts merely because the last change was a while ago.
+    return updatedAt<=SC.NowMs()
 end
 function View.EquipmentMap(equipment)
     local map={}
@@ -408,7 +411,7 @@ function View.Bind(canvas,player,details,status)
     local externalUlts={}
     if not details and player and player.connected~=false then
         for _,ultimate in ipairs(player.externalUltimates or {}) do
-            if Fresh(ultimate.updatedAt) then externalUlts[ultimate.bar=="front" and "primary" or ultimate.bar=="back" and "backup" or "invalid"]=ultimate end
+            if ValidLibraryReport(ultimate.updatedAt) then externalUlts[ultimate.bar=="front" and "primary" or ultimate.bar=="back" and "backup" or "invalid"]=ultimate end
         end
     end
     local curse=details and details.curse or {}
@@ -458,8 +461,8 @@ function View.Bind(canvas,player,details,status)
     canvas.masteries.passives:SetText(masteries.known and tostring(#(masteries.passives or {})).." passives • hover" or "Passives unknown")
     local lineNames={}
     for _,line in ipairs(masteries.skillLines or {}) do if not line.mastery and line.active~=false then lineNames[#lineNames+1]=Text(line.name) end end
-    local externalLines=not details and player and player.externalSkillLines
-    if externalLines and Fresh(externalLines.updatedAt) then for _,name in ipairs(externalLines.names or {}) do lineNames[#lineNames+1]=Text(name) end end
+    local externalLines=not details and player and player.connected~=false and player.externalSkillLines
+    if externalLines and ValidLibraryReport(externalLines.updatedAt) then for _,name in ipairs(externalLines.names or {}) do lineNames[#lineNames+1]=Text(name) end end
     canvas.masteries.lines:SetText(#lineNames>0 and (#lineNames.." class lines • hover") or "Class lines unknown")
     canvas.masteries.lineTooltip="Active class skill lines\n\n"..(#lineNames>0 and table.concat(lineNames,"\n") or "No verified class skill lines available.")..(externalLines and "\n\nShared class lines do not establish passive or mastery selections." or "")
     local food=details and details.food or player and player.food or {}

@@ -96,6 +96,40 @@ function Theme.BindColor(control,colorOrRole,alpha)
     bindings[control]={color=colorOrRole,alpha=alpha}
     return Color(control,colorOrRole,alpha)
 end
+-- Native combo boxes share a dropdown singleton. Give our picker its own native
+-- dropdown so an opaque fill never changes another addon's menu appearance.
+function Theme.ConfigureDropdown(combo)
+    if not combo or combo.alphaSquadDropdown then return combo and combo.alphaSquadDropdown end
+    if type(combo.SetDropdownObject)~="function" or not WINDOW_MANAGER
+        or type(WINDOW_MANAGER.CreateControlFromVirtual)~="function" or CT_TEXTURE==nil then return nil end
+    local control=WINDOW_MANAGER:CreateControlFromVirtual(nil,GuiRoot,"ZO_ComboBoxDropdown_Keyboard_Template")
+    if not control or not control.object then return nil end
+    local background=WINDOW_MANAGER:CreateControl(nil,control,CT_TEXTURE)
+    background:SetAnchorFill(control)
+    background:SetMouseEnabled(false)
+    if DL_BACKGROUND~=nil then background:SetDrawLayer(DL_BACKGROUND) end
+    background:SetDrawLevel(0)
+    Theme.BindColor(background,"bg",1)
+    local show=control.object.Show
+    if type(show)=="function" then
+        function control.object:Show(owner,items,minWidth,maxHeight,spacing)
+            local parent=owner.GetContainer and owner:GetContainer()
+            if parent and parent.GetScale and parent.GetWidth then
+                local scale=parent:GetScale()
+                if type(scale)=="number" and scale==scale and scale>0 and scale<math.huge then
+                    local rootScale=GuiRoot and GuiRoot.GetScale and GuiRoot:GetScale() or 1
+                    if type(rootScale)~="number" or rootScale<=0 or rootScale~=rootScale then rootScale=1 end
+                    control:SetScale(scale/rootScale)
+                    minWidth=parent:GetWidth()/scale
+                end
+            end
+            return show(self,owner,items,minWidth,maxHeight,spacing)
+        end
+    end
+    combo:SetDropdownObject(control.object)
+    combo.alphaSquadDropdown=control
+    return control
+end
 local function Texture(parent,level)
     local manager=WINDOW_MANAGER
     if not manager or type(manager.CreateControl)~="function" or CT_TEXTURE==nil then return nil end

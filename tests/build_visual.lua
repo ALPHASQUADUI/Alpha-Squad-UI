@@ -109,16 +109,26 @@ player.externalUltimates={{bar='front',abilityId=600,name='Shared ultimate',upda
 player.externalSets={fresh=true,sessionValid=true,updatedAt=99000,setList={{name='Shared set',frontKnown=true,backKnown=false,mainCount=5,backCount=0}}}
 V.Bind(canvas,player,nil,'Detailed build unavailable')
 check(canvas.equipment.slots.HEAD.data.value==nil and canvas.equipment.slots.HEAD.empty.text=='?','Switching to partial build clears prior equipment')
-check(canvas.skills.bars.primary.icons[6].icon.texture=='shared-ultimate','Fresh partial ultimate is shown')
+check(canvas.skills.bars.primary.icons[6].icon.texture=='shared-ultimate','Valid partial ultimate is shown')
 check(canvas.skills.bars.primary.icons[1].data.value==nil,'Partial ultimate does not imply knowledge of normal skills')
 local shared=V.SetRows(nil,player.externalSets)[1]
 check(shared.name=='≥5× Shared set' and shared.front==5 and shared.back==nil,'Partial sets show the known bar as a lower bound and leave the other bar unknown')
 check(canvas.champion.rows.COMBAT.icons[1].data.value==nil,'Switching player removes previous CP data')
 check(canvas.masteries.icons[1].hidden,'Switching player hides previous mastery icon')
 check(canvas.consumables.tiles[4].value.text=='Unknown','Missing curse state does not become uninfected')
+player.externalUltimates[1].updatedAt=1000
+player.externalSkillLines={updatedAt=1000,names={'Storm Calling','Dark Magic'}}
+V.Bind(canvas,player,nil)
+check(canvas.skills.bars.primary.icons[6].icon.texture=='shared-ultimate','Unchanged native library Ultimate slots remain visible after75seconds')
+check(canvas.masteries.lines.text=='2 class lines • hover','Unchanged class lines use the current library cache without an invented expiry')
+player.externalUltimates[1].updatedAt=100001;player.externalSkillLines.updatedAt=0/0
+V.Bind(canvas,player,nil)
+check(canvas.skills.bars.primary.icons[6].data.value==nil and canvas.masteries.lines.text=='Class lines unknown','Impossible report timestamps remain unavailable')
+player.externalUltimates[1].updatedAt=1000;player.externalSkillLines.updatedAt=1000
 player.connected=false
 V.Bind(canvas,player,nil)
 check(canvas.skills.bars.primary.icons[6].data.value==nil,'Offline player loses partial ultimate display')
+check(canvas.masteries.lines.text=='Class lines unknown','Offline player also loses partial library class lines')
 check(canvas.sets.rows[1].hidden,'Offline player loses partial set display')
 V.Bind(canvas,nil,nil)
 check(canvas.equipment.silhouette.hidden,'No selected player never falls back to own silhouette')

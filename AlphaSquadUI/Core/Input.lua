@@ -395,7 +395,10 @@ end
 function Input.MoveHUD()
     if InCombat() or Input.loading or DialogVisible() then return false end
     if not ASUI.Layout then return false end
-    if ASUI.Layout.active then ASUI.Layout.Finish(); return true end
+    if ASUI.Layout.active or ASUI.Layout.pending then
+        if ASUI.Layout.Done then ASUI.Layout.Done() else ASUI.Layout.Finish() end
+        return true
+    end
     return ASUI.Layout.Start()
 end
 function Input.RegisterGamepadEntry()
@@ -450,7 +453,7 @@ function Input.Initialize()
             if combat then Input.suspendedWindow = nil; Input.Deactivate(); if ASUI.Layout then ASUI.Layout.Finish() end
             else Input.Refresh() end
         end)
-        Event(EVENT_PLAYER_DEACTIVATED, function() Input.loading = true; Input.Deactivate(); if ASUI.Layout then ASUI.Layout.Finish() end end)
+        Event(EVENT_PLAYER_DEACTIVATED, function() Input.loading = true; Input.Deactivate(); if ASUI.Layout then ASUI.Layout.Finish(true) end end)
         Event(EVENT_PLAYER_ACTIVATED, function() Input.loading = false; Input.RegisterGamepadEntry(); Input.Refresh() end)
         Event(EVENT_GAMEPAD_PREFERRED_MODE_CHANGED, function() Input.Deactivate(); Input.Refresh() end)
     end
@@ -466,8 +469,19 @@ function Input.Initialize()
         SCENE_MANAGER:RegisterCallback("SceneStateChanged", function(scene, _, state)
             if Input.activeWindow and state == SCENE_SHOWING and Input.activeScene ~= scene then
                 local control, data = Input.activeWindow, Input.windows[Input.activeWindow]
+                local name = scene and scene.GetName and scene:GetName()
+                local previousName = Input.activeScene and Input.activeScene.GetName and Input.activeScene:GetName()
+                local fromGameplay = previousName == "hud" or previousName == "hudui"
+                if data and (data.layout or fromGameplay) and (name == "hud" or name == "hudui") then
+                    -- Native cursor ownership can itself transition HUD/HUDUI,
+                    -- including when Done returns to the addon settings. This
+                    -- retains the same context; external menus still dismiss it.
+                    Input.activeScene = scene
+                    return
+                end
                 Input.Deactivate()
-                if data and data.close then data.close() elseif control then control:SetHidden(true) end
+                local dismiss = data and (data.dismiss or data.close)
+                if dismiss then dismiss() elseif control then control:SetHidden(true) end
             end
         end)
     end
