@@ -121,6 +121,11 @@ for line in manifest:gmatch('[^\r\n]+') do
 end
 local SC=AlphaSquadUI.Modules.SupportCoverage
 SC:Initialize()
+check(SC.loading and SC.localSnapshot==nil and not SC:NeedsBuildData(),
+    'Initial load suspends native scans until player activation')
+SC:Refresh('still loading')
+check(SC.localSnapshot==nil,'An initial refresh cannot capture uncommitted loading-screen equipment')
+events.AlphaSquadUI_SupportCoverage_Activated.fn()
 -- Execute startup's deferred bootstrap once before measuring individual events.
 -- Sharing now defaults ON and intentionally schedules one initial build scan.
 local startupIndex=1

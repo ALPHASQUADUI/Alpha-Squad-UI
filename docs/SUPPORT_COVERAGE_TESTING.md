@@ -1,6 +1,6 @@
 # ESO acceptance checklist
 
-Version **3.0.1** / **30001**. This checklist is not a record of completed in-game tests.
+Version **3.1.0** / **30100**. This checklist is not a record of completed in-game tests.
 
 ## Native Add-Ons menu
 
@@ -46,7 +46,7 @@ Check a fresh installation separately from migrated preferences. Fresh supported
 | Cross-sync OFF | Two character profiles remain separate; switching mode keeps the active layout without requiring reload |
 | Unified Ultimate migration | Existing FRONT/BACK/BOTH preferences survive; new settings default to AUTO; supported Overload options and applicable legacy placement migrate into the one personal HUD |
 | AUTO and Overload | AUTO follows the active bar; optional applicable Overload takes priority outside BOTH mode; toggling specialized behavior OFF restores normal Ultimate behavior without a second panel |
-| BOTH mode | Both cards remain visible with an Overload morph; narrow side-resized layouts stack cards without stretching icons |
+| BOTH mode | Both cards remain visible with an Overload morph; the saved horizontal/vertical layout remains stable while resizing |
 | Independent shell | Main settings, Libraries, Website & About and Discord remain usable with every gameplay module disabled |
 | Theme selection | Ember Classic, Tactical Compact and default Obsidian Studio repaint existing menu/HUD surfaces immediately, preserve status/quality/discipline colors, and survive reload/profile changes |
 | Resize corners | Drag every corner proportionally with icons/text intact; release, Escape, combat and loading remove temporary resize callbacks |
@@ -55,6 +55,13 @@ Check a fresh installation separately from migrated preferences. Fresh supported
 | Branding | Ą and Ş render fully in the static orange gradient; UI stays white; @SeRuM1 uses the blue gradient |
 | External links | Website, ESOUI, Minion and Discord confirmations appear above addon windows and can be accepted or cancelled normally; Discord opens only the configured widget externally, without sending build data |
 | Viewport | At 720p, 1080p and ultrawide UI scales, Libraries stays on one page, the main settings shell has no close cross, and long text remains available on hover |
+| Continuous resizing | Repeatedly drag all corners and edges through their range; no sudden half-size change, cumulative shrinking or opposite-edge jump; unchanged pointer positions do not redraw contents |
+| Display transitions | Change fullscreen/windowed/borderless, custom keyboard/gamepad UI scale and viewport dimensions; fitting preserves saved requested sizes/positions and the active drag ends before coordinates change |
+| Preview states | Mixed, ready, missing/charging, Overload and live choices repaint immediately; Group examples contain 12 fictional accounts; changing modes never changes live roster, transport or build snapshots |
+| Gamepad entry | Open the addon through gamepad Settings; the native options scene closes before the addon window appears |
+| Navigation | Arrows, Tab/Shift+Tab, directional controller input, Select and Back reach all visible settings, filters, roster entries and hover-only detail icons; disabled and hidden controls are skipped |
+| Controller placement | Secondary action cycles Move/Scale/Width/Height/Controls, shoulders select panels, and held directional input adjusts smoothly; orientation and preview controls remain reachable |
+| Input ownership | Native URL/dialog confirmation receives input without interference; close, loading, combat and menu changes release the addon layer and restore normal gameplay controls |
 
 ## Builds and Coverage
 
@@ -66,7 +73,7 @@ Check a fresh installation separately from migrated preferences. Fresh supported
 | Contributor hover | Every known duplicate account and its exact source names/bar availability remain readable; a count opens the named build |
 | Effect hover | Full names, conditions, source alternatives and duplicate rules remain available without raw-ID clutter |
 | Set icons | Actual equipped pieces or clearly labelled native collection references are used; references never imply the sender's trait/enchantment |
-| Equipment layout | Larger native silhouette and armor locations are clear; jewelry/front/back weapon groups retain their positions |
+| Equipment layout | Native silhouette stays centered and proportionate; paired armor columns have equal distances and row spacing; jewelry/front/back weapon groups retain their positions |
 | Set headline | Three body pieces + front sword/shield + back staff from one set show 5×, with FRONT 5× and BACK 5×, despite six physical items |
 | Native excess warning | A genuine sixth piece remains 6× with an appropriate one-extra-piece warning; monster, arena, mythic and shorter sets use their actual native bonus thresholds |
 | Unknown threshold | Missing native bonus requirements or incomplete equipment never manufacture a five-piece rule, exact total or excess warning |

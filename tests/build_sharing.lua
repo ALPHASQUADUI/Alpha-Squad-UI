@@ -262,6 +262,36 @@ check(alice.SC:GetPlayerBuildDetails("@Bob")==nil,"An updated build fingerprint 
 peer.buildDetailFingerprint=peer.fullBuildFingerprint;members={"@Alice","@Carol"}
 check(alice.SC:GetPlayerBuildDetails("@Bob")==nil,"A departed player's cache cannot be opened")
 members={"@Alice","@Bob","@Carol"};peer.scannedAt=scannedAt
+peer.fullBuildAt=now-119999
+PrimeSummary(alice,bob)
+check(alice.SC.peerData["@Bob"].fullBuild==full,"The capture stays available until its own expiry boundary")
+Advance(2);alice.SC:PrunePeerSharingData()
+check(alice.SC.peerData["@Bob"].fullBuild==nil and alice.SC.peerData["@Bob"].skills==nil
+    and alice.SC.peerData["@Bob"].capabilities.major_courage~=nil,
+    "Periodic pruning expires old detailed coverage between heartbeats while retaining fresh summary facts")
+peer=alice.SC.peerData["@Bob"]
+peer.fullBuild=full;peer.fullBuildFingerprint=peer.buildDetailFingerprint
+peer.fullBuildAt=now-120001
+PrimeSummary(alice,bob)
+check(alice.SC.peerData["@Bob"].fullBuild==nil and alice.SC.peerData["@Bob"].skills==nil,
+    "An unchanged heartbeat cannot prolong an expired detailed capture")
+check(alice.SC.peerData["@Bob"].capabilities.major_courage~=nil,
+    "Expired details fall back to fresh compatible summary evidence")
+online["@Bob"]=false
+PrimeSummary(alice,bob)
+check(alice.SC.peerData["@Bob"].connected==false,"A native offline result never becomes connected through a fallback")
+online["@Bob"]=true
+local oldClass,oldFood=bob.SC.localSnapshot.classId,bob.SC.localSnapshot.food.abilityId
+bob.SC.localSnapshot.classId=100;bob.SC.localSnapshot.food.abilityId=1048576
+local futureIdentity=bob.SC:BuildSharePayload()
+check(futureIdentity.classId==0 and futureIdentity.foodId==0,
+    "Future IDs outside the summary wire range remain unknown rather than becoming another class or food")
+bob.SC.localSnapshot.classId=oldClass;bob.SC.localSnapshot.food.abilityId=oldFood
+PrimeSummary(alice,bob)
+alice.SC.peerData["@Bob"].scannedAt=now-120001
+alice.SC:PrunePeerSharingData()
+check(alice.SC.peerData["@Bob"]==nil,"Abandoned peer snapshots are evicted even if membership remains unchanged")
+PrimeSummary(alice,bob)
 
 -- Malformed summaries must not partially mutate an existing peer record.
 local valid=bob.SC:BuildSharePayload()
@@ -423,4 +453,31 @@ ResetWorld();broken=NewClient("@Alice",{missingLibrary=true})
 check(not broken.SC.share.available and broken.registrations==0,"A missing optional library leaves the local addon usable")
 broken.env.LibGroupBroadcast=broken.library;broken.SC:InitializeSharing()
 check(broken.SC.share.available and broken.registrations==1,"A library that becomes available can initialize cleanly")
+
+-- A late packet must not restart a transfer after its inactivity boundary.
+ResetWorld();alice,bob=NewClient("@Alice"),NewClient("@Bob")
+assert(alice.SC:RequestPlayerBuild("@Bob"));Deliver(assert(Take("@Alice",507,0)),bob)
+Deliver(assert(Take("@Bob",510)),alice);Take("@Bob",507,2)
+Deliver(assert(Take("@Bob",507,1)),alice)
+local lateAck=assert(Take("@Alice",507,3))
+frames={};Advance(20001);Deliver(lateAck,bob)
+check(bob.SC.share.outgoingBuild==nil and #frames==0,"A late acknowledgment cannot revive an expired outgoing capture")
+ResetWorld();alice,bob=NewClient("@Alice"),NewClient("@Bob")
+PrimeSummary(alice,bob);assert(alice.SC:RequestPlayerBuild("@Bob"));frames={}
+local revision=alice.SC.share.incomingBuild.revision
+local captured=assert(bob.SC.BuildCodec.Encode(bob.SC.localSnapshot))
+local chunks=math.ceil(#captured/bob.SC.Details.CHUNK_BYTES)
+Advance(10000)
+alice.SC:OnDetailData("group2",WireChunk(alice,bob,captured,revision,1,chunks))
+Advance(20001);frames={}
+alice.SC:OnDetailData("group2",WireChunk(alice,bob,captured,revision,2,chunks))
+check(alice.SC.share.incomingBuild==nil and not alice.SC.peerData["@Bob"].fullBuild and #frames==0,
+    "A chunk arriving after inactivity cannot extend an abandoned partial capture")
+ResetWorld();alice=NewClient("@Alice")
+alice.protocols[507].IsEnabled=function()error("Library setting unavailable")end
+check(alice.SC:RequestPlayerBuild("@Bob")==false and #frames==0,
+    "An incompatible native detail setting fails closed without a Lua error")
+alice.protocols[510].IsEnabled=function()error("Library setting unavailable")end
+check(alice.SC:ShareLocalSnapshot("unavailable setting")==false and #frames==0,
+    "An incompatible native summary setting fails closed without a Lua error")
 print("Build sharing: "..assertions.." assertions passed")

@@ -6,6 +6,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import xml.etree.ElementTree as ET
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -30,7 +31,12 @@ def main():
     version = re.search(r'^## Version: (.+)$', manifest, re.M).group(1)
     assert f'ASUI.version = "{version}"' in (root / 'Core/Core.lua').read_text()
     assert re.search(r'^## AddOnVersion: [0-9]+$', manifest, re.M)
-    assert {p.relative_to(root).as_posix() for p in root.rglob('*.lua')} == set(paths)
+    assert {p.relative_to(root).as_posix() for p in root.rglob('*.lua')} == {p for p in paths if p.endswith('.lua')}
+    assert {p.relative_to(root).as_posix() for p in root.rglob('*.xml')} == {p for p in paths if p.endswith('.xml')}
+    for path in paths:
+        assert Path(path).suffix in {'.lua', '.xml'}, f'Unsupported manifest entry: {path}'
+        if path.endswith('.xml'):
+            ET.parse(root / path)
     run('git', 'diff', '--check')
     source = list(root.rglob('*.lua')) + list((ROOT / 'companion').glob('*.lua'))
     with tempfile.TemporaryDirectory(prefix='asui-validate-') as temporary:

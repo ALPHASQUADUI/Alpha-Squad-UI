@@ -9,12 +9,12 @@ local function Control(name,parent)
     local c={name=name,parent=parent,children={},handlers={},width=0,height=0,hidden=false,scale=1,x=0,y=0}
     if parent then parent.children[#parent.children+1]=c end
     function c:SetDimensions(w,h)self.width=w;self.height=h end
-    function c:GetWidth()return self.width end
-    function c:GetHeight()return self.height end
+    function c:GetWidth()return self.width*self:GetScale() end
+    function c:GetHeight()return self.height*self:GetScale() end
     function c:SetWidth(w)self.width=w end
     function c:SetHeight(h)self.height=h end
     function c:SetScale(v)self.scale=v end
-    function c:GetScale()return self.scale end
+    function c:GetScale()return self.scale*(self.parent and self.parent:GetScale() or 1) end
     function c:SetAnchor(_,relative,_,x,y)self.x=x or 0;self.y=y or 0;self.relative=relative end
     function c:SetHidden(v)self.hidden=v end
     function c:IsHidden()return self.hidden end
@@ -127,4 +127,50 @@ check(created==pool and requests==0 and scans==0,'Theme refresh reuses the build
 inspector:SetHidden(true);Theme.SetPreset('obsidian');inspector:SetHidden(false);SC:RefreshInspector()
 check(ColorKey(inspector.playerList.rows[1].bg.color)==ColorKey(Theme.colors.selected),'Opening a previously hidden build restores selection in the current theme')
 check(requests==0 and scans==0,'Reopening presentation through refresh uses the cached snapshot only')
+-- Repeated refreshes at non-unit native scale never feed rendered child height back into layout.
+local setList={}
+for i=1,14 do setList[i]={name='Fragmented set '..i,mainCount=1,backCount=1}end
+details.equipment.setList=setList;details.curse={known=true,kind='WEREWOLF'}
+details.skills.werewolfKnown=true;details.skills.werewolf={{slot=3,abilityId=999}}
+for _,size in ipairs({{1280,720},{800,600},{480,320},{2560,1080},{3840,2160}})do
+    GuiRoot:SetDimensions(size[1],size[2]);SC:RefreshInspector()
+    local expectedHeight=inspector.height
+    for i=1,3 do
+        SC:RefreshInspector()
+        check(inspector.height==expectedHeight,'Repeated scaled sheet fitting preserves logical dimensions')
+        check(inspector.buildSheet.y+inspector.buildSheet.height<=inspector.height-48,'All build panels stay above the footer on every refresh')
+        check(inspector:GetWidth()<=size[1]-24+.01 and inspector:GetHeight()<=size[2]-24+.01,'Native rendered dimensions fit the display in every window mode')
+    end
+end
+-- Placement samples stay outside the live coverage/roster and preserve real visibility choices.
+inspector:SetHidden(true);GuiRoot:SetDimensions(1920,1080)
+local liveCoverage,liveRoster=SC.coverage,SC.roster
+local mode='mixed'
+AlphaSquadUI.Preview={GetMode=function()return mode end}
+local actualMoving=Layout.IsMoving;Layout.IsMoving=function(module)return module==SC end
+SC.Catalog.effects={}
+local demoKeys={}
+for i=1,12 do local key='demo'..i;demoKeys[i]=key;SC.Catalog.effects[key]={label='Native effect '..i}end
+SC.Catalog.GetAllEffectKeys=function()return demoKeys end
+SC.sv.problemsOnly=true
+SC:RefreshHUD()
+check(#SC.window.list.rows>=12 and not SC.window.list.rows[12].hidden,'Placement fills the support preview even with issues-only enabled')
+check(SC.window.list.rows[1].value.text=='COVERED' and SC.window.list.rows[2].value.text=='MISSING' and SC.window.list.rows[3].value.text=='UNKNOWN','Preview includes distinct known ready, missing and unknown states')
+check(SC.window.list.rows[4].value.text=='DUPLICATE 3' and SC.window.list.rows[5].value.text=='TRACKING OFF','Preview shows duplicate and optional tracking states')
+check(SC.window.summary.text:find('12 players',1,true) and SC.window.note.text:find('Preview only',1,true),'Sample population is clearly identified')
+SC.sv.problemsOnly=false
+for _,nextMode in ipairs({'ready','missing','overload','live'})do mode=nextMode;SC:SetLayoutPreview(mode)end
+check(SC.coverage==liveCoverage and SC.roster==liveRoster and #SC.roster==12,'Cycling previews never replaces live snapshots or membership')
+check(SC.window.list.rows[1].data==liveCoverage.entries[1],'Live preview shows the original coverage row')
+mode='mixed';Layout.IsMoving=function()return false end;SC:RefreshHUD()
+check(SC.window.list.rows[1].data==liveCoverage.entries[1],'Leaving placement restores real data without fake rows escaping')
+Layout.IsMoving=actualMoving
+check(requests==0 and scans==0,'All layout, screen and preview changes use presentation data without scans or requests')
+local nativeVisual=SC.Catalog.GetEffectVisual
+SC.Catalog.GetEffectTooltip=function()return 'Effect description' end
+SC.Catalog.GetEffectVisual=function()return {icon='native-category',isFallback=true,iconKind='category'}end
+check(SC.UI.EffectTooltip('demo1'):find('category symbol',1,true),'Fallback artwork is explicitly distinguished from an exact effect icon')
+SC.Catalog.GetEffectVisual=function()return {icon='native-provider',isFallback=false,iconKind='source',sourceName='Exact provider'}end
+check(SC.UI.EffectTooltip('demo1'):find('Exact provider',1,true),'A source ability icon is named as a provider, not mislabeled as the effect image')
+SC.Catalog.GetEffectVisual=nativeVisual
 print(string.format('Support visual integration: %d assertions passed',total))

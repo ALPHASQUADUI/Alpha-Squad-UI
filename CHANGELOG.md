@@ -2,6 +2,10 @@
 
 All notable changes to Ąlpha Şquad UI are documented here.
 
+## 3.1.0 — 2026-09-15
+
+Corrected inherited-scale calculations across HUD placement, Builds, settings and tooltips. Added compact personal Ultimate defaults, stable horizontal/vertical layouts, isolated twelve-player editor previews, and scoped keyboard/gamepad navigation with a native gamepad Settings entry. Coverage artwork has native fallbacks, equipment alignment preserves the mannequin's proportions, and catalog and incoming-build validation reject additional false source matches. See [release notes](releases/3.1.0.md) and the [engineering audit](docs/AUDIT_3.1.0.md).
+
 ## 3.0.1 — 2026-09-15
 
 Fixed the truncated name in ESO's Add-Ons menu by keeping title and author color markup within a compact metadata budget. The expanded entry now lists all seven group-feature libraries with green installed states and red missing, disabled, outdated or dependency warnings. Native character filters and other addons remain unchanged. See [release notes](releases/3.0.1.md).

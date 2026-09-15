@@ -7,9 +7,12 @@ local function Control(parent)
     function c:GetDrawTier()return self.tier end
     function c:GetDrawLayer()return self.layer end
     function c:GetDrawLevel()return self.level end
-    function c:GetScale()return self.scale end
-    function c:GetWidth()return self.width end
-    function c:GetHeight()return self.height end
+    function c:GetScale()return self.scale*(self.parent and self.parent:GetScale() or 1) end
+    function c:GetControlScale()return self.scale end
+    function c:GetParent()return self.parent end
+    function c:GetInheritsScale()return true end
+    function c:GetWidth()return self.width*self:GetScale() end
+    function c:GetHeight()return self.height*self:GetScale() end
     function c:GetRight()return self.right or 150 end
     function c:GetOwningWindow()return self.parent end
     function c:GetOwner()return self.owner end
@@ -17,6 +20,7 @@ local function Control(parent)
     function c:SetDrawLayer(value)self.layer=value end
     function c:SetDrawLevel(value)self.level=value end
     function c:SetScale(value)self.scale=value end
+    function c:SetControlScale(value)self.scale=value end
     function c:SetHidden(value)self.hidden=value;if value and self.hooks.OnHide then self.hooks.OnHide() end end
     function c:AddLine(value)self.lines[#self.lines+1]=value end
     return c
@@ -112,4 +116,26 @@ check(InformationTooltip.lines[1]:find('correct fallback',1,true),'Native failur
 AbilityTooltip.SetAbilityId=original
 T.Hide();T.Hide()
 check(T.active==nil and infoWindow.scale==1,'Repeated hide is idempotent')
+infoWindow.scale=1.5;InformationTooltip.scale=1.2;InformationTooltip.height=600
+T.ShowText(owner,'Scaled native tooltip')
+check(math.abs(InformationTooltip:GetHeight()-(GuiRoot.height-32))<0.001,
+    'A scaled tooltip fits exactly once using the existing inherited scale')
+check(infoWindow.scale==1.5,'Fitting a tooltip never scales its native parent window')
+T.Hide()
+check(InformationTooltip.scale==1.2 and infoWindow.scale==1.5,
+    'Native local scale and inherited parent scale are restored independently')
+InformationTooltip.height=200
+T.ShowText(owner,'Short native tooltip')
+check(InformationTooltip.scale==1.2,'A tooltip already fitting the viewport is not shrunk')
+T.Hide();infoWindow.scale=1;InformationTooltip.scale=1
+InformationTooltip.height=1400
+T.ShowText(owner,'Fitted tooltip then reused')
+InitializeTooltip(InformationTooltip,otherOwner,TOPLEFT,0,0,TOPRIGHT)
+InformationTooltip:SetControlScale(1.2);InformationTooltip:SetDrawLevel(15000)
+T.Hide()
+check(InformationTooltip:GetOwner()==otherOwner and not InformationTooltip.hidden,
+    'A reused fitted tooltip remains visible for its new owner')
+check(InformationTooltip.scale==1.2 and InformationTooltip.level==15000,
+    'Cleanup does not overwrite scaling or layering explicitly changed by a new tooltip owner')
+InformationTooltip.scale=1;InformationTooltip.level=12;InformationTooltip.height=400
 print('Tooltip layering and identities: '..total..' assertions passed')

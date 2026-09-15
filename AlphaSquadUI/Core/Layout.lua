@@ -2,6 +2,7 @@
 AlphaSquadUI=AlphaSquadUI or {}
 local ASUI=AlphaSquadUI
 local Layout={active=false,participants={},attachments={}}
+local TOOLBAR_WIDTH,TOOLBAR_HEIGHT=860,154
 ASUI.Layout=Layout
 local function Finite(value,fallback)
     value=tonumber(value)
@@ -44,8 +45,11 @@ end
 function Layout.GetScale(module,actualWidth,actualHeight)
     local width,height=Layout.GetDimensions(module,module.layoutDefaultWidth,module.layoutDefaultHeight)
     local win=module.window
-    actualWidth=Finite(actualWidth,Finite(win and win.GetWidth and win:GetWidth()))
-    actualHeight=Finite(actualHeight,Finite(win and win.GetHeight and win:GetHeight()))
+    -- Native GetWidth/GetHeight are scaled screen dimensions; SetDimensions
+    -- and the supplied renderer dimensions are logical. Never fit twice.
+    local currentScale=math.max(0.001,Finite(win and win.GetScale and win:GetScale(),1))
+    actualWidth=Finite(actualWidth,win and win.GetWidth and Finite(win:GetWidth(),width)/currentScale)
+    actualHeight=Finite(actualHeight,win and win.GetHeight and Finite(win:GetHeight(),height)/currentScale)
     if actualWidth and actualWidth>0 then width=actualWidth end
     if actualHeight and actualHeight>0 then height=actualHeight end
     local rootW,rootH=RootSize()
@@ -53,16 +57,33 @@ function Layout.GetScale(module,actualWidth,actualHeight)
     -- Fitting never overwrites the requested scale. A larger screen restores it.
     return math.max(0.001,math.min(requested,math.max(1,rootW-20)/width,math.max(1,rootH-20)/height))
 end
-local function RefreshModule(module)
+function Layout.GetLogicalDimensions(module)
+    local width,height=Layout.GetDimensions(module,module.layoutDefaultWidth,module.layoutDefaultHeight)
+    local win=module.window
+    if win then
+        local scale=math.max(0.001,Finite(win.GetScale and win:GetScale(),1))
+        width=math.max(1,Finite(win.GetWidth and win:GetWidth(),width*scale)/scale)
+        height=math.max(1,Finite(win.GetHeight and win:GetHeight(),height*scale)/scale)
+    end
+    return width,height
+end
+local function RefreshModule(module,geometryOnly)
     if not module or not module.sv then return end
+    if not Enabled(module) then
+        if module.UpdateLockState then module:UpdateLockState() end
+        if module.ApplyVisibility then module:ApplyVisibility() end
+        return
+    end
     if module.ApplyLayout then module:ApplyLayout()
     elseif module.ApplyVisualSettings then module:ApplyVisualSettings()
     elseif module.RefreshHUD then module:RefreshHUD() end
     -- Geometry helpers differ between modules. Editor transitions must always
     -- update native visibility, appearance and lock state immediately.
-    if module.ApplyAppearance then module:ApplyAppearance() end
-    if module.UpdateLockState then module:UpdateLockState() end
-    if module.ApplyVisibility then module:ApplyVisibility() end
+    if not geometryOnly then
+        if module.ApplyAppearance then module:ApplyAppearance() end
+        if module.UpdateLockState then module:UpdateLockState() end
+        if module.ApplyVisibility then module:ApplyVisibility() end
+    end
     if Layout.IsMoving(module) then
         -- Each module owns its safety policy: Support may keep the grouped
         -- sharing heartbeat while its presentation is being edited.
@@ -72,23 +93,82 @@ local function RefreshModule(module)
 end
 local function Place(module,x,y)
     local win=module.window;if not win or not module.sv then return end
-    local rootW,rootH=RootSize();local scale=Finite(win:GetScale(),Layout.GetScale(module))
-    x=Clamp(Finite(x,0),0,math.max(0,rootW-Finite(win:GetWidth(),1)*scale))
-    y=Clamp(Finite(y,0),0,math.max(0,rootH-Finite(win:GetHeight(),1)*scale))
-    module.sv.x,module.sv.y=math.floor(x+0.5),math.floor(y+0.5)
+    local rootW,rootH=RootSize()
+    x=Clamp(Finite(x,0),0,math.max(0,rootW-Finite(win:GetWidth(),1)))
+    y=Clamp(Finite(y,0),0,math.max(0,rootH-Finite(win:GetHeight(),1)))
+    -- Keep subpixel coordinates throughout a drag; SavePosition rounds only
+    -- after release. Rounding every pointer sample produces visible stepping.
+    module.sv.x,module.sv.y=x,y
     module.sv.positionSaved=true
     win:ClearAnchors();win:SetAnchor(TOPLEFT,GuiRoot,TOPLEFT,module.sv.x,module.sv.y)
 end
 function Layout.Select(module)
     if Layout.IsMoving(module) then Layout.selected=module;Layout.RefreshToolbar() end
 end
+function Layout.CycleSelected(direction)
+    local choices={};local current=0
+    for _,module in ipairs(Modules()) do
+        if Layout.IsMoving(module) then
+            choices[#choices+1]=module
+            if module==Layout.selected then current=#choices end
+        end
+    end
+    if #choices==0 then return false end
+    Layout.EndResize()
+    local step=Finite(direction,1)<0 and -1 or 1
+    Layout.Select(choices[(current-1+step)%#choices+1]);return true
+end
+function Layout.MoveSelected(dx,dy)
+    local module=Layout.selected;if not Layout.IsMoving(module) then return false end
+    Layout.EndResize()
+    Place(module,module.window:GetLeft()+Finite(dx,0),module.window:GetTop()+Finite(dy,0))
+    Layout.RefreshToolbar();return true
+end
+function Layout.ResizeSelected(dx,dy)
+    local module=Layout.selected;if not Layout.IsMoving(module) then return false end
+    Layout.EndResize()
+    local width,height=Layout.GetLogicalDimensions(module)
+    local scale=math.max(0.001,Finite(module.window:GetScale(),1))
+    local left,top=module.window:GetLeft(),module.window:GetTop()
+    local rootW,rootH=RootSize()
+    local bounds=module.layoutBounds or {}
+    local minW,minH=Finite(bounds.minWidth,100),Finite(bounds.minHeight,40)
+    local nextW=Clamp(width+Finite(dx,0)/scale,minW,math.max(minW,math.min(Finite(bounds.maxWidth,1920),(rootW-left)/scale)))
+    local nextH=Clamp(height+Finite(dy,0)/scale,minH,math.max(minH,math.min(Finite(bounds.maxHeight,1080),(rootH-top)/scale)))
+    if nextW==width and nextH==height then return false end
+    module.sv.hudWidth,module.sv.hudHeight=nextW,nextH
+    RefreshModule(module,true);Place(module,left,top);Layout.RefreshToolbar();return true
+end
+function Layout.CycleOrientation(direction)
+    local module=Layout.selected
+    if not Layout.IsMoving(module) or not module.SetLayoutOrientation then return false end
+    Layout.EndResize()
+    local choices=module.GetLayoutOrientations and module:GetLayoutOrientations() or {"horizontal","vertical"}
+    local current=module.GetLayoutOrientation and module:GetLayoutOrientation() or "horizontal"
+    local index=1;for i,value in ipairs(choices) do if value==current then index=i;break end end
+    if #choices==0 then return false end
+    local step=Finite(direction,1)<0 and -1 or 1
+    local left,top=module.window:GetLeft(),module.window:GetTop()
+    module:SetLayoutOrientation(choices[(index-1+step)%#choices+1])
+    RefreshModule(module,true);Place(module,left,top);Layout.RefreshToolbar();return true
+end
+function Layout.CyclePreview(direction)
+    local preview=ASUI.Preview
+    if not Layout.active or not preview or not preview.SetMode then return false end
+    Layout.EndResize()
+    local choices={"mixed","ready","missing","overload","live"}
+    local current=preview.GetMode and preview.GetMode() or "mixed"
+    local index=1;for i,value in ipairs(choices) do if value==current then index=i;break end end
+    local step=Finite(direction,1)<0 and -1 or 1
+    preview.SetMode(choices[(index-1+step)%#choices+1]);Layout.RefreshToolbar();return true
+end
 function Layout.EndResize()
     local drag=Layout.drag;if not drag then return end
     Layout.drag=nil
-    drag.handle:SetHandler("OnUpdate",nil)
+    if drag.handle then drag.handle:SetHandler("OnUpdate",nil) end
     if EVENT_MANAGER and EVENT_GLOBAL_MOUSE_UP then EVENT_MANAGER:UnregisterForEvent("AlphaSquadUI_Layout_Resize",EVENT_GLOBAL_MOUSE_UP) end
     if drag.module.window.StopMovingOrResizing then drag.module.window:StopMovingOrResizing() end
-    if drag.module.SavePosition then drag.module:SavePosition() end
+    if drag.changed and drag.module.SavePosition then drag.module:SavePosition() end
     Layout.RefreshToolbar()
 end
 function Layout.UpdateResize(mouseX,mouseY)
@@ -99,35 +179,58 @@ function Layout.UpdateResize(mouseX,mouseY)
     local dx,dy=x-drag.mouseX,y-drag.mouseY
     if dx==drag.dx and dy==drag.dy then return end
     drag.dx,drag.dy=dx,dy
-    local module=drag.module;local sv=module.sv
+    local module=drag.module;local sv=module.sv;local changed=false
     if drag.horizontal~=0 and drag.vertical~=0 then
         local distance=drag.width*drag.width+drag.height*drag.height
         local delta=(drag.horizontal*dx*drag.width+drag.vertical*dy*drag.height)/distance
-        sv.scale=Clamp(math.floor((drag.scale+delta)*100+0.5),60,180)
+        local rootW,rootH=RootSize()
+        local availableW=drag.horizontal<0 and drag.right or rootW-drag.left
+        local availableH=drag.vertical<0 and drag.bottom or rootH-drag.top
+        local maximum=math.max(0.001,math.min(1.8,math.max(1,rootW-20)/drag.width,
+            math.max(1,rootH-20)/drag.height,availableW/drag.width,availableH/drag.height))
+        local requested=Clamp(drag.scale+delta,math.min(0.6,maximum),maximum)
+        if math.abs(requested-Finite(module.window:GetScale(),drag.scale))>0.000001 then
+            sv.scale=requested*100
+            -- Corners only change the native parent scale. Children, square
+            -- icons and fonts follow in the same frame without rebuilding rows.
+            module.window:SetScale(requested);changed=true
+        end
     else
-        if drag.horizontal~=0 then sv.hudWidth=drag.width+drag.horizontal*dx/drag.scale end
-        if drag.vertical~=0 then sv.hudHeight=drag.height+drag.vertical*dy/drag.scale end
-        sv.hudWidth,sv.hudHeight=Layout.GetDimensions(module,drag.width,drag.height)
+        local bounds=module.layoutBounds or {}
+        local width=drag.horizontal~=0 and drag.width+drag.horizontal*dx/drag.scale or drag.width
+        local height=drag.vertical~=0 and drag.height+drag.vertical*dy/drag.scale or drag.height
+        local rootW,rootH=RootSize()
+        -- The opposite edge stays fixed until it meets the screen boundary.
+        local availableW=drag.horizontal<0 and drag.right or rootW-drag.left
+        local availableH=drag.vertical<0 and drag.bottom or rootH-drag.top
+        local minW=math.max(32,Finite(bounds.minWidth,100))
+        local minH=math.max(24,Finite(bounds.minHeight,40))
+        width=Clamp(width,minW,math.max(minW,math.min(Finite(bounds.maxWidth,1920),availableW/drag.scale)))
+        height=Clamp(height,minH,math.max(minH,math.min(Finite(bounds.maxHeight,1080),availableH/drag.scale)))
+        if math.abs(width-drag.appliedWidth)>0.000001 or math.abs(height-drag.appliedHeight)>0.000001 then
+            sv.hudWidth,sv.hudHeight=width,height
+            drag.appliedWidth,drag.appliedHeight=width,height
+            RefreshModule(module,true);changed=true
+        end
     end
-    RefreshModule(module)
-    local scale=Finite(module.window:GetScale(),Layout.GetScale(module))
-    local left=drag.horizontal<0 and drag.left+drag.width*drag.scale-module.window:GetWidth()*scale or drag.left
-    local top=drag.vertical<0 and drag.top+drag.height*drag.scale-module.window:GetHeight()*scale or drag.top
+    if not changed then return end
+    drag.changed=true
+    local left=drag.horizontal<0 and drag.right-module.window:GetWidth() or drag.left
+    local top=drag.vertical<0 and drag.bottom-module.window:GetHeight() or drag.top
     Place(module,left,top)
     Layout.RefreshToolbar()
 end
 function Layout.BeginResize(module,horizontal,vertical,handle)
-    if not Layout.IsMoving(module) or not GetUIMousePosition then return false end
+    if not Layout.IsMoving(module) or not GetUIMousePosition or not handle then return false end
     Layout.EndResize();Layout.Select(module)
     local x,y=GetUIMousePosition();x,y=Finite(x),Finite(y)
     if not x or not y then return false end
-    local win=module.window;local width,height=Layout.GetDimensions(module,win:GetWidth(),win:GetHeight())
-    width=math.max(1,Finite(win:GetWidth(),width));height=math.max(1,Finite(win:GetHeight(),height))
-    -- Freeze rendered dimensions too (for example two vertically stacked bars).
-    module.sv.hudWidth,module.sv.hudHeight=width,height
+    local win=module.window;local width,height=Layout.GetLogicalDimensions(module)
     if win.StopMovingOrResizing then win:StopMovingOrResizing() end
     Layout.drag={module=module,handle=handle,horizontal=horizontal,vertical=vertical,
-        mouseX=x,mouseY=y,width=width,height=height,left=Finite(win:GetLeft(),0),top=Finite(win:GetTop(),0),
+        mouseX=x,mouseY=y,width=width,height=height,appliedWidth=width,appliedHeight=height,dx=0,dy=0,
+        left=Finite(win:GetLeft(),0),top=Finite(win:GetTop(),0),
+        right=Finite(win:GetLeft(),0)+Finite(win:GetWidth(),width),bottom=Finite(win:GetTop(),0)+Finite(win:GetHeight(),height),
         scale=Finite(win:GetScale(),Layout.GetScale(module))}
     handle:SetHandler("OnUpdate",function()
         local currentX,currentY=GetUIMousePosition();Layout.UpdateResize(currentX,currentY)
@@ -183,7 +286,7 @@ end
 function Layout.Refresh()
     for _,module in ipairs(Modules()) do
         RefreshModule(module)
-        local handles=Layout.Attach(module)
+        local handles=Layout.IsMoving(module) and Layout.Attach(module) or Layout.attachments[module]
         for _,handle in ipairs(handles or {}) do handle:SetHidden(not Layout.IsMoving(module)) end
     end
     Layout.RefreshToolbar()
@@ -195,18 +298,39 @@ function Layout.RefreshToolbar()
         for _,module in ipairs(Modules()) do if Layout.IsMoving(module) then Layout.selected=module;break end end
     end
     local module=Layout.selected
-    if toolbar.selection then toolbar.selection:SetText(module and (module.layoutName or "HUD Panel") or "No active panel") end
-    if toolbar.values then toolbar.values:SetText(module and string.format("%d%% scale   •   %d%% background",
-        math.floor(Clamp(Finite(module.sv.scale,100),60,180)),math.floor(Clamp(Finite(module.sv.opacity,92),30,100))) or "") end
-    local rootW=RootSize();toolbar:SetScale(math.min(1,math.max(1,rootW-24)/860))
+    local function Text(control,value)
+        if control and control.layoutText~=value then control:SetText(value);control.layoutText=value end
+    end
+    Text(toolbar.selection,module and (module.layoutName or "HUD Panel") or "No active panel")
+    local width,height=0,0
+    if module then width,height=Layout.GetLogicalDimensions(module) end
+    Text(toolbar.values,module and string.format("%.1f%% scale   •   %d%% background   •   %.0f × %.0f",
+        Finite(module.window:GetScale(),1)*100,math.floor(Clamp(Finite(module.sv.opacity,92),30,100)),width,height) or "")
+    local orientation=module and module.GetLayoutOrientation and module:GetLayoutOrientation()
+    Text(toolbar.orientation,orientation and (orientation=="vertical" and "VERTICAL" or "HORIZONTAL") or "FIXED LAYOUT")
+    if toolbar.orientation and toolbar.orientation.SetEnabled then toolbar.orientation:SetEnabled(orientation~=nil) end
+    local preview=ASUI.Preview;local mode=preview and preview.GetMode and preview.GetMode() or "mixed"
+    Text(toolbar.preview,"PREVIEW: "..string.upper(mode))
+    local rootW,rootH=RootSize()
+    local scale=math.max(0.001,math.min(1,math.max(1,rootW-24)/TOOLBAR_WIDTH,math.max(1,rootH-24)/TOOLBAR_HEIGHT))
+    if toolbar.layoutScale~=scale then toolbar:SetScale(scale);toolbar.layoutScale=scale end
 end
 function Layout.AdjustSelected(field,delta)
     if field~="scale" and field~="opacity" then return end
     delta=Finite(delta,0)
     local module=Layout.selected;if not Layout.IsMoving(module) then return end
     local minimum,maximum,default=field=="scale" and 60 or 30,field=="scale" and 180 or 100,field=="scale" and 100 or 92
-    module.sv[field]=Clamp(Finite(module.sv[field],default)+delta,minimum,maximum)
-    RefreshModule(module);Place(module,module.window:GetLeft(),module.window:GetTop());Layout.RefreshToolbar()
+    Layout.EndResize()
+    local value=Clamp(Finite(module.sv[field],default)+delta,minimum,maximum)
+    if value==module.sv[field] then return end
+    module.sv[field]=value
+    local left,top=module.window:GetLeft(),module.window:GetTop()
+    if field=="scale" then
+        local width,height=Layout.GetLogicalDimensions(module)
+        module.window:SetScale(Layout.GetScale(module,width,height))
+    elseif module.ApplyAppearance then module:ApplyAppearance()
+    else RefreshModule(module) end
+    Place(module,left,top);Layout.RefreshToolbar()
 end
 function Layout.ResetSelected()
     local module=Layout.selected;if not Layout.IsMoving(module) then return end
@@ -239,7 +363,7 @@ end
 function Layout.CreateToolbar()
     if Layout.toolbar then return Layout.toolbar end
     local win=WINDOW_MANAGER:CreateTopLevelWindow("AlphaSquadUILayoutToolbar")
-    win:SetDimensions(860,94);win:SetAnchor(TOP,GuiRoot,TOP,0,20)
+    win:SetDimensions(TOOLBAR_WIDTH,TOOLBAR_HEIGHT);win:SetAnchor(TOP,GuiRoot,TOP,0,12)
     win:SetClampedToScreen(true);win:SetHidden(true);win:SetMouseEnabled(true)
     if ASUI.Settings and ASUI.Settings.ApplyWindowLayer then ASUI.Settings.ApplyWindowLayer(win,false) end
     local background=WINDOW_MANAGER:CreateControl(nil,win,CT_TEXTURE);background:SetAnchorFill(win);background:SetColor(0.025,0.03,0.04,0.97)
@@ -249,9 +373,9 @@ function Layout.CreateToolbar()
         label:SetDimensions(width,24);label:SetAnchor(TOPLEFT,win,TOPLEFT,x,y);label:SetText(text);return label
     end
     Label("MOVE HUD  •  Drag panels to move. Drag edges to reshape. Drag corners to scale.",14,8,730)
-    local function Button(text,x,width,callback)
+    local function Button(text,x,width,callback,y)
         local button=WINDOW_MANAGER:CreateControl(nil,win,CT_BUTTON);button:SetDimensions(width,30)
-        button:SetAnchor(TOPLEFT,win,TOPLEFT,x,38);button:SetFont("ZoFontGameBold");button:SetText(text)
+        button:SetAnchor(TOPLEFT,win,TOPLEFT,x,y or 38);button:SetFont("ZoFontGameBold");button:SetText(text)
         button:SetMouseEnabled(true)
         local bg=WINDOW_MANAGER:CreateControl(nil,button,CT_TEXTURE);bg:SetAnchorFill(button)
         if bg.SetDrawLayer and DL_BACKGROUND then bg:SetDrawLayer(DL_BACKGROUND) end
@@ -266,13 +390,11 @@ function Layout.CreateToolbar()
         end
         button:SetHandler("OnMouseEnter",function()Paint("hover")end)
         button:SetHandler("OnMouseExit",function()Paint("panel")end)
-        button:SetHandler("OnClicked",callback);return button
+        button:SetHandler("OnClicked",callback)
+        if ASUI.Input and ASUI.Input.Register then ASUI.Input.Register(button,{activate=callback,label=text}) end
+        return button
     end
-    win.selection=Button("HUD Panel",14,220,function()
-        local choices={};local current=0
-        for _,module in ipairs(Modules()) do if Layout.IsMoving(module) then choices[#choices+1]=module;if module==Layout.selected then current=#choices end end end
-        if #choices>0 then Layout.Select(choices[current%#choices+1]) end
-    end)
+    win.selection=Button("HUD Panel",14,220,function()Layout.CycleSelected(1)end)
     Button("SCALE −",244,90,function()Layout.AdjustSelected("scale",-5)end)
     Button("+",336,28,function()Layout.AdjustSelected("scale",5)end)
     Button("OPACITY −",378,114,function()Layout.AdjustSelected("opacity",-5)end)
@@ -282,9 +404,13 @@ function Layout.CreateToolbar()
         local module=Layout.selected;if Layout.IsMoving(module) then RefreshModule(module);Place(module,module.window:GetLeft(),module.window:GetTop()) end
     end)
     Button("DONE",754,92,Layout.Finish)
-    win.values=Label("",14,70,600)
-    Label("Done or Esc saves changes.",630,70,216)
+    win.orientation=Button("HORIZONTAL",14,170,function()Layout.CycleOrientation(1)end,74)
+    win.preview=Button("PREVIEW: MIXED",194,216,function()Layout.CyclePreview(1)end,74)
+    Label("Corners scale. Edges reshape. Esc / Back saves.",420,78,430)
+    win.values=Label("",14,106,830)
+    win.inputHint=Label("",14,130,830)
     win:SetHandler("OnHide",Layout.Finish)
+    if ASUI.Input and ASUI.Input.RegisterWindow then ASUI.Input.RegisterWindow(win,{layout=true,close=Layout.Finish}) end
     if SCENE_MANAGER and SCENE_MANAGER.RegisterTopLevel then SCENE_MANAGER:RegisterTopLevel(win,true) end
     Layout.toolbar=win;Layout.RefreshToolbar();return win
 end
@@ -314,6 +440,16 @@ if EVENT_MANAGER then
     if EVENT_PLAYER_DEACTIVATED then EVENT_MANAGER:RegisterForEvent("AlphaSquadUI_Layout_Loading",EVENT_PLAYER_DEACTIVATED,function()Layout.Finish(true)end) end
     if EVENT_PLAYER_COMBAT_STATE then EVENT_MANAGER:RegisterForEvent("AlphaSquadUI_Layout_Combat",EVENT_PLAYER_COMBAT_STATE,function(_,combat)if combat then Layout.Finish()end end) end
     if EVENT_SCREEN_RESIZED then EVENT_MANAGER:RegisterForEvent("AlphaSquadUI_Layout_Screen",EVENT_SCREEN_RESIZED,function()if Layout.active then Layout.EndResize();Layout.Refresh() end end) end
+    -- Custom UI scale may apply after its setting notification. Observe the
+    -- completed native canvas resize, as ESO's own tree layouts do.
+    if EVENT_ALL_GUI_SCREENS_RESIZE_STARTED then
+        EVENT_MANAGER:RegisterForEvent("AlphaSquadUI_Layout_CanvasStart",EVENT_ALL_GUI_SCREENS_RESIZE_STARTED,Layout.EndResize)
+    end
+    if EVENT_ALL_GUI_SCREENS_RESIZED then
+        EVENT_MANAGER:RegisterForEvent("AlphaSquadUI_Layout_CanvasReady",EVENT_ALL_GUI_SCREENS_RESIZED,function()
+            Layout.EndResize();Layout.Refresh()
+        end)
+    end
 end
 if SCENE_MANAGER and SCENE_MANAGER.RegisterCallback then
     SCENE_MANAGER:RegisterCallback("SceneStateChanged",function(scene,_,newState)

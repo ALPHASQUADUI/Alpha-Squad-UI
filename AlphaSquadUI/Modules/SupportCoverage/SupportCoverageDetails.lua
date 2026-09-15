@@ -28,7 +28,10 @@ end
 local function Frame(sc,kind,revision,checksum,body)
     if not Enabled(sc) or type(body)~="string" or #body>Details.MAX_BYTES then return false end
     local p=sc.share.detailProtocol
-    if p.IsEnabled and not p:IsEnabled() then return false end
+    if p.IsEnabled then
+        local ok,enabled=pcall(p.IsEnabled,p)
+        if not ok or enabled~=true then return false end
+    end
     local ok,sent=pcall(p.Send,p,{version=Details.VERSION,kind=kind,revision=revision,checksum=checksum,body=body},
         {isRelevantInCombat=false,replaceQueuedMessages=false})
     return ok and sent==true
@@ -184,6 +187,9 @@ end
 
 local function OnAcknowledgment(sc,tag,data)
     local stream=sc.share.outgoingBuild
+    if stream and sc.NowMs()-stream.updatedAt>Details.TIMEOUT_MS then
+        sc.share.outgoingBuild=nil;return
+    end
     if not stream or stream.requester~=sc:GetPlayerKey(tag) or stream.revision~=data.revision
         or data.checksum~=Details.Hash(data.body) or #data.body<2 then return end
     local nextIndex=data.body:byte(1)
@@ -199,6 +205,11 @@ end
 local function OnChunk(sc,tag,data)
     local pending=sc.share.incomingBuild
     if not pending or pending.key~=sc:GetPlayerKey(tag) or pending.revision~=data.revision or #data.body<6 then return end
+    if sc.NowMs()-pending.updatedAt>Details.TIMEOUT_MS then
+        sc.share.incomingBuild=nil;sc.share.buildStatus="Build transfer timed out; request again."
+        sc:ScheduleRefresh("build transfer timeout",100)
+        return
+    end
     if UnpackHash(data.body)~=Details.Hash(sc:GetPlayerKey("player")) then return end
     local index,total=data.body:byte(4,5)
     if index<1 or total<1 or total>Details.MAX_CHUNKS or index>total or index~=(pending.received or 0)+1 then return end
@@ -264,6 +275,7 @@ function SC:OnDetailData(tag,data)
                 capabilities[effect]={sources={["Shared build"]=true},evidence="PEER_CAPABILITY_HINT"}
             end
         end
+        peer.summaryCapabilities=capabilities
         if not peer.fullBuild or peer.fullBuildFingerprint~=data.revision then peer.capabilities=capabilities end
         self:ScheduleRefresh("shared capabilities",100)
     end

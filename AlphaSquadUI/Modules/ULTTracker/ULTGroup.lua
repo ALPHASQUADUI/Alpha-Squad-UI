@@ -114,6 +114,7 @@ function Group:GetDefaults()
         hideInMenus = true,
         scale = 100,
         hudWidth = 312,
+        hudOrientation = "vertical",
         rowHeight = 36,
         opacity = 92,
         x = math.floor(rootW * 0.03),
@@ -160,9 +161,10 @@ function Group:EnsureSavedVariables()
 
     -- Persistent per-account HUD geometry. Existing users keep their saved values.
     ULT.sv.group.scale = ULT.Clamp(FiniteOr(ULT.sv.group.scale, defaults.scale), 60, 180)
-    ULT.sv.group.hudWidth = ULT.Clamp(FiniteOr(ULT.sv.group.hudWidth, defaults.hudWidth), 240, 960)
+    if ULT.sv.group.hudOrientation~="horizontal" and ULT.sv.group.hudOrientation~="vertical" then ULT.sv.group.hudOrientation="vertical" end
+    ULT.sv.group.hudWidth = ULT.Clamp(FiniteOr(ULT.sv.group.hudWidth, defaults.hudWidth), 240, 1800)
     if ULT.sv.group.hudHeight~=nil then
-        ULT.sv.group.hudHeight=ULT.Clamp(FiniteOr(ULT.sv.group.hudHeight,90),52,1080)
+        ULT.sv.group.hudHeight=ULT.Clamp(FiniteOr(ULT.sv.group.hudHeight,90),52,1200)
     end
     ULT.sv.group.rowHeight = ULT.Clamp(FiniteOr(ULT.sv.group.rowHeight, defaults.rowHeight), 28, 56)
     ULT.sv.group.opacity = ULT.Clamp(FiniteOr(ULT.sv.group.opacity, defaults.opacity), 30, 100)
@@ -261,15 +263,27 @@ function Group:GetTrackedAbilityCount()
     return count
 end
 
+local abilityMeta,abilityMetaCount={},0
 function Group:GetAbilityMeta(abilityId)
-    abilityId = tonumber(abilityId) or 0
-    if abilityId <= 0 then return "No Ultimate", "", 0 end
-
-    local name = GetAbilityName and GetAbilityName(abilityId) or ""
-    local icon = GetAbilityIcon and GetAbilityIcon(abilityId) or ""
-    if not name or name == "" then name = "Unknown Ultimate" end
-
-    return zo_strformat("<<C:1>>", name), icon or "", abilityId
+    abilityId=IsAbilityId(abilityId)
+    if not abilityId then return "No Ultimate", "", 0 end
+    local cached=abilityMeta[abilityId]
+    if cached then return cached.name,cached.icon,abilityId end
+    local name,icon="",""
+    if GetAbilityName then
+        local ok,value=pcall(GetAbilityName,abilityId)
+        if ok and type(value)=="string" then name=value end
+    end
+    if GetAbilityIcon then
+        local ok,value=pcall(GetAbilityIcon,abilityId)
+        if ok and type(value)=="string" then icon=value end
+    end
+    if name=="" then name="Unknown Ultimate" end
+    name=zo_strformat("<<C:1>>",name)
+    -- At most two slots per player plus saved filters; never grow with peer IDs.
+    if abilityMetaCount>=128 then abilityMeta={};abilityMetaCount=0 end
+    abilityMeta[abilityId]={name=name,icon=icon};abilityMetaCount=abilityMetaCount+1
+    return name,icon,abilityId
 end
 
 function Group:InitializeSharing()
@@ -694,6 +708,14 @@ end
 
 function Group:Refresh(reason, rebuildRoster)
     if ULT.loading or not self.initialized or not self.sv then return end
+    local tracking=self.sv.enabled and ULT.sv and ULT.sv.enabled
+    local settings=AlphaSquadUI.Settings
+    local inspecting=(self.configWindow and not self.configWindow:IsHidden())
+        or (settings and settings.mainWindow and not settings.mainWindow:IsHidden())
+    if not tracking and not inspecting then
+        if self.ApplyVisibility then self:ApplyVisibility() end
+        return
+    end
 
     if rebuildRoster ~= false then
         self:BuildRoster()

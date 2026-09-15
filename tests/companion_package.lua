@@ -83,6 +83,25 @@ grouped=true;Fire(EVENT_GROUP_MEMBER_JOINED)
 check(updates.AlphaSquadBuildShareHeartbeat and updates.AlphaSquadBuildShareHeartbeat.ms==60000,"Grouped companion uses a slow heartbeat")
 local pending=later;later={};for _,task in ipairs(pending) do now=task.at;task.fn() end
 check(SC.localSnapshot~=nil,"Generated shared scanner executes without full addon infrastructure")
+local captures,readiness=0,0
+local captureNative,readinessNative=SC.ScanLocalPlayer,SC.RefreshReadinessFacts
+SC.ScanLocalPlayer=function(self) captures=captures+1;return captureNative(self) end
+SC.RefreshReadinessFacts=function(self) readiness=readiness+1;return readinessNative(self) end
+local function FlushCaptures()
+    local tasks=later;later={}
+    for _,task in ipairs(tasks) do now=task.at;task.fn() end
+end
+Fire(EVENT_EFFECT_CHANGED,0,0,0,'player');FlushCaptures()
+check(captures==0 and readiness==1,'Food or boon changes refresh readiness without rescanning every item and skill')
+updates.AlphaSquadBuildShareHeartbeat.fn()
+check(captures==0 and readiness==2,'Unchanged companion heartbeats reuse the current equipment capture')
+Fire(EVENT_ACTION_SLOTS_ALL_HOTBARS_UPDATED);Fire(EVENT_SKILL_BUILD_SELECTION_UPDATED);FlushCaptures()
+check(captures==1 and not SC.scanDirty,'Multiple build events coalesce into one native capture')
+Fire(EVENT_PLAYER_COMBAT_STATE,true)
+Fire(EVENT_ACTION_SLOTS_ALL_HOTBARS_UPDATED)
+check(SC.scanDirty and captures==1,'Companion remembers build changes while scans are paused in combat')
+Fire(EVENT_PLAYER_COMBAT_STATE,false);FlushCaptures()
+check(captures==2 and not SC.scanDirty,'A single committed capture runs after combat ends')
 local beforeLoading=SC.localSnapshot
 Fire(EVENT_PLAYER_DEACTIVATED)
 check(SC.loading and not updates.AlphaSquadBuildShareHeartbeat,"Loading suspends the companion heartbeat")

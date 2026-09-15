@@ -61,6 +61,7 @@ end
 function SC:OpenFoodCheck() return self:OpenInspector("BUILD") end
 function SC:CreateInspectorWindow()
     local win=UI.Window("AlphaSquadSupportInspector","Ąlpha Şquad UI  •  Builds",function()SC:CloseInspector()end)
+    win.hasContentLayout=true
     self.inspectorWindow=win;UI.RegisterWindow("supportBuilds",win,function()SC:CloseInspector()end)
     win.coverage=UI.Button(win,"AlphaSquadInspectorCoverage","COVERAGE",124,30,function()SC:OpenMatrix()end)
     win.coverage:SetAnchor(TOPRIGHT,win,TOPRIGHT,-104,14)
@@ -124,8 +125,8 @@ function SC:RefreshInspectorRoster()
 end
 function SC:RefreshInspector()
     local win=self.inspectorWindow;if not win or win:IsHidden() then return end
-    -- A stable logical canvas keeps the complete character sheet on one page at all UI scales.
-    win:SetDimensions(1060,660);win:SetScale(math.max(0.1,math.min(1,(GuiRoot:GetWidth()-24)/1060,(GuiRoot:GetHeight()-24)/660)))
+    -- Bind once, then fit the complete logical sheet. Rendered child dimensions
+    -- already include parent scale and must never feed back into this calculation.
     win.title:SetText(AlphaSquadUI.Theme.Brand and AlphaSquadUI.Theme.Brand("Builds") or "Ąlpha Şquad UI  •  Builds")
     local player=self:GetInspectedPlayer()
     win.request:SetHidden(not player)
@@ -141,7 +142,8 @@ function SC:RefreshInspector()
     win.subtitle:SetText((UI.Text(subtitle):gsub("@SeRuM1",function() return AlphaSquadUI.Theme.authorText or "@SeRuM1" end)))
     win.footer:SetText("Hover equipment, skills and Champion stars for their details. ? = unavailable • — = empty. Set headline = highest bar total; FRONT / BACK = exact set pieces.")
     self.BuildView.Bind(win.buildSheet,player,details,status)
-    local height=math.max(660,win.buildSheet:GetHeight()+144)
+    local _,sheetHeight=self.BuildView.GetDimensions(win.buildSheet)
+    local height=math.max(660,sheetHeight+144)
     win.playerPanel:SetHeight(height-168)
     win.playerList:SetHeight(height-168)
     UI.FinishScroll(win.playerList,#(self.roster or {})*40,158)

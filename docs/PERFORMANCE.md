@@ -19,11 +19,13 @@ Native events drive shared personal slot/resource changes and relevant Overload 
 
 The optional Overload effect subscription is filtered to the player and relevant morphs. Cached slot/effect state handles presentation; layout checks do not rescan skills. Placement and loading suppress alerts and cancellation.
 
+The personal HUD compares a layout signature before reanchoring unchanged controls. Resource and readiness text can update without repeating the geometry work. Horizontal/Vertical selection is explicit, with cached dimensions for each orientation; a small edge movement does not trigger a sudden template switch.
+
 ## Group ULT
 
 LibGroupCombatStats is subscribed for **ULT only**. An incoming player update changes that player's cached entry; no DPS/HPS stream is requested. Full roster refreshes are for membership/connectivity changes and a two-second safety check while the group HUD and its parent are enabled, visible and unobscured.
 
-The HUD reuses up to twelve player rows. READY animation stops when no visible row requires it.
+The HUD reuses up to twelve player rows, including the twelve-player placement sample. Horizontal and vertical presentations reuse the same pool. READY animation stops when no visible row requires it, and placement samples do not start gameplay alerts.
 
 ## Support Coverage
 
@@ -37,7 +39,7 @@ Disabling a module removes its gameplay subscriptions and unnecessary updates. E
 
 ## Optional third-party evidence
 
-LibSetDetection set updates are event-driven. Repeated reads do not make old data fresh; the adapter uses events observed in the current group session, labels the last-report age and invalidates records on session/identity/disconnect/deactivation changes. Change-only set traffic has no artificial short expiry timer. Compatible LibGroupCombatStats Ultimate/active-line evidence uses a 75-second conservative age limit; an idle sender may therefore become limited until it sends fresh data.
+LibSetDetection set updates are event-driven. Repeated reads do not make old data fresh; the adapter uses events observed in the current group session, labels the last-report age and invalidates records on session/identity/disconnect/deactivation changes. Change-only set traffic has no artificial short expiry timer. Compatible LibGroupCombatStats Ultimate/active-line evidence follows its character-indexed group cache. Slots and skill lines are change-driven, so unchanged reports have no artificial expiry; their original valid library timestamp is preserved and is never renewed by polling. Removed cache entries, invalid timestamps and unavailable current members supply no actionable coverage. The separate Alpha Squad build-summary lifetime is unchanged.
 
 ## Verification and limits
 
@@ -56,11 +58,19 @@ Dashboard and Libraries use static controls. Libraries fits its two columns and 
 
 ## Compact interface and placement
 
-The Coverage grid creates its controls once and reanchors them for filtering or viewport changes. A fixed single page replaces tall repeated provider rows; contributor descriptions are assembled on hover. Set-bonus thresholds use a bounded cache of 256 successful native lookups. Incomplete or unavailable native lookups are not cached as proof of absence.
+The Coverage grid creates its controls once and reanchors them for filtering or viewport changes. A fixed single page replaces tall repeated provider rows; contributor descriptions are assembled on hover. Dense rows fit native icons inside their own hit area. Set-bonus thresholds use a bounded cache of 256 successful native lookups. Successful native effect and set previews are cached; unavailable artwork uses an identified category symbol, without treating a missing lookup as verified identity.
 
-Global MOVE HUD is a short-lived placement state without an idle heartbeat. Only Dashboard-enabled modules participate. A mouse-position callback exists only during an active edge/corner drag, reflows changed dimensions and stops on release or cancellation. Placement previews suspend normal alert animation work and preserve normal visibility settings; closing saves and locks the panels. Personal ULT and Overload share one HUD, with cached slot state choosing the display and no extra skill scan.
+Global MOVE HUD is a short-lived placement state without an idle heartbeat. Only Dashboard-enabled modules participate. A mouse-position callback exists only during an active drag and stops on release or cancellation. Unchanged pointer positions do no layout work. Corners change only the native parent scale; edge changes reflow the logical dimensions. Both paths keep the opposite edge fixed and avoid applying scale twice. Cached logical canvas sizes also prevent repeated scaled inspector refreshes from shrinking the build sheet.
+
+`Core/Preview.lua` stores only the selected presentation mode. Personal, group and Support renderers cache their sample tables by mode and consume them only during placement. Switching samples performs no scan, build request or send, and sample rows never enter live evidence. Placement previews suspend normal alert animation work and preserve normal visibility settings; closing saves and locks the panels. Personal ULT and Overload share one HUD, with cached slot state choosing the display and no extra skill scan.
 
 Sharing defaults are applied once, and actual native library states remain authoritative afterward. Missing libraries and unsupported controls do not trigger polling or repeated navigation. Sharing controls do not create a second library-settings window.
+
+## Input ownership
+
+Keyboard/controller navigation reuses registered controls, their existing callbacks and a shared focus border. The action layer and native directional-input owner are acquired only for an open suite window or placement toolbar and released when navigation is suspended or closed. Live HUD visibility alone does not acquire them. Native dialogs, combat, loading and scene changes suspend navigation instead of leaving movement controls captured.
+
+Focus candidate geometry is read when navigating visible controls, not through an always-running scan. Controller placement uses the open session's directional-input callback and capped frame delta for movement. When suite navigation is closed, it adds no directional-input loop or mouse-position poll. These lifecycle checks do not replace real-client controller and frame-time measurements.
 
 ## Appearance and community pages
 

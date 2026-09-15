@@ -143,8 +143,16 @@ local badNative=GetItemSetBonusInfo
 GetItemSetBonusInfo=function()return 0/0 end
 check(V.SetRequirement({id=102})==nil,"Malformed native requirements cannot create false excess warnings")
 GetItemSetBonusInfo=badNative
-check(canvas.equipment.silhouette.width==104 and canvas.equipment.silhouette.height==264,"Native silhouette fills the body panel with a larger static image")
-check(canvas.equipment.slots.HEAD.x+22==canvas.equipment.silhouette.x+52,"Head slot aligns with the center of the figure")
+check(canvas.equipment.silhouette.width==61 and canvas.equipment.silhouette.height==244,"Native silhouette stays large inside the body panel")
+check(canvas.equipment.slots.HEAD.x+22==canvas.equipment.silhouette.x+30.5,"Head slot aligns with the center of the figure")
+local silhouette=canvas.equipment.silhouette
+check(silhouette.y+silhouette.height<296,"The native silhouette ends before the jewelry divider")
+check(silhouette.width/silhouette.height==64/256,"Native paper-doll aspect ratio is preserved without distorting the figure")
+for _,pair in ipairs({{'SHOULDERS','CHEST'},{'HAND','WAIST'},{'LEGS','FEET'}})do
+    local left,right=canvas.equipment.slots[pair[1]],canvas.equipment.slots[pair[2]]
+    check(left.y==right.y and (left.x+22+right.x+22)/2==silhouette.x+30.5,"Paired armor slots align at equal distances from the native figure")
+    check(left.y+44+20<=296 and right.y+44+20<=296,"Armor captions stay above the jewelry divider")
+end
 check(canvas.equipment.slots.NECK.y==326 and canvas.equipment.slots.MAIN_HAND.y==421 and canvas.equipment.slots.BACKUP_MAIN.y==421,"Jewelry and both weapon sections retain their accepted positions")
 
 details.equipment.complete=true

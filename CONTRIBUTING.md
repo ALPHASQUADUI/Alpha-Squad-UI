@@ -22,6 +22,9 @@ Update the README, module documentation and changelog when behavior changes. Use
 - Register pages through Core and reuse controls. `Core/Shell.lua` owns the shell independently of tracking modules. Put module switches in Dashboard and sharing switches in Libraries.
 - Keep Overload inside the shared personal ULT lifecycle and HUD. Preserve existing FRONT/BACK/BOTH modes; fresh installations use AUTO.
 - Resize through Core Layout: corners preserve proportions, edges reflow contents, and opacity affects background surfaces only. Stop the temporary resize callback on every completion or cancellation path.
+- Native `GetWidth`/`GetHeight` return dimensions with inherited scale. Convert once to logical layout units; never write a rendered dimension back as an unscaled SavedVariables size. Orientation is an explicit saved choice. Automatic viewport fitting must not overwrite requested geometry.
+- Editor examples are presentation-only. Never put fictional accounts, effects or skills into the live roster, coverage engine, network payloads or saved build data.
+- Register interactive controls with Core Input. Scope navigation to visible addon windows, release input before native dialogs/combat/loading, and leave gameplay bindings unchanged. Use native gamepad settings/action APIs and platform-appropriate hints.
 - Repaint themes only on selection/profile changes; preserve semantic status, quality and discipline colors. Community links use native URL confirmation; no embedded HTML or invented Discord data.
 - Use only the targeted native library protocol settings after verifying their option section and identity; reject ambiguous duplicate controls. An unsupported integration must degrade safely.
 
@@ -33,7 +36,7 @@ From the repository root:
 python3 tooling/validate.py
 ```
 
-The validator runs every regression suite with Lua 5.1 and 5.4, checks Lua syntax, manifest/version consistency and whitespace, and validates the full and companion packages. Use `LUA51` and `LUA54` environment variables when the runtimes have different executable names. CI runs the same checks with standard Lua interpreters.
+The validator runs every regression suite with Lua 5.1 and 5.4, checks Lua/XML syntax, manifest/version consistency and whitespace, and validates the full and companion packages. Use `LUA51` and `LUA54` environment variables when the runtimes have different executable names. CI runs the same checks with standard Lua interpreters.
 
 Meaningful regressions should cover the affected boundary: exact item traits/enchantments, CP allocation, profile isolation, module lifecycle, tooltip ownership or malformed/stale packets. Avoid tests that only duplicate implementation details.
 

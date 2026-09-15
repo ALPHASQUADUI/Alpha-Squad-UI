@@ -150,10 +150,10 @@ function SC:BuildSharePayload()
     return {
         version = BUILD_VERSION,
         role = ROLE_TO_ID[s.role] or 0,
-        classId = BoundedInteger(s.classId, 0, 15),
+        classId = IsInteger(s.classId, 0, 15) and s.classId or 0,
         food = food.active == true,
         foodVerified = food.verified == true,
-        foodId = BoundedInteger(food.abilityId, 0, 1048575),
+        foodId = IsInteger(food.abilityId, 0, 1048575) and food.abilityId or 0,
         potion = ClassifyPotion(s),
         missingGlyphs = BoundedInteger(glyphs.armorMissing, 0, 7),
         prism = BoundedInteger(glyphs.prismatic, 0, 7),
@@ -204,7 +204,7 @@ function SC:OnPeerShareData(unitTag, data)
         dataQuality = "ASUI",
         buildVerified = true,
         asui = true,
-        connected = IsUnitOnline and IsUnitOnline(unitTag) or true,
+        connected = self.IsOnline and self:IsOnline(unitTag),
         dead = IsUnitDead and IsUnitDead(unitTag) or false,
         capabilities = DecodeCapabilities(data),
         equipment = {
@@ -235,9 +235,14 @@ function SC:OnPeerShareData(unitTag, data)
     }
 
     local peer = self.peerData[key]
+    -- Retain bounded summary facts independently so detail expiry can remove
+    -- exact items/skills immediately without losing a still-fresh summary.
+    peer.summaryCapabilities,peer.summaryEquipment=peer.capabilities,peer.equipment
+    peer.summaryFood,peer.summaryPotion=peer.food,peer.potion
     peer.buildDetailFingerprint = data.version == 3 and math.floor(data.cap4 / 512) or nil
     if previous and previous.fullBuild and previous.fullBuildFingerprint == peer.buildDetailFingerprint
-        and previous.characterName == peer.characterName then
+        and previous.characterName == peer.characterName
+        and self.NowMs()-(previous.fullBuildAt or 0)<=(self.Details and self.Details.CACHE_MS or 120000) then
         peer.fullBuild, peer.fullBuildAt, peer.fullBuildFingerprint = previous.fullBuild, previous.fullBuildAt, previous.fullBuildFingerprint
         peer.capabilities = previous.fullBuild.capabilities
         peer.equipment, peer.skills, peer.masteries = previous.fullBuild.equipment, previous.fullBuild.skills, previous.fullBuild.masteries
@@ -273,7 +278,16 @@ function SC:PrunePeerSharingData()
         local key=self:GetPlayerKey(tag)
         if key and key~="" then current[key]=true end
     end
-    for key in pairs(self.peerData or {}) do if not current[key] then self.peerData[key]=nil end end
+    for key,peer in pairs(self.peerData or {}) do
+        if not current[key] or self.NowMs()-(peer.scannedAt or 0)>120000 then self.peerData[key]=nil
+        elseif peer.fullBuild and self.NowMs()-(peer.fullBuildAt or 0)>(self.Details and self.Details.CACHE_MS or 120000) then
+            peer.fullBuild,peer.fullBuildAt,peer.fullBuildFingerprint=nil,nil,nil
+            peer.capabilities,peer.equipment=peer.summaryCapabilities or {},peer.summaryEquipment
+            peer.skills,peer.masteries,peer.curse,peer.poisons,peer.mundus=nil,nil,nil,nil,nil
+            peer.food,peer.potion=peer.summaryFood or {active=false,verified=false},peer.summaryPotion
+            peer.dataQuality="ASUI"
+        end
+    end
     local share=self.share
     if share then
         if share.outgoingBuild and not current[share.outgoingBuild.requester] then share.outgoingBuild=nil end
@@ -344,7 +358,10 @@ end
 function SC:ShareLocalSnapshot(reason)
     if not self.sv or not self.sv.experimentalSharing or not self.sv.shareData or self.inCombat or self.loading then return false end
     if not self:IsGrouped() or not self.share or not self.share.available or not self.share.protocol then return false end
-    if self.share.protocol.IsEnabled and not self.share.protocol:IsEnabled() then return false end
+    if self.share.protocol.IsEnabled then
+        local ok,enabled=pcall(self.share.protocol.IsEnabled,self.share.protocol)
+        if not ok or enabled~=true then return false end
+    end
     local now=self.NowMs()
     if now-(self.share.lastSendAt or -60000)<1500 then return false end
     local payload=self:BuildSharePayload()

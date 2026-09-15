@@ -57,6 +57,7 @@ local function Icon(parent,name,x,y,size,label)
         else UI.Tooltip(tile,data.tooltip or "Information unavailable") end
     end)
     tile:SetHandler("OnMouseExit",UI.ClearTooltip)
+    if AlphaSquadUI.Input and AlphaSquadUI.Input.Register then AlphaSquadUI.Input.Register(tile,{kind="inspect",label=label}) end
     return tile
 end
 local function Bind(tile,kind,value,tooltip,empty,color,badge)
@@ -91,14 +92,18 @@ local function Bind(tile,kind,value,tooltip,empty,color,badge)
 end
 local EQUIPMENT={
     {"HEAD","Head",111,30},
-    {"SHOULDERS","Shoulders",12,96},{"CHEST","Chest",210,116},
-    {"HAND","Hands",12,161},{"WAIST","Waist",210,181},
-    {"LEGS","Legs",12,215},{"FEET","Feet",210,228},
+    {"SHOULDERS","Shoulders",14,98},{"CHEST","Chest",208,98},
+    {"HAND","Hands",14,164},{"WAIST","Waist",208,164},
+    {"LEGS","Legs",14,230},{"FEET","Feet",208,230},
     {"NECK","Necklace",34,326},{"RING1","Ring 1",101,326},{"RING2","Ring 2",168,326},
     {"MAIN_HAND","Main hand",18,421},{"OFF_HAND","Off hand",76,421},
     {"BACKUP_MAIN","Main hand",145,421},{"BACKUP_OFF","Off hand",203,421},
 }
 View.EquipmentPositions=EQUIPMENT
+function View.GetDimensions(canvas)
+    -- ESO reports rendered dimensions on a scaled control; fitting uses the logical canvas.
+    return WIDTH,canvas and canvas.logicalHeight or HEIGHT
+end
 local DISCIPLINES={{"COMBAT","Warfare",{0.32,0.66,1,1}},{"CONDITIONING","Fitness",{1,0.38,0.35,1}},{"WORLD","Craft",{0.40,0.80,0.45,1}}}
 local function SourceAge(updatedAt)
     if not Number(updatedAt) or not SC.NowMs then return "Report age unavailable" end
@@ -219,11 +224,13 @@ function View.SetRows(equipment,external)
 end
 function View.Create(parent)
     local canvas=WINDOW_MANAGER:CreateControl("AlphaSquadBuildSheet",parent,CT_CONTROL)
-    canvas:SetDimensions(WIDTH,HEIGHT);canvas.isBuildSheet=true
+    canvas:SetDimensions(WIDTH,HEIGHT);canvas.logicalHeight=HEIGHT;canvas.isBuildSheet=true
     canvas.equipment=Panel(canvas,"AlphaSquadBuildEquipment",0,0,266,HEIGHT,"EQUIPPED")
     local gear=canvas.equipment
     gear.silhouette=WINDOW_MANAGER:CreateControl("AlphaSquadBuildSilhouette",gear,CT_TEXTURE)
-    At(gear.silhouette,gear,81,56,104,264);gear.silhouette:SetColor(0.76,0.72,0.57,0.88)
+    -- Native characterwindow_keyboard.xml uses a 64:256 paper doll. Preserve its
+    -- aspect ratio, centered between equal-distance armor columns above jewelry.
+    At(gear.silhouette,gear,102.5,48,61,244);gear.silhouette:SetColor(0.76,0.72,0.57,0.88)
     gear.slots={}
     for index,def in ipairs(EQUIPMENT) do
         local caption=index>10 and (index%2==1 and "Main" or "Off") or def[2]
@@ -260,6 +267,7 @@ function View.Create(parent)
             else UI.Tooltip(row,row.tooltip) end
         end)
         row:SetHandler("OnMouseExit",UI.ClearTooltip)
+        if AlphaSquadUI.Input and AlphaSquadUI.Input.Register then AlphaSquadUI.Input.Register(row,{kind="inspect"}) end
         canvas.sets.rows[i]=row
     end
     canvas.skills=Panel(canvas,"AlphaSquadBuildSkills",278,136,552,150,"SKILL BARS")
@@ -376,6 +384,10 @@ function View.Bind(canvas,player,details,status)
             if row.divider then row.divider:ClearAnchors();row.divider:SetAnchor(BOTTOMLEFT,row,BOTTOMLEFT,0,0);row.divider:SetWidth(width) end
             At(row.icon,row,1,1,20,20)
             local icon=data.item and (data.item.icon or Try(GetItemLinkIcon,data.item.link))
+            if (not icon or icon=="") and SC.Catalog and SC.Catalog.GetCategoryIcon then
+                icon=SC.Catalog:GetCategoryIcon("sets")
+                row.tooltip=(row.tooltip or "").."\n\nCategory symbol: no verified item preview is available for this set."
+            end
             row.icon:SetTexture(icon or "");row.icon:SetHidden(not icon or icon=="")
             At(row.name,row,24,0,width-(columns==2 and 120 or 164),22)
             At(row.front,row,width-(columns==2 and 92 or 140),0,columns==2 and 46 or 60,22)
@@ -408,7 +420,8 @@ function View.Bind(canvas,player,details,status)
     At(canvas.champion,canvas,278,cpY,552,84)
     At(canvas.masteries,canvas,278,cpY+96,552,48)
     At(canvas.consumables,canvas,278,cpY+156,552,48)
-    canvas:SetHeight(math.max(HEIGHT,cpY+204))
+    canvas.logicalHeight=math.max(HEIGHT,cpY+204)
+    canvas:SetHeight(canvas.logicalHeight)
     for _,bar in ipairs({"primary","backup","werewolf"}) do
         local group=canvas.skills.bars[bar];local barMap=View.SkillMap(skills[bar])
         if not details and externalUlts[bar] then barMap[6]=externalUlts[bar] end

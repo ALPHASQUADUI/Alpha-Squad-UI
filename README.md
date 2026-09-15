@@ -7,10 +7,10 @@ A modular **The Elder Scrolls Online** addon by **@SeRuM1** for group preparatio
 ## Get started
 
 1. Install the `AlphaSquadUI` folder in ESO's `live/AddOns` directory and enable it in the Add-Ons menu.
-2. Open **Settings → Ąlpha Şquad UI**, or use `/asui`.
+2. Open **Settings → Ąlpha Şquad UI** in keyboard or gamepad mode, or use `/asui`.
 3. In **Dashboard**, choose **ULT Tracker** and **Support Coverage**, then pick an **Interface Style**. Tracking starts enabled; you can switch either module off.
 4. Open **Libraries** to check dependencies and sharing. New installations configure supported sharing **ON** automatically; saved OFF choices are preserved.
-5. Use **MOVE HUD** to move, resize and adjust your panels. Drag corners to scale, edges to reshape, then click **DONE** or press Escape.
+5. Use **MOVE HUD** to choose horizontal/vertical layouts, preview realistic states and arrange your panels. Drag corners to scale, edges to reshape, then choose **DONE** or Back/Escape.
 6. Open **Support Coverage → Builds** or **Coverage** to prepare your group.
 
 Use [Minion](https://minion.mmoui.com/) to install and update published ESO addons and libraries. Install the full suite or the lightweight Build Share companion according to the features you need; do not nest either folder inside another addon directory.
@@ -40,11 +40,23 @@ Click **MOVE HUD** in the settings sidebar or enter `/asmove` outside combat. Se
 - Drag the panel to move it.
 - Drag a **corner** to scale the whole panel proportionally.
 - Drag an **edge** to change its shape; the contents rearrange and icons stay square.
+- Select **HORIZONTAL** or **VERTICAL** for personal and Group Ultimate panels. Resizing preserves this choice; it never switches layout unexpectedly at a width threshold.
+- Use **PREVIEW** to choose mixed, ready, missing/charging, Overload or live states. Group previews contain twelve fictional accounts, so every row can be arranged while solo. Support previews show covered, missing, unknown, duplicate and tracking-off examples.
 - Use **SCALE**, **OPACITY**, **RESET PANEL** and **FIT** in the placement toolbar for the selected panel. Opacity changes the background without fading icons or text.
 
 **DONE** or Escape saves and locks the panels. Combat, loading or another menu ends placement safely.
 
 Placement preserves disabled modules and normal visibility preferences. Personal Ultimate and Overload use the same panel, position and size. Group Ultimate tracking keeps its own panel and selection.
+
+Examples exist only in the editor's presentation. They are never sent, stored as player builds, or counted as real coverage. Choosing **Live data** shows the currently available information instead. New personal HUDs start compact; previously saved sizes remain intact. Windowed, borderless, fullscreen and custom UI-scale changes refit panels without replacing the requested size.
+
+## Keyboard and controller
+
+The gamepad Settings menu includes **Ąlpha Şquad UI**. **Open Alpha Squad UI** and **Move Alpha Squad UI HUD** can also be assigned in Controls without replacing gameplay bindings.
+
+Use arrows or the controller directional input to navigate, Select to activate, and Back to close the current window. Tab/Shift+Tab cycle keyboard focus. Left/right change a focused dropdown or slider. Focus displays the same explanations as mouse hover, including equipment and Champion details, and scrolls overflowing lists into view.
+
+In MOVE HUD, the secondary action cycles **Move**, **Scale**, **Width**, **Height** and **Controls**; the shoulder actions change the selected panel. Directional movement is continuous in the geometry modes. Controls mode lets you reach orientation, preview, reset and Done. The on-screen hints identify the active mode. Native confirmation dialogs temporarily receive input; addon navigation resumes afterward. Combat, loading and leaving the addon screen release its input controls.
 
 ## Builds
 
@@ -58,13 +70,13 @@ Choose a group member to see a compact character sheet:
 - Twelve Champion slots, native discipline stars, invested points and the inspected player's corresponding bonus.
 - Class Masteries, learned class passives, food, selected potion, Mundus and supported curse information.
 
-The Champion interface uses ESO's own discipline artwork. The game does not provide a unique skill picture for each Champion star. Set icons come from actual equipment or the native set collection; a collection reference is clearly distinguished from a player's equipped item.
+The Champion interface uses ESO's own discipline artwork. The game does not provide a unique skill picture for each Champion star. Set icons come from actual equipment or supported native reference items; a reference is clearly distinguished from a player's equipped item. The mannequin preserves its native proportions, with mirrored armor columns and separate jewelry and weapon groups.
 
 Tooltips appear above addon windows. For a shared skill, stat-dependent preview values use the viewer's character; equipment identity and the sender's CP allocation remain separate. **Unknown** means data is unavailable or incomplete; it never means confirmed absence.
 
 ## Coverage
 
-Choose **Trial** or **Dungeon**, then review **Buffs**, **Debuffs**, **Group Sets** and **Group Mythics** on one page. Larger categories use multiple compact columns, with no scrolling or pagination. Each effect has a native icon where available, an ON/OFF switch, a status color and a contributor count. **All**, **Missing** and **Duplicates** filter the page.
+Choose **Trial** or **Dungeon**, then review **Buffs**, **Debuffs**, **Group Sets** and **Group Mythics** on one page. Larger categories use multiple compact columns, with no scrolling or pagination. Each effect has native artwork, an ON/OFF switch, a status color and a contributor count. When an effect has no verified dedicated image, a native category symbol keeps the tile visible and its tooltip explains the fallback. **All**, **Missing** and **Duplicates** filter the page.
 
 Hover an effect name for its full description, sources and conditions. Hover its contributor count for **every known provider**, their exact reported source names and bar availability. A duplicate shows **×** beside the count. Clicking the count opens the named contributor's build; select any other group member from the Builds roster. Green means covered, red missing, gold unknown or duplicate, and grey optional.
 

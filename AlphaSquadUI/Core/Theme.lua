@@ -68,11 +68,11 @@ local presets={
             surface={0.012,0.018,0.026,0.66},accent={0.73,0.41,0.14,0.90}},
         edge=1,windowAccent=1,cardAccent=0,headerHeight=0,headerVisible=false},
     obsidian={name="Obsidian Studio",description="Soft dark cards, quiet borders and strong separation between sections.",
-        colors={bg={0.010,0.015,0.025,0.98},panel={0.038,0.048,0.065,0.98},
-            panelActive={0.063,0.075,0.095,0.99},border={0.18,0.22,0.28,0.82},
-            hover={0.075,0.090,0.115,1},selected={0.125,0.080,0.035,1},
-            sidebar={0.014,0.021,0.033,0.99},header={0.078,0.097,0.126,0.35},
-            surface={0.023,0.032,0.048,0.97},accent={0.95,0.48,0.14,1}},
+        colors={bg={0.031,0.035,0.043,0.98},panel={0.055,0.063,0.078,0.98},
+            panelActive={0.078,0.090,0.110,0.99},border={0.141,0.165,0.200,0.82},
+            hover={0.096,0.110,0.137,1},selected={0.160,0.100,0.047,1},
+            sidebar={0.031,0.035,0.043,0.99},header={0.122,0.140,0.170,0.35},
+            surface={0.051,0.063,0.078,0.97},accent={1.00,0.471,0.094,1}},
         edge=1,windowAccent=2,cardAccent=0,headerHeight=30,headerVisible=true},
 }
 local bindings=setmetatable({},{__mode="k"})

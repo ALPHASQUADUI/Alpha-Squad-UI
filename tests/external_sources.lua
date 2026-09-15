@@ -43,7 +43,8 @@ sharedUlt._lastUpdated=0
 SC:MergeExternalCapabilities(entry)
 check(not entry.capabilities.major_force and not entry.externalUltimates,"Default timestamp zero clears earlier external evidence")
 sharedUlt._lastUpdated=now-75001;SC:MergeExternalCapabilities(entry)
-check(not entry.externalUltimates,"Stale LGCS evidence is excluded")
+check(entry.externalUltimates and entry.externalUltimates[1].updatedAt==now-75001
+    and entry.capabilities.major_force,"Unchanged LGCS slot reports remain usable without inventing a new timestamp")
 sharedUlt._lastUpdated=now+1;SC:MergeExternalCapabilities(entry)
 check(not entry.externalUltimates,"Future timestamps are rejected")
 sharedUlt._lastUpdated=0/0;SC:MergeExternalCapabilities(entry)
@@ -64,6 +65,9 @@ check(not entry.externalSkillLines,"Unreceived library class guesses do not beco
 sharedLines._lastUpdated=now;SC:MergeExternalCapabilities(entry)
 check(#entry.externalSkillLines.names==3 and entry.externalSkillLines.names[1]=="Ardent Flame" and not entry.masteries,
     "Received skill line IDs produce a named partial view without mastery inference")
+sharedLines._lastUpdated=now-75001;SC:MergeExternalCapabilities(entry)
+check(entry.externalSkillLines and entry.externalSkillLines.updatedAt==now-75001,
+    "Change-driven skill lines retain the original receipt instead of expiring by polling age")
 entry.externalSkillLines.ids[1]=999
 check(sharedLines.first==35,"External views never mutate the library's skill line table")
 sharedUlt={ult1ID=40223,ult2ID=0,_lastUpdated=now}
@@ -77,6 +81,9 @@ entry=Entry();entry.buildVerified=true;entry.capabilitiesComplete=true
 SC:MergeExternalCapabilities(entry)
 check(not entry.externalUltimates,"A complete verified build stays authoritative over another library's cached slots")
 entry=Entry();sharedUlt=nil;sharedLines=nil
+SC:MergeExternalCapabilities(entry)
+check(not entry.externalUltimates and not entry.externalSkillLines,
+    "Removal from the library-owned group cache clears previously reported slots and lines")
 local calls,callback,setData,available=0,nil,{},true
 local constants={event_data_update=2,unit_type_group=2,active_type_none=0,active_type_dual=1,active_type_front=2,active_type_back=3}
 LibSetDetection={constants=constants,
@@ -106,6 +113,14 @@ local received=now
 now=now+600000;SC:MergeExternalCapabilities(entry)
 check(entry.externalSets and entry.externalSets.updatedAt==received and entry.capabilities.major_courage,
     "A change-driven set report remains valid for the continuous group session without renewing its timestamp")
+function GetItemSetUnperfectedSetId(id) return id==99951 and 185 or 0 end
+setData=Set(99951,3,2,0,2);callback("group2",false);SC:MergeExternalCapabilities(entry)
+check(entry.capabilities.major_courage and entry.externalSets.setList[1].id==185,
+    "Native Perfected set identities resolve to their catalog family")
+setData=Set(185,3,0,0,0);setData[99951]=Set(99951,0,2,0,2)[99951]
+callback("group2",false);SC:MergeExternalCapabilities(entry)
+check(entry.capabilities.major_courage and #entry.externalSets.setList==1 and entry.externalSets.setList[1].mainCount==5,
+    "Mixed normal and Perfected family counts are merged without combining front and back")
 setData=Set(185,3,1,1,0);callback("group2",false);SC:MergeExternalCapabilities(entry)
 check(not entry.capabilities.major_courage,"Front and back weapon counts cannot be combined into a false five-piece set")
 setData=Set(185,5,0,0,0);callback("group2",false);SC:MergeExternalCapabilities(entry)

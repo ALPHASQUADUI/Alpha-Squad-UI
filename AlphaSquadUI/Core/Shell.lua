@@ -6,6 +6,8 @@ local COLORS=ASUI.Theme.colors
 local SETTINGS_MENU_NAME=ASUI.Theme.Brand()
 local VERSION=ASUI.version
 local Clamp=ASUI.Utils.Clamp
+local LogicalWidth=ASUI.Utils.GetLogicalWidth
+local LogicalHeight=ASUI.Utils.GetLogicalHeight
 local function SetColor(control,color) control:SetColor(color[1],color[2],color[3],color[4] or 1) end
 function Shell:ApplyVisualSettings() ASUI.Settings.RefreshModuleVisibility() end
 function Shell:OpenWebsite() return ASUI.Settings.OpenLink(ASUI.website) end
@@ -66,6 +68,8 @@ local function CreateButton(parent, name, text, x, y, width, height, onClick)
         end
     end)
 
+    if ASUI.Input then ASUI.Input.Register(button, {activate = onClick, label = text}) end
+
     return button
 end
 
@@ -82,6 +86,8 @@ function Shell:ApplySettingsGeometry()
     if not self.settingsWindow or not GuiRoot then return end
     local scale=math.max(0.1,math.min(1,(GuiRoot:GetWidth()-40)/1350,(GuiRoot:GetHeight()-40)/720))
     local height=720
+    if self.settingsAppliedScale==scale then return end
+    self.settingsAppliedScale=scale
     self.settingsWindow:SetDimensions(1350, height)
     self.settingsWindow:SetScale(scale)
     if self.settingsSidebar then self.settingsSidebar:SetHeight(height - 64) end
@@ -121,7 +127,7 @@ function Shell:ShowSettingsPage(pageId)
     end
     if self.settingsContent then
         local page = self.settingsPages[pageId]
-        local height = math.max(self.settingsScroll and self.settingsScroll:GetHeight() or 590, tonumber(page.contentHeight) or 640)
+        local height = math.max(self.settingsScroll and LogicalHeight(self.settingsScroll) or 590, tonumber(page.contentHeight) or 640)
         self.settingsContent:SetHeight(height)
         page:SetHeight(height)
     end
@@ -195,6 +201,12 @@ function Shell:CreateSettingsWindow()
             Shell:ApplySettingsGeometry()
         end)
     end
+    if EVENT_ALL_GUI_SCREENS_RESIZED then
+        EVENT_MANAGER:RegisterForEvent("AlphaSquadUI_SettingsUIScale", EVENT_ALL_GUI_SCREENS_RESIZED, function()
+            Shell.settingsAppliedScale=nil
+            Shell:ApplySettingsGeometry()
+        end)
+    end
 
     win.bg=CreateSolid(win,"AlphaSquadSettingsBG",COLORS.bg)
     if ASUI.Theme.RegisterSurface then ASUI.Theme.RegisterSurface(win,win.bg,"window") end
@@ -223,6 +235,13 @@ function Shell:CreateSettingsWindow()
     subtitle:SetDimensions(520, 20)
     subtitle:SetAnchor(TOPLEFT, win, TOPLEFT, 21, 38)
     subtitle:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
+
+    win.inputHint = CreateLabel(win, "AlphaSquadSettingsInputHint", "ZoFontGameSmall", "", COLORS.muted)
+    win.inputHint:SetDimensions(754, 22)
+    win.inputHint:SetAnchor(TOPRIGHT, win, TOPRIGHT, -20, 37)
+    win.inputHint:SetHorizontalAlignment(TEXT_ALIGN_RIGHT)
+    win.inputHint:SetMaxLineCount(1)
+    if win.inputHint.SetWrapMode and TEXT_WRAP_MODE_ELLIPSIS then win.inputHint:SetWrapMode(TEXT_WRAP_MODE_ELLIPSIS) end
 
     local separator = WINDOW_MANAGER:CreateControl("AlphaSquadSettingsSeparator", win, CT_TEXTURE)
     separator:SetAnchor(TOPLEFT, win, TOPLEFT, 0, 63)
@@ -276,6 +295,7 @@ function Shell:CreateSettingsWindow()
             if mouseButton == MOUSE_BUTTON_INDEX_LEFT and upInside ~= false then Shell:ShowSettingsPage(id) end
         end)
         self.settingsNavButtons[id] = button
+        if ASUI.Input then ASUI.Input.Register(button, {activate = function() Shell:ShowSettingsPage(id) end, label = text}) end
         return button
     end
 
@@ -328,7 +348,7 @@ function Shell:CreateSettingsWindow()
 
     local function CreateCard(parent, name, x, y, w, h, titleText, titleColor)
         if not parent.responsiveCards then
-            local factor=(parent:GetWidth()-16)/658
+            local factor=(LogicalWidth(parent)-16)/658
             x=8+(x-8)*factor;w=w*factor
         end
         local card = WINDOW_MANAGER:CreateControl(name, parent, CT_CONTROL)
@@ -346,7 +366,7 @@ function Shell:CreateSettingsWindow()
 
     local function AddToggleRow(parent, name, labelText, y, getter, setter, help)
         local label = CreateLabel(parent, name .. "Label", "ZoFontGame", labelText, COLORS.white)
-        label:SetDimensions(parent:GetWidth() - 116, 30)
+        label:SetDimensions(LogicalWidth(parent) - 116, 30)
         label:SetAnchor(TOPLEFT, parent, TOPLEFT, 14, y)
         label:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
         label:SetMaxLineCount(1)
@@ -356,10 +376,11 @@ function Shell:CreateSettingsWindow()
             Shell:ApplyVisualSettings()
             Shell:RefreshSettingsWindow()
         end
-        local button = CreateButton(parent, name .. "Button", "", parent:GetWidth() - 96, y, 80, 30, Toggle)
+        local button = CreateButton(parent, name .. "Button", "", LogicalWidth(parent) - 96, y, 80, 30, Toggle)
         button.thumb=CreateSolid(button,name.."Thumb",COLORS.muted)
         button.thumb:SetDimensions(18,18);button.thumb:ClearAnchors()
         button.help = help or (labelText .. "\n\nClick the label or switch to change this setting. Changes are saved automatically.")
+        if ASUI.Input then ASUI.Input.Register(button, {activate = Toggle, label = labelText}) end
         label:SetMouseEnabled(true)
         label:SetHandler("OnMouseEnter", function()
             if AlphaSquadUI.Tooltips then AlphaSquadUI.Tooltips.ShowText(label, button.help) end
@@ -388,26 +409,30 @@ function Shell:CreateSettingsWindow()
 
     local function AddStepperRow(parent, name, labelText, y, getter, setter, step, minimum, maximum, suffix, color, description)
         local label = CreateLabel(parent, name .. "Label", "ZoFontGame", labelText, COLORS.white)
-        label:SetDimensions(parent:GetWidth() - 170, 30)
+        label:SetDimensions(LogicalWidth(parent) - 170, 30)
         label:SetAnchor(TOPLEFT, parent, TOPLEFT, 14, y)
         label:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
         label:SetMaxLineCount(1)
         if label.SetWrapMode and TEXT_WRAP_MODE_ELLIPSIS then label:SetWrapMode(TEXT_WRAP_MODE_ELLIPSIS) end
-        local minus = CreateButton(parent, name .. "Minus", "−", parent:GetWidth() - 154, y, 38, 30, function()
+        local minus = CreateButton(parent, name .. "Minus", "−", LogicalWidth(parent) - 154, y, 38, 30, function()
             setter(Clamp(getter() - step, minimum, maximum))
             Shell:RefreshSettingsWindow()
         end)
         local value = CreateLabel(parent, name .. "Value", "ZoFontGameBold", "", color or COLORS.cyan)
         value:SetDimensions(56, 30)
-        value:SetAnchor(TOPLEFT, parent, TOPLEFT, parent:GetWidth() - 112, y)
+        value:SetAnchor(TOPLEFT, parent, TOPLEFT, LogicalWidth(parent) - 112, y)
         value:SetHorizontalAlignment(TEXT_ALIGN_CENTER)
-        local plus = CreateButton(parent, name .. "Plus", "+", parent:GetWidth() - 52, y, 38, 30, function()
+        local plus = CreateButton(parent, name .. "Plus", "+", LogicalWidth(parent) - 52, y, 38, 30, function()
             setter(Clamp(getter() + step, minimum, maximum))
             Shell:RefreshSettingsWindow()
         end)
         local help = string.format("%s%s\n\nAdjust from %s%s to %s%s. Changes are saved automatically.",
             labelText, description and ("\n\n" .. description) or "", minimum, suffix or "", maximum, suffix or "")
         minus.help, plus.help = help, help
+        if ASUI.Input then
+            ASUI.Input.Register(minus, {label = "Decrease " .. labelText})
+            ASUI.Input.Register(plus, {label = "Increase " .. labelText})
+        end
         label:SetMouseEnabled(true)
         label:SetHandler("OnMouseEnter", function()
             if AlphaSquadUI.Tooltips then AlphaSquadUI.Tooltips.ShowText(label, help) end
@@ -541,6 +566,7 @@ function Shell:Initialize()
     if self.initialized then return end
     self.initialized=true
     if ASUI.Theme.Initialize then ASUI.Theme.Initialize() end
+    if ASUI.Input then ASUI.Input.Initialize() end
     self:CreateSettingsWindow()
     self:RegisterDirectSettingsPanel()
     if ASUI.Theme.OnChanged then

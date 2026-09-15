@@ -279,4 +279,39 @@ ULT.sv.enabled, Group.sv.enabled, Group.sv.visible, Group.sv.locked = false, fal
 SLASH_COMMANDS["/asult"]("group move")
 check(ULT.sv.enabled and Group.sv.enabled and Group.sv.visible and not Group.sv.locked, "Group move command activates and exposes the HUD")
 
+local savedBuildRoster=Group.BuildRoster
+local rosterScans=0
+Group.BuildRoster=function() rosterScans=rosterScans+1 end
+ULT.sv.enabled=false;Group.sv.enabled=false
+Group:Refresh("queued before disable",true)
+check(rosterScans==0,"A queued refresh cannot scan the group after tracking is disabled")
+Group.BuildRoster=savedBuildRoster
+
+-- Native hotbar changes often arrive as a burst while swapping equipment.
+ULT.sv.enabled=true;ULT.loading=false;ULT.slotRefreshPending=false
+ULT:RegisterEvents()
+local queued=#delayed
+local hotbar=events.AlphaSquadUI_ULTTracker_HotbarSlot.callback
+hotbar(nil,3,HOTBAR_CATEGORY_PRIMARY)
+check(#delayed==queued,"Changing a normal skill cannot queue an Ultimate metadata refresh")
+hotbar(nil,ULT.ULTIMATE_SLOT,HOTBAR_CATEGORY_PRIMARY)
+events.AlphaSquadUI_ULTTracker_AllBars.callback()
+events.AlphaSquadUI_ULTTracker_ActiveBar.callback()
+check(#delayed==queued+1,"Related slot and bar events coalesce into one queued refresh")
+local calls=0;local refresh=ULT.Refresh
+ULT.Refresh=function() calls=calls+1 end
+ULT.sv.enabled=false;delayed[#delayed].callback()
+check(calls==0 and not ULT.slotRefreshPending,"Disabling the module cancels the effect of already queued slot work")
+ULT.sv.enabled=true;ULT:ScheduleSlotRefresh("new slots");delayed[#delayed].callback()
+check(calls==1,"A later enabled slot change resumes normally")
+ULT.Refresh=refresh
+local reads=0;local nativeName=GetAbilityName
+GetAbilityName=function(id) reads=reads+1;return "Native "..id end
+Group:GetAbilityMeta(77777);Group:GetAbilityMeta(77777)
+check(reads==1,"Group rendering caches native ability identity instead of rereading every row update")
+GetAbilityName=function() error("Unknown ability") end
+local safeName=Group:GetAbilityMeta(77778)
+check(safeName=="Unknown Ultimate","Unsupported remote IDs cannot crash the HUD through a native metadata getter")
+GetAbilityName=nativeName
+
 print(string.format("PASS: %d assertions; Lua %s. No ESO-runtime certification.", total, _VERSION))

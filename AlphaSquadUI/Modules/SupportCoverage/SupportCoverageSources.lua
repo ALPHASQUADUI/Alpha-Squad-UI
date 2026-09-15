@@ -135,7 +135,7 @@ function SC:ScanEquipment()
     end)
     result.capabilities=capabilities
     for _,item in ipairs(result.items or {}) do
-        if item.isWeapon and item.weaponType==nil then result.complete=false end
+        if item.equipSlotValid==false or (item.isWeapon and item.weaponType==nil) then result.complete=false end
     end
     if not result.complete then result.capabilities={} end
     self:RefreshEquipmentPhysicalCounts(result)
@@ -147,11 +147,57 @@ function SC:ScanPotion()
     local potion=potionScan(self)
     if potion.known then
         local count=FiniteNumber(Try(GetSlotItemCount,potion.slot,HOTBAR_CATEGORY_QUICKSLOT_WHEEL))
-        potion.count=count and math.floor(math.max(0,math.min(1000000,count))) or nil
+        potion.count=count and math.floor(math.max(0,math.min(65535,count))) or nil
         potion.evidence="SELECTED_QUICKSLOT"
         -- Selection is not a cast event, including when the stack becomes empty.
     end
     return potion
+end
+
+local function NativeIconName(value)
+    if type(value)~="string" then return nil end
+    local path=value:lower():gsub("\\","/")
+    if not path:match("^/?esoui/art/icons/") then return nil end
+    return path:match("([^/]+)$")
+end
+
+-- Validate the reported recipe against public, character-independent definition APIs.
+-- Do not use the viewer's unlocked scripts, active recipe or crafted effective ability ID.
+function SC:DeriveScribingCapabilities(skill)
+    local result={}
+    if type(skill)~="table" or skill.scriptsKnown~=true or type(skill.scripts)~="table" or #skill.scripts~=3 then return result end
+    local craftedId=AbilityId(skill.craftedAbilityId)
+    if not craftedId or skill.ultimate==true then return result end
+    local slots={SCRIBING_SLOT_PRIMARY,SCRIBING_SLOT_SECONDARY,SCRIBING_SLOT_TERTIARY}
+    if #slots~=3 then return result end
+    local ids,icons,seen={},{},{}
+    for index,script in ipairs(skill.scripts) do
+        local id=type(script)=="table" and AbilityId(script.id)
+        if not id or seen[id] or Try(GetCraftedAbilityScriptScribingSlot,id)~=slots[index] then return result end
+        local count=FiniteNumber(Try(GetNumScriptsInSlotForCraftedAbility,craftedId,slots[index]))
+        if not count or count<1 or count>128 or count%1~=0 then return result end
+        local allowed=false
+        for i=1,count do
+            if Try(GetScriptIdAtSlotIndexForCraftedAbility,craftedId,slots[index],i)==id then allowed=true;break end
+        end
+        if not allowed or Try(IsCraftedAbilityScriptDisabled,id)==true then return result end
+        ids[index],icons[index],seen[id]=id,NativeIconName(Try(GetCraftedAbilityScriptIcon,id)),true
+    end
+    if Try(IsCraftedAbilityDisabled,craftedId)==true
+        or Try(IsScribableScriptCombinationForCraftedAbility,craftedId,ids[1],ids[2],ids[3])~=true then return result end
+    local textures=Catalog.scribingTextures
+    if not textures or NativeIconName(Try(GetCraftedAbilityIcon,craftedId))~=textures.banner then return result end
+    local focusKey=textures.bannerFocus[icons[1]]
+    -- Immobilize is a personal cleanse; it is deliberately not a group-cleanse provider.
+    if focusKey then
+        result[focusKey]={name="Banner Bearer - "..Catalog.effects[focusKey].label:gsub("^Banner Bearer %- ",""),
+            conditions="The exact Focus is equipped in a valid recipe. Toggle the banner on and keep intended allies in its aura."}
+    end
+    for _,key in ipairs(textures.bannerAffix[icons[3]] or {}) do
+        result[key]={name="Banner Bearer - "..Catalog.effects[key].label,
+            conditions="The exact Affix is equipped in a valid Banner recipe. Its recipients must be in the active aura; the same named buff does not stack."}
+    end
+    return result
 end
 
 -- Use the same conservative capability derivation for local scans and received full builds.
@@ -193,7 +239,7 @@ function SC:DeriveBuildCapabilities(snapshot)
                         local name=source.label or set.name or "Equipped set"
                         for _,key in ipairs(source.provides or {}) do
                             Add(key,name,"set",source.conditions,main,back,"SET_ID",{
-                                requiredPieces=needed,mainCount=set.mainCount,backCount=set.backCount})
+                                requiredPieces=needed,mainCount=set.mainCount,backCount=set.backCount,recipientLimit=source.recipientLimit})
                         end
                     end
                 end
@@ -213,7 +259,12 @@ function SC:DeriveBuildCapabilities(snapshot)
     end
     local skills=type(snapshot.skills)=="table" and snapshot.skills or {}
     if skills.known==true then
-        for _,bar in ipairs({"primary","backup"}) do
+        local usableBars={"primary","backup"}
+        local curse=type(snapshot.curse)=="table" and snapshot.curse or {}
+        if skills.werewolfKnown==true and curse.known==true and curse.kind=="WEREWOLF" and curse.transformed==true then
+            usableBars[#usableBars+1]="werewolf"
+        end
+        for _,bar in ipairs(usableBars) do
             for _,skill in ipairs(skills[bar] or {}) do
                 local seen={}
                 local function AddMatches(id)
@@ -223,7 +274,7 @@ function SC:DeriveBuildCapabilities(snapshot)
                             for _,key in ipairs(source.provides or {}) do
                                 if source.personal~=true then
                                     Add(key,source.label or skill.name,"skill",source.conditions,
-                                        bar=="primary",bar=="backup","SLOTTED_SKILL",{slot=skill.slot})
+                                        bar=="primary",bar=="backup","SLOTTED_SKILL",{slot=skill.slot,alternateBar=bar=="werewolf" and "WEREWOLF" or nil})
                                 end
                             end
                         end
@@ -245,7 +296,12 @@ function SC:DeriveBuildCapabilities(snapshot)
     if masteries.known and masteries.eligible then
         for _,selected in ipairs(masteries.selected or {}) do
             for _,source in ipairs(Catalog.masterySources or {}) do
-                local matches=(source.abilityId and selected.id==source.abilityId) or Normalize(selected.name)==Normalize(source.name)
+                local nativeName=Try(GetAbilityName,selected.id)
+                local name=type(nativeName)=="string" and nativeName~="" and nativeName or selected.name
+                local matches=(source.abilityId and selected.id==source.abilityId) or Normalize(name)==Normalize(source.name)
+                if not matches then
+                    for _,alias in ipairs(source.aliases or {}) do if Normalize(name)==Normalize(alias) then matches=true;break end end
+                end
                 local prerequisite=not source.requires
                 for _,id in ipairs(source.requiresIds or {}) do
                     if ((masteries.learnedIds or {})[id] or 0)>=(source.rank or 1) then prerequisite=true;break end

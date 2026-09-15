@@ -3,6 +3,8 @@ AlphaSquadUI = AlphaSquadUI or {}
 AlphaSquadUI.Settings = AlphaSquadUI.Settings or {}
 
 local Settings = AlphaSquadUI.Settings
+local LogicalWidth = AlphaSquadUI.Utils.GetLogicalWidth
+local LogicalHeight = AlphaSquadUI.Utils.GetLogicalHeight
 Settings.pages = Settings.pages or {}
 Settings.mainWindow = Settings.mainWindow or nil
 Settings.showPageCallback = Settings.showPageCallback or nil
@@ -21,6 +23,7 @@ end
 function Settings.RegisterExclusiveWindow(id, control, closeCallback)
     if not id or not control then return end
     Settings.exclusiveWindows[id] = { control = control, close = closeCallback }
+    if AlphaSquadUI.Input then AlphaSquadUI.Input.RegisterWindow(control, {close = closeCallback}) end
 end
 
 function Settings.AnyExclusiveWindowVisible()
@@ -71,11 +74,11 @@ function Settings.CreateScrollArea(parent, name, x, y, width, height, contentHei
     slider:SetThumbTexture(thumb, thumb, thumb, 10, 40, 0, 0, 1, 1)
     scroll.offset = 0
     local function SetOffset(value)
-        scroll.offset = math.max(0, math.min(scroll.maximum or 0, tonumber(value) or 0))
+        scroll.offset = AlphaSquadUI.Utils.Clamp(value, 0, scroll.maximum or 0)
         scroll:SetVerticalScroll(scroll.offset)
     end
     local function UpdateBounds()
-        scroll.maximum = math.max(0, child:GetHeight() - scroll:GetHeight())
+        scroll.maximum = math.max(0, LogicalHeight(child) - LogicalHeight(scroll))
         slider:SetMinMax(0, scroll.maximum)
         slider:SetHidden(scroll.maximum == 0)
         SetOffset(scroll.offset)
@@ -92,6 +95,18 @@ function Settings.CreateScrollArea(parent, name, x, y, width, height, contentHei
     child:SetHandler("OnRectHeightChanged", UpdateBounds)
     scroll.UpdateBounds = UpdateBounds
     scroll.scrollbar = slider
+    function scroll:EnsureControlVisible(control)
+        if not control or not control.GetTop or not self.GetTop then return end
+        local scale = self.GetScale and self:GetScale() or 1
+        if type(scale) ~= "number" or scale <= 0 then return end
+        local top = (control:GetTop() - self:GetTop()) / scale
+        local bottom = top + LogicalHeight(control)
+        local viewport = LogicalHeight(self)
+        if top < 0 then SetOffset(self.offset + top)
+        elseif bottom > viewport then SetOffset(self.offset + bottom - viewport) end
+        slider:SetValue(self.offset)
+    end
+    if AlphaSquadUI.Input then AlphaSquadUI.Input.Register(slider, {kind = "slider", step = 40, label = "Scroll content"}) end
     UpdateBounds()
     return child, scroll, slider
 end
@@ -190,6 +205,7 @@ local function PresetDropdown(parent,ui,width)
         entry.id=id;entry.description=preset.description
         combo:AddItem(entry)
     end
+    if ASUI.Input then ASUI.Input.Register(container, {kind = "dropdown", combo = combo, label = "Interface style"}) end
     ui.RegisterRefresher(function()
         local id=theme.GetPresetId()
         combo:SetSelectedItemByEval(function(entry)return entry.id==id end,true)
@@ -199,7 +215,7 @@ local function PresetDropdown(parent,ui,width)
 end
 Settings.RegisterPage("dashboard",function(page,ui)
     page.responsiveCards=true;page.contentHeight=590
-    local width=page:GetWidth()-16;local half=(width-16)/2
+    local width=LogicalWidth(page)-16;local half=(width-16)/2
     Label(ui,page,"AlphaSquadDashboardTitle","DASHBOARD",8,2,width,34,ui.colors.orange,"ZoFontWinH2")
     Label(ui,page,"AlphaSquadDashboardIntro","Your tools, your layout. Choose what you need and make it yours.",8,40,width,26)
     local entries={
@@ -229,7 +245,7 @@ Settings.RegisterPage("dashboard",function(page,ui)
 end)
 Settings.RegisterPage("libraries",function(page,ui)
     page.responsiveCards=true;page.contentHeight=590
-    local c=ui.colors;local width=page:GetWidth()-16;local half=(width-16)/2
+    local c=ui.colors;local width=LogicalWidth(page)-16;local half=(width-16)/2
     Label(ui,page,"AlphaSquadLibrariesTitle","LIBRARIES & SHARING",8,2,width,34,c.orange,"ZoFontWinH2")
     Label(ui,page,"AlphaSquadLibrariesIntro","Required add-ons for group features • green: installed • red: missing. Local trackers work without these libraries.",8,38,width,28)
     local rows={
@@ -281,7 +297,7 @@ end)
 
 Settings.RegisterPage("community",function(page,ui)
     page.responsiveCards=true;page.contentHeight=590
-    local width=page:GetWidth()-16;local half=(width-16)/2
+    local width=LogicalWidth(page)-16;local half=(width-16)/2
     Label(ui,page,"AlphaSquadCommunityTitle",ASUI.Theme.Brand(),8,2,width,36,ui.colors.white,"ZoFontWinH2")
     Label(ui,page,"AlphaSquadCommunityIntro","Endgame ESO PvE • Hard Modes • Trifectas • Guides • Community",8,44,width,26)
     local site=ui.CreateCard(page,"AlphaSquadCommunitySite",8,88,width,180,"EXPLORE ALPHA SQUAD",ui.colors.orange)
@@ -299,7 +315,7 @@ Settings.RegisterPage("community",function(page,ui)
 end)
 Settings.RegisterPage("discord",function(page,ui)
     page.responsiveCards=true;page.contentHeight=590
-    local width=page:GetWidth()-16;local left=math.floor(width*0.55)
+    local width=LogicalWidth(page)-16;local left=math.floor(width*0.55)
     Label(ui,page,"AlphaSquadDiscordTitle","ALPHA SQUAD • DISCORD",8,2,width,36,ui.colors.orange,"ZoFontWinH2")
     Label(ui,page,"AlphaSquadDiscordIntro","The community behind your next clear.",8,44,width,28,ui.colors.muted,"ZoFontGame")
     local invite=ui.CreateCard(page,"AlphaSquadDiscordInvite",8,94,left,418,"ALPHA SQUAD",ui.colors.cyan)

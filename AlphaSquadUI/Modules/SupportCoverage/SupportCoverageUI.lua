@@ -70,6 +70,7 @@ function UI.Hover(control, text)
         if leave then leave(control) end
         UI.ClearTooltip()
     end)
+    if AlphaSquadUI.Input and AlphaSquadUI.Input.Register then AlphaSquadUI.Input.Register(control,{kind="inspect"}) end
 end
 function UI.SetButtonSelected(button,selected)
     button.selected=selected==true
@@ -90,6 +91,9 @@ function UI.Button(parent, name, caption, width, height, action)
     b:SetHandler("OnMouseUp", function(_, button, inside)
         if button == MOUSE_BUTTON_INDEX_LEFT and inside ~= false and action then action(b) end
     end)
+    if AlphaSquadUI.Input and AlphaSquadUI.Input.Register then
+        AlphaSquadUI.Input.Register(b,{label=caption,activate=action and function() action(b) end})
+    end
     return b
 end
 function UI.Scroll(parent, name)
@@ -175,7 +179,10 @@ function UI.ShowWindow(id,win)
         if SC.inspectorWindow and SC.inspectorWindow~=win then SC.inspectorWindow:SetHidden(true) end
         win:SetHidden(false)
     end
-    UI.FitWindow(win); SC:ApplyVisibility()
+    -- Windows with their own logical layout fit once after binding content.
+    -- A temporary larger size can otherwise move a clamped window on opening.
+    if not win.hasContentLayout then UI.FitWindow(win) end
+    SC:ApplyVisibility()
 end
 function UI.PlayerSources(player,key)
     local capability=player and player.capabilities and player.capabilities[key]
@@ -198,7 +205,20 @@ function UI.PlayerSources(player,key)
     end
     return table.concat(lines,"\n\n")
 end
+function UI.EffectTooltip(key)
+    local catalog=SC.Catalog
+    if not catalog then return "Coverage information is unavailable." end
+    local text=catalog:GetEffectTooltip(key)
+    local visual=catalog.GetEffectVisual and catalog:GetEffectVisual(key)
+    if visual and visual.isFallback then
+        text=text.."\n\nIcon: native category symbol; an exact effect or item image is unavailable."
+    elseif visual and visual.iconKind=="source" and visual.sourceName then
+        text=text.."\n\nIcon: "..visual.sourceName..", one of this effect's possible sources."
+    end
+    return text
+end
 function UI.Status(row)
+    if row.status=="off" or row.optional then return "TRACKING OFF",C.muted end
     if row.status=="covered" then return "COVERED",C.green end
     if row.unverified or row.status=="unknown" then return "UNKNOWN",C.gold end
     return "MISSING",C.red
@@ -213,11 +233,11 @@ function SC:GetHUDDimensions()
     if layout and layout.GetDimensions then width,height=layout.GetDimensions(self,width,height) end
     return self.Clamp(width,300,1000),self.Clamp(height,210,900)
 end
-function SC:GetEffectiveScale()
+function SC:GetEffectiveScale(width,height)
     local layout=AlphaSquadUI.Layout
-    if layout and layout.GetScale then return layout.GetScale(self) end
+    if layout and layout.GetScale then return layout.GetScale(self,width,height) end
     local scale=self.Clamp(self.sv.scale or 100,60,180)/100
-    local width,height=self:GetHUDDimensions()
+    if not width or not height then width,height=self:GetHUDDimensions() end
     return math.min(scale,(GuiRoot:GetWidth()-24)/width,(GuiRoot:GetHeight()-24)/height)
 end
 function SC:ApplyLayout()
@@ -249,8 +269,9 @@ end
 function SC:ApplyAppearance()
     if not self.window or not self.sv then return end
     local width,height=self:GetHUDDimensions()
+    self.layoutWidth,self.layoutHeight=width,height
     self.window:SetDimensions(width,height)
-    self.window:SetScale(self:GetEffectiveScale())
+    self.window:SetScale(self:GetEffectiveScale(width,height))
     self.window.bg:SetAlpha(self.Clamp(self.sv.opacity or 94,30,100)/100)
     if self.window.actions then
         local actionWidth=(width-28)/2
@@ -278,25 +299,60 @@ function SC:ApplyVisibility()
         self:SetSafetyUpdateActive(not self.loading and not self.inCombat and (tracking or sharing)==true)
     end
 end
-function SC:GetHUDIssues()
+function SC:SetLayoutPreview(mode)
+    self.layoutPreview=mode
+    self:RefreshHUD()
+end
+function SC:GetHUDPresentation()
+    local layout=AlphaSquadUI.Layout
+    local moving=layout and layout.IsMoving and layout.IsMoving(self)
+    local preview=AlphaSquadUI.Preview
+    local mode=preview and preview.GetMode and preview.GetMode() or self.layoutPreview or "mixed"
+    if not moving or mode=="live" then return self.coverage or {},#(self.roster or {}) end
+    if mode=="overload" then mode="mixed" end
+    if self.hudPreview and self.hudPreviewMode==mode then return self.hudPreview,12 end
+    local catalog=self.Catalog
+    local keys=catalog and catalog.GetAllEffectKeys and catalog:GetAllEffectKeys() or {}
+    local data={entries={},requiredCount=0,coveredCount=0,profileLabel="Layout preview",preview=true}
+    local cycle={"covered","missing","unknown","covered","off"}
+    for index=1,math.min(12,#keys) do
+        local key=keys[index]
+        local status=mode=="ready" and "covered" or mode=="missing" and "missing" or mode=="off" and "off" or cycle[(index-1)%#cycle+1]
+        local duplicate=mode=="mixed" and (index-1)%#cycle==3
+        local owners={}
+        if status=="covered" then
+            for owner=1,duplicate and 3 or 1 do owners[owner]={displayName=string.format("@Preview%02d",((index+owner-2)%12)+1)} end
+        end
+        data.entries[index]={key=key,effect=catalog.effects[key],status=status,owners=owners,
+            duplicatePlayers=duplicate and owners or {},optional=status=="off",preview=true}
+        if status~="off" then data.requiredCount=data.requiredCount+1 end
+        if status=="covered" then data.coveredCount=data.coveredCount+1 end
+    end
+    data.ready=data.coveredCount==data.requiredCount and data.requiredCount>0
+    self.hudPreview,self.hudPreviewMode=data,mode
+    return data,12
+end
+function SC:GetHUDIssues(coverage)
     local rows={}
-    for _,row in ipairs(self.coverage and self.coverage.entries or {}) do
+    coverage=coverage or self.coverage
+    for _,row in ipairs(coverage and coverage.entries or {}) do
         local duplicate=#(row.duplicatePlayers or {})>1
-        if not self.sv.problemsOnly or row.status~="covered" or duplicate then rows[#rows+1]=row end
+        if coverage.preview or not self.sv.problemsOnly or row.status~="covered" or duplicate then rows[#rows+1]=row end
     end
     return rows
 end
 function SC:RefreshHUD()
     if not self.window or not self.sv then return end
     self:ApplyVisibility(); if self.window:IsHidden() then return end
-    local win,coverage=self.window,self.coverage or {}
-    local rows=self:GetHUDIssues(); local rowHeight=self.Clamp(self.sv.rowHeight or 30,24,48)
+    local win=self.window
+    local coverage,players=self:GetHUDPresentation()
+    local rows=self:GetHUDIssues(coverage); local rowHeight=self.Clamp(self.sv.rowHeight or 30,24,48)
     local width,height=self:GetHUDDimensions()
     win:SetDimensions(width,height)
     win.status:SetText(string.format("%d / %d covered",coverage.coveredCount or 0,coverage.requiredCount or 0))
     UI.Color(win.status,coverage.ready and C.green or C.gold)
-    win.summary:SetText((coverage.profileLabel or "Group preparation") .. "  •  " .. tostring(#(self.roster or {})) .. " players")
-    win.note:SetText(#rows==0 and "No preparation issues to display." or #rows*rowHeight>height-158 and "Scroll for more • Coverage has every source" or "Hover for details • open Coverage for sources")
+    win.summary:SetText((coverage.profileLabel or "Group preparation") .. "  •  " .. tostring(players) .. " players")
+    win.note:SetText(coverage.preview and "Preview only • sample players and states" or #rows==0 and "No preparation issues to display." or #rows*rowHeight>height-158 and "Scroll for more • Coverage has every source" or "Hover for details • open Coverage for sources")
     for index,data in ipairs(rows) do
         local row=win.list.rows[index]
         if not row then
@@ -315,7 +371,11 @@ function SC:RefreshHUD()
                 if not row.data then return nil end
                 local effect=row.data.effect or {}
                 local names={}; for _,player in ipairs(row.data.owners or {}) do names[#names+1]=player.displayName or "Unknown player" end
-                return (effect.label or "Support coverage").."\n\n"..(effect.description or "Available build source")
+                local text=(effect.label or "Support coverage").."\n\n"..(effect.description or "Available build source")
+                local visual=SC.Catalog and SC.Catalog.GetEffectVisual and SC.Catalog:GetEffectVisual(row.data.key)
+                if visual and visual.isFallback then text=text.."\n\nIcon: native category symbol; exact artwork is unavailable."
+                elseif visual and visual.iconKind=="source" and visual.sourceName then text=text.."\n\nSource icon: "..visual.sourceName end
+                return (row.data.preview and "Layout preview • sample data only\n\n" or "")..text
                     .."\n\nSource carriers: "..(#names>0 and table.concat(names,", ") or "Not verified")
                     .."\n\nOpen Coverage for tracking switches, all possible sources and each player's details."
             end)

@@ -4,7 +4,7 @@
 
 `AlphaSquadUI/` is the full ESO suite. The **AlphaSquadBuildShare** companion is a separate sharing-only installation for group members who do not want the UI suite; it uses the same compatible build format.
 
-Core owns identity/version (`Core.lua`), saved theme presets (`Theme.lua`), shared helpers (`Utils.lua`), module event scopes (`Events.lua`), account/character preferences (`Preferences.lua`), the settings-page bridge (`Settings.lua`), the standalone settings shell (`Shell.lua`), library preferences (`Sharing.lua`), global placement/resizing (`Layout.lua`) and foreground tooltip routing (`Tooltips.lua`). New pages register through:
+Core owns identity/version (`Core.lua`), saved theme presets (`Theme.lua`), shared helpers (`Utils.lua`), module event scopes (`Events.lua`), account/character preferences (`Preferences.lua`), the settings-page bridge (`Settings.lua`), the standalone settings shell (`Shell.lua`), library preferences (`Sharing.lua`), global placement/resizing (`Layout.lua`), temporary presentation samples (`Preview.lua`), scoped keyboard/controller navigation (`Input.lua`) and foreground tooltip routing (`Tooltips.lua`). New pages register through:
 
 ```lua
 AlphaSquadUI.Settings.RegisterPage(id, builder)
@@ -28,6 +28,8 @@ AlphaSquadUI.Settings.RegisterPage(id, builder)
 | Support share/details/codec | Bounded compatible snapshot transport and validation |
 | Support UI/settings/inspector | Categorized Coverage, build selection and integrated consumable readiness |
 | Support BuildView | Compact equipment silhouette, set summaries, skill/Ultimate and Champion icons |
+| Core Preview | Temporary sample states consumed only by participating Move HUD renderers |
+| Core Input | Focus, activation, adjustments and placement input within registered suite windows |
 | Core tooltip routing | Native item/ability details and readable custom descriptions above addon windows |
 
 Some audit helpers remain for scanner/evidence compatibility. Their presence does not expose the old expected-build template workflow. Pull history, combat observation, live-report transport and recorded-build planner modules are retired from the runtime.
@@ -43,6 +45,8 @@ A five-second lightweight recovery refresh is limited to a relevant visible or g
 `SupportCoverageBuildView.lua` renders the selected build as a compact character view. Equipment placement represents body slots, jewelry and each weapon bar. It is not a native remote-character inventory API or a 3D character renderer. Set-summary headlines use the highest known per-bar piece total, preserve separate FRONT/BACK values and apply two-handed weights. Physical item counts remain explanatory data instead of being summed across bars. Native set-bonus requirements determine excess warnings; a bounded positive cache avoids repeated requirement reads. Partial bar evidence produces a lower bound and never guesses the missing total. The normal weapon bars remain separate from a reported Werewolf bar. Twelve Champion positions, mastery icons and compact consumable/character cards complete the view.
 
 `Core/Tooltips.lua` centralizes foreground layering and native/custom tooltip routing. Item details are tied to the actual item link; ability details are tied to the selected skill or morph. Native item-tooltip set counters still refer to the viewing player, so the tooltip directs the user to the inspected build's own per-bar summary. Native descriptions on a receiving client do not establish the remote player's stat-scaled combat values. Champion descriptions use the sender's verified allocated points; missing allocations are not substituted with the viewer's values. Missing snapshot fields remain unknown, including unsupported transformation details and Vampire stage.
+
+The armor columns are mirrored around the native paper doll, which retains its original 64:256 proportions. BuildView retains its logical canvas height separately from rendered control dimensions. The inspector binds the complete sheet before fitting it once to the viewport, so repeated refreshes under a scaled parent cannot shrink the layout or clip its footer. Where exact effect or item artwork cannot be verified, the catalog supplies a native category symbol and the tooltip identifies that limitation; a named source icon is not presented as a unique picture of the effect itself.
 
 ## Evidence and transport boundaries
 
@@ -68,7 +72,7 @@ AlphaSquadULTTrackerSavedVariables
 AlphaSquadSupportCoverageSavedVariables
 ```
 
-Group Ultimate settings remain inside the ULT Tracker namespace. Relevant Support Coverage visibility, geometry and effect preferences migrate conservatively. Retired workflow fields are not revived as current UI or an active report collector. Peer build snapshots are transient group data.
+Group Ultimate settings remain inside the ULT Tracker namespace. Personal and group ULT each save an explicit `hudOrientation` and per-orientation dimensions in `hudLayouts`; selecting the other orientation does not discard its previous size. Relevant Support Coverage visibility, geometry and effect preferences migrate conservatively. Retired workflow fields are not revived as current UI or an active report collector. Peer build snapshots and Move HUD samples are transient data; previews never enter SavedVariables or transport payloads.
 
 ## Design constraints
 
@@ -93,10 +97,22 @@ Core Layout opens a temporary placement state for enabled modules only. It close
 
 The personal ULT view owns a single HUD and shared resource state. AUTO follows the active weapon bar; optional Overload behavior uses cached slotted-morph state to take priority outside BOTH mode. BOTH preserves both cards. Existing display modes are retained, and supported legacy Overload options migrate into the personal ULT settings. No skill scan runs from layout checks or rendering. Group ULT remains independent.
 
-Core Layout distinguishes corner scaling from edge reshaping. Corners preserve proportions; edges change saved logical width/height and invoke each panel's layout function. The shared toolbar owns scale, background opacity, reset and fitting to screen. Personal BOTH cards can stack, Group ULT rows adapt to the panel, and Support HUD elements reflow without stretching icons. Placement preserves module activation and normal visibility.
+Core Layout distinguishes corner scaling from edge reshaping. Corners update the native parent scale continuously without rebuilding the panel; edges change saved logical width/height and invoke each panel's layout function. The opposite edge remains fixed during dragging. Rendered `GetWidth`/`GetHeight` values already include effective scale and must not be multiplied by it again. Shared logical-dimension helpers divide rendered sizes by effective scale when a logical cache is unavailable. Screen fitting is temporary and preserves the requested dimensions and scale.
+
+The shared toolbar owns scale, background opacity, reset, fitting and orientation. Personal and group ULT have explicit Horizontal/Vertical layouts; dragging an edge does not cross an implicit orientation threshold. BOTH retains both personal cards, placed side by side or stacked according to the selected orientation. Group rows adapt within their chosen template, and Support HUD elements reflow without stretching icons. A personal ULT layout signature avoids reanchoring unchanged geometry while allowing resource/readiness text to update. Placement preserves module activation and normal visibility.
+
+`Core/Preview.lua` holds Mixed, Ready, Missing, Overload and Live modes for the current session. Renderers check `Layout.IsMoving(module)` before using any samples. Group ULT offers twelve fictional players with representative readiness, missing, sharing-off, used and unavailable states; Support Coverage offers sample covered, missing, unknown, duplicate and optional sources. Overload mode uses the integrated personal view and falls back to mixed support samples. Native icons and names come from verified game identities. Preview tables are separate from live player records, coverage evaluation, inspected builds and senders; stopping placement restores live presentation without publishing sample data.
 
 Coverage groups the current catalog into four categories and gives dense categories additional compact lanes. Layout is computed from category counts and the viewport; controls are pooled and filtering reuses them. Native icons, switches and contributor counts remain on one page. Effect hover explains conditions; contributor hover lists every available provider with source names and bar availability.
 
 Native item, skill and Champion tooltips stay above the suite. External links use ESO's own confirmation dialog, with suite layering managed so the confirmation is visible. Sharing switches never navigate to another addon's configuration. The Website & About/Discord pages contain native ESO controls; Discord opens the configured widget URL through the native external-link confirmation. No HTML browser, member-count polling or generated invitation endpoint is embedded in the addon.
 
 Incoming build data must satisfy both structural limits and consistency checks. Claimed complete equipment is reconciled with native slot identities and linked items, including two-handed weights and set-family totals. Contradictions cannot certify completeness. A consistent report remains sender-supplied information, not protection against a modified client deliberately reporting a different build.
+
+## Keyboard and controller scope
+
+`Core/Input.lua` registers existing suite controls and reads their current handlers when focus or activation changes. Buttons, toggles, sliders, dropdowns and inspectable icons share their mouse actions and tooltip content with keyboard/controller focus. Exclusive settings, Coverage and Builds windows register as input roots; the Move HUD toolbar is the placement root. Always-visible combat HUDs do not register as navigation windows, so their presence alone cannot capture gameplay input.
+
+The custom action layer and ESO directional-input owner are active only while an eligible suite window is open. Native dialogs suspend suite navigation; combat, loading and scene transitions release it. Tab/Shift-Tab or directional navigation selects controls, and activation uses the registered action. Placement additionally supports panel cycling and separate move, scale, width, height and toolbar-control modes. Its controller movement uses native directional input and frame delta only during the open placement session. The addon does not reassign gameplay bindings. The native gamepad settings entry opens the same suite settings, rather than maintaining a second configuration state.
+
+Automated input and geometry checks exercise these boundaries with native API contracts. Actual controller focus, native dialog behavior, font rendering and interaction across client UI scales still require the ESO acceptance checklist.

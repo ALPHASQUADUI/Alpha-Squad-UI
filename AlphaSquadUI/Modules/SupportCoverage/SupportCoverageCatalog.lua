@@ -8,7 +8,7 @@ SC.Catalog = SC.Catalog or {}
 local Catalog = SC.Catalog
 
 Catalog.patch = "U50"
-Catalog.reviewedAt = "2026-09-14"
+Catalog.reviewedAt = "2026-09-15"
 Catalog.profileOrder = {"trial", "dungeon"}
 Catalog.bossArmor = 18200
 Catalog.criticalDamageCap = 125
@@ -56,8 +56,8 @@ Catalog.effects = {
     -- Penetration budget
     major_breach = E("major_breach", "Major Breach", "penetration", "debuff", {priority="core", boss=true, penetration=5948}),
     minor_breach = E("minor_breach", "Minor Breach", "penetration", "debuff", {priority="core", boss=true, penetration=2974}),
-    crusher = E("crusher", "Crusher Enchantment", "penetration", "unique", {priority="core", boss=true, penetration=1622}),
-    alkosh = E("alkosh", "Roar of Alkosh", "penetration", "unique", {priority="core", boss=true, penetration=6000}),
+    crusher = E("crusher", "Crusher Enchantment", "penetration", "unique", {priority="core", boss=true, variablePenetration=true}),
+    alkosh = E("alkosh", "Roar of Alkosh", "penetration", "unique", {priority="core", boss=true, variablePenetration=true}),
     crimson_oath = E("crimson_oath", "Crimson Oath's Rive", "penetration", "unique", {priority="situational", boss=true}),
     -- Tremorscale scales from the triggering tank's higher resistance and is capped by the live set rule.
     -- Presence is useful coverage information, but a static contribution would make the penetration budget lie.
@@ -372,6 +372,10 @@ function Catalog:MatchSkill(abilityId, skillName)
     end
 
     local value = Normalize(skillName)
+    if abilityId and currentNameGetter then
+        local ok, nativeName = pcall(currentNameGetter, abilityId)
+        if ok and type(nativeName) == "string" and nativeName ~= "" then value = Normalize(nativeName) end
+    end
     if value ~= "" then AddProvided(found, self.localizedSkillNameIndex[value]) end
 
     -- Old clients and unusual hotbar overrides may expose neither a canonical ID nor a localized
@@ -380,7 +384,7 @@ function Catalog:MatchSkill(abilityId, skillName)
         for _, source in ipairs(self.skillSources) do
             local tokens = source.tokens or (source.token and {source.token}) or {}
             for _, token in ipairs(tokens) do
-                if value:find(Normalize(token), 1, true) then
+                if value == Normalize(token) then
                     AddProvided(found, source.provides)
                     break
                 end
@@ -505,7 +509,7 @@ Catalog.masterySources = {
     {abilityId=263607,name="Share the Spoils",requires="Transfer",requiresIds={45145},rank=2,
         provides={"share_the_spoils"}},
     {abilityId=263606,name="Cutthroat's Focus",aliases={"Evasive Trance"},provides={"evasive_trance"}},
-    {abilityId=238232,name="Lead From the Front",requires="The Storm Voice",requiresIds={44951},rank=2,
+    {abilityId=263247,name="Lead From the Front",requires="The Storm Voice",requiresIds={},rank=2,
         provides={"major_berserk","major_protection"}},
     {abilityId=263412,name="Erudite's Rigor",requires="Fatewoven Armor",
         requiresIds={183648,185908,186477},rank=1,provides={"minor_cowardice","major_vitality"}},
@@ -562,7 +566,7 @@ AddEffect("warriors_opportunity", "Warrior's Opportunity", "debuff", "Traveling 
 AddEffect("dragonknight_standard", "Dragonknight Standard", "offense", "The standard's area improves group Weapon and Spell Damage and reduces damage taken. Standard of Might's extra caster bonuses are personal.")
 AddEffect("vitalizing_glyphic", "Vitalizing Glyphic", "offense", "The glyphic provides healing and up to 200 Weapon and Spell Damage, depending on its Health.")
 AddEffect("feeding_frenzy", "Feeding Frenzy", "offense", "The Werewolf synergy gives its user 6% damage done and Minor Force. Each beneficiary must activate the synergy.")
-AddEffect("resource_synergy", "Resource Synergy", "sustain", "Healing Orb or Luminous Shards provides an activatable resource return. A synergy must be activated by its intended recipient.")
+AddEffect("resource_synergy", "Resource Synergy", "sustain", "Energy Orb or a Spear Shards morph provides an activatable resource return. A synergy must be activated by its intended recipient.")
 AddEffect("group_cleanse", "Group Cleanse", "defense", "A skill or Champion star can remove eligible negative effects from allies. Boss mechanics may be unpurgeable.")
 AddEffect("group_shield", "Group Damage Shield", "defense", "An equipped skill, set or Champion star can protect allies with a damage shield. Recipient limits and shield conditions differ.")
 AddEffect("weakening", "Weakening Enchantment", "defense", "A weapon enchantment lowers the enemy's Weapon and Spell Damage. Its strength depends on the weapon and enchantment.", {boss=true})
@@ -642,6 +646,12 @@ Catalog.effects.minor_mending.group = nil
 Catalog.effects.minor_mending.personal = true
 Catalog.effects.major_aegis.personal = nil
 Catalog.effects.major_aegis.group = true
+-- These rows describe available group suppliers; personal potion/buff observations
+-- are not promoted into capability owners. Group auras need only one source owner.
+for _,key in ipairs({"major_intellect","major_endurance","major_fortitude","major_aegis"}) do
+    Catalog.effects[key].personal=nil
+    Catalog.effects[key].group=true
+end
 Catalog.effects.minor_force.group = true
 Catalog.effects.minor_force.personal = nil
 Catalog.effects.minor_brutality_sorcery.legacy = true
@@ -753,8 +763,10 @@ local knownNames={
     [585]="Saxhleel Champion", [641]="Serpent's Disdain", [318]="Grand Rejuvenation",
 }
 Catalog.setNameById={}
+local setRecipientLimits={[180]=6,[571]=4,[518]=4,[609]=4,[574]=4,[181]=6}
 for _, source in ipairs(Catalog.setSources) do
     source.groupSource=true
+    source.recipientLimit=setRecipientLimits[source.setId]
     source.label=source.label or knownNames[source.setId] or source.token
     Catalog.setNameById[source.setId]=source.label
     source.conditions=source.conditions or (Catalog.effects[source.provides[1]] and Catalog.effects[source.provides[1]].description)
@@ -773,21 +785,23 @@ AddSkill({38250}, "Pierce Armor", {"major_breach","minor_breach"}, "Taunt the in
 AddSkill({38256}, "Ransack", {"major_breach"}, "The Breach debuff affects the enemy; the defensive benefit is personal.")
 AddSkill({28306}, "Puncture", {"major_breach"}, "Taunt the intended target.")
 AddSkill({38264}, "Heroic Slash", {"minor_maim"}, "Hit the intended enemy; Heroism from this skill is personal.")
-AddSkill({114860,117690,117749}, "Boneyard", {"minor_vulnerability"}, "The target must stand in Boneyard. Major Breach requires the Unnerving morph.")
-AddSkill({}, "Unnerving Boneyard", {"major_breach"}, "The target must stand in the area.")
+AddSkill({115252,117805,117850}, "Boneyard", {"minor_vulnerability"}, "The target must stand in Boneyard. Major Breach requires the Unnerving morph.")
+AddSkill({117805}, "Unnerving Boneyard", {"major_breach"}, "The target must stand in the area.")
 AddSkill({33357,36968,36967}, "Mark Target", {"major_breach"}, "Apply the mark to the intended target. Reaper's Mark's Major Berserk is personal.")
-AddSkill({25484}, "Lotus Fan", {"minor_vulnerability"}, "The enemy must be struck by the attack.")
-AddSkill({}, "Crystal Weapon", {"crystal_weapon"}, "The imbued Light or Heavy Attacks must hit the target.")
+AddSkill({25493}, "Lotus Fan", {"minor_vulnerability"}, "The enemy must be struck by the attack.")
+AddSkill({25484}, "Ambush", {"minor_vulnerability"}, "The enemy must be struck by the attack.")
+AddSkill({46331}, "Crystal Weapon", {"crystal_weapon"}, "The imbued Light or Heavy Attacks must hit the target.")
 AddSkill({86130}, "Ice Fortress", {}, "Its Major Resolve affects nearby allies; Minor Protection belongs only to the caster.")
 AddSkill({85862}, "Enchanted Growth", {"minor_intellect","minor_endurance"}, "Heal the intended recipients; morph names differ but the shared recovery buffs remain.")
 AddSkill({29482}, "Regenerative Ward", {"minor_intellect","minor_endurance"}, "The recovery buffs affect nearby group members; the primary shield is personal.")
 AddSkill({36028}, "Refreshing Path", {"minor_intellect","minor_endurance"}, "Allies must enter the path.")
 AddSkill({26807}, "Radiant Aura", {"minor_intellect","minor_endurance","minor_fortitude"}, "Activate the skill to distribute the buffs; merely slotting it only affects the caster.")
-AddSkill({26869}, "Luminous Shards", {"resource_synergy"}, "The intended ally must activate the Shards synergy.")
+AddSkill({26858}, "Luminous Shards", {"resource_synergy"}, "The intended ally must activate the Shards synergy.")
+AddSkill({26869}, "Blazing Spear", {"resource_synergy"}, "The intended ally must activate Blessed Shards to restore the appropriate resource.")
 AddSkill({42038}, "Energy Orb", {"resource_synergy"}, "An ally must activate the resource synergy.")
 AddSkill({28988,32958,32947}, "Dragonknight Standard", {"dragonknight_standard"}, "Allies must remain inside the standard's area.")
-AddSkill({17878}, "Magma Shell", {"group_shield"}, "Cast near the intended allies; the wearer's damage cap is personal.")
-AddSkill({29224,32673}, "Obsidian Shield", {"group_shield"}, "The shield affects nearby allies; Major Mending is for the caster.")
+AddSkill({17874}, "Magma Shell", {"group_shield"}, "Cast near the intended allies; the wearer's damage cap is personal.")
+AddSkill({29071,29224,32673}, "Obsidian Shield", {"group_shield"}, "The shield affects nearby allies; Major Mending is for the caster.")
 AddSkill({38571,40232,40234}, "Purge", {"group_cleanse"}, "Removes eligible negative effects from nearby group members.")
 AddSkill({22265,22259,22262}, "Cleansing Ritual", {"group_cleanse"}, "Allies must activate Purify. The caster's immediate cleanse is personal.")
 
@@ -798,16 +812,19 @@ AddSkill({186229}, "Zenas' Empowering Disc", {"minor_courage","minor_intellect",
 AddSkill({186234}, "Reconstructive Domain", {"minor_courage","minor_intellect","minor_endurance","minor_fortitude"}, "Group members must enter the domain.")
 AddSkill({183267}, "Rune of the Colorless Pool", {"minor_brittle","minor_vulnerability"}, "Apply to the intended enemy; these debuffs do not require a successful stun.")
 AddSkill({183430}, "Runic Sunder", {"runic_sunder","minor_maim"}, "Taunt the intended target; its unique Armor reduction is separate from Breach.")
-AddSkill({183709,193794,193558}, "Vitalizing Glyphic", {"vitalizing_glyphic"}, "The glyphic's Health controls the strength; place it near allies.")
-AddSkill({}, "Glyphic of the Tides", {"vitalizing_glyphic"}, "The glyphic's Health controls the strength; place it near allies.")
-AddSkill({}, "Resonating Glyphic", {"vitalizing_glyphic"}, "The glyphic's Health controls the strength; place it near allies.")
-AddSkill({}, "Hearthfire", {"minor_heroism","minor_fortitude"}, "Heal the intended allies within the area.")
-AddSkill({}, "Fire Keeper", {"minor_heroism","minor_fortitude"}, "Heal the intended allies within the area.")
-AddSkill({}, "Hearth and Home", {"minor_heroism","minor_fortitude"}, "The recovery and Heroism buffs affect healed allies; Major Protection is personal.")
-AddSkill({}, "Feeding Frenzy", {"feeding_frenzy","minor_force"}, "Each intended beneficiary must activate the Werewolf synergy.")
+AddSkill({183709}, "Vitalizing Glyphic", {"vitalizing_glyphic"}, "The glyphic's Health controls the strength; place it near allies.")
+AddSkill({193794}, "Glyphic of the Tides", {"vitalizing_glyphic"}, "The glyphic's Health controls the strength; place it near allies.")
+AddSkill({193558}, "Resonating Glyphic", {"vitalizing_glyphic"}, "The glyphic's Health controls the strength; place it near allies.")
+AddSkill({29059,33142}, "Hearthfire", {"minor_heroism","minor_fortitude"}, "Heal the intended allies within the area.")
+AddSkill({20779,21435}, "Fire Keeper", {"minor_heroism","minor_fortitude"}, "Heal the intended allies within the area.")
+AddSkill({32710,33099}, "Hearth and Home", {"minor_heroism","minor_fortitude"}, "The recovery and Heroism buffs affect healed allies; Major Protection is personal.")
+-- Roar owns Feeding Frenzy in U50; the synergy is not itself a slottable ability.
+AddSkill({32633,39113,39114}, "Roar", {"feeding_frenzy","minor_force"}, "Transform into a Werewolf, cast Roar or either morph, then have each beneficiary activate Feeding Frenzy.")
+AddSkill({39114}, "Deafening Roar", {"major_maim","major_cowardice"}, "Transform into a Werewolf and hit the intended enemy with the roar.")
+AddSkill({86015}, "Deep Fissure", {"major_breach","minor_breach"}, "The subterranean attack must hit the intended enemy.")
 
 Catalog.passiveSources = {
-    {name="Elder Dragon",abilityIds={},rank=1,skillLineIds={36},trigger="CAST_LINE",provides={"minor_brutality"},conditions="Learn the passive and slot a Draconic Power ability, then cast it to buff the group."},
+    {name="Elder Dragon",abilityIds={29460,44951},rank=1,skillLineIds={36},trigger="CAST_LINE",provides={"minor_brutality"},conditions="Learn the passive and slot a Draconic Power ability, then cast it to buff the group."},
     {name="Traumatic Burns",abilityIds={},rank=1,skillLineIds={35},trigger="CAST_LINE",provides={"traumatic_burns"},conditions="Learn the passive and deal direct damage with an Ardent Flame ability."},
     {name="Illuminate",abilityIds={31743,45215},rank=1,skillLineIds={44},trigger="CAST_LINE",provides={"minor_sorcery"},conditions="Learn Illuminate and cast a slotted Dawn's Wrath ability."},
     {name="Exploitation",abilityIds={31389,45181},rank=1,skillLineIds={41},trigger="CAST_LINE",provides={"minor_prophecy"},conditions="Learn Exploitation and cast a slotted Dark Magic ability. Font of Power can broaden its trigger."},
@@ -838,7 +855,7 @@ Catalog.championSources={
     {name="Cleansing Revival",championIds={29},provides={"cleansing_revival","group_cleanse"},conditions="Invest enough points to activate the slotted Champion star and heal an ally below 25% Health; only eligible effects can be removed."},
     {name="Salve of Renewal",championIds={260},provides={"salve_of_renewal"},conditions="Invest enough points to activate the slotted Champion star and remove a negative effect from an ally."},
 }
-Catalog.masterySources[#Catalog.masterySources+1]={name="Veil's Forfeit",provides={"veils_forfeit"},
+Catalog.masterySources[#Catalog.masterySources+1]={abilityId=263554,name="Veil's Forfeit",provides={"veils_forfeit"},
     conditions="Select the mastery and bring a source of Major Vulnerability; only this Necromancer's applications are extended."}
 for _,source in ipairs(Catalog.masterySources) do
     if source.name=="Bountiful Harvest" then source.requiredSkillLineIds={128} end
@@ -867,7 +884,14 @@ local function AddProvider(key, source, kind)
     effect.providers[#effect.providers+1]={name=name,kind=kind,conditions=source.conditions or effect.conditions}
 end
 for _, source in ipairs(Catalog.setSources) do for _, key in ipairs(source.provides) do AddProvider(key,source,"set") end end
+local skillLabels={
+    [40223]="Aggressive Horn",[39113]="Ferocious Roar",[40094]="Combat Prayer",
+    [39095]="Elemental Drain",[29173]="Weakness to Elements",[39089]="Elemental Susceptibility",
+    [40242]="Razor Caltrops",[31816]="Magma Fist",[31874]="Igneous Weapons",[31888]="Molten Armaments",
+    [86122]="Frost Cloak",[86023]="Swarm",[39489]="Blood Altar",[40169]="Ring of Preservation",
+}
 for _, source in ipairs(Catalog.skillSources) do
+    source.label=source.label or skillLabels[(source.abilityIds or {})[1]]
     source.groupSource=source.personal~=true
     source.label=source.label or (source.tokens and source.tokens[1]) or source.token
     source.conditions=source.conditions or "Slot this ability on a usable bar and meet its actual cast, target and recipient conditions."
@@ -938,13 +962,52 @@ function Catalog:FindSkillSources(abilityId, skillName)
             for _,token in ipairs(source.tokens or {}) do Index(self.providerNameIndex,Normalize(token),source) end
         end
     end
+    local name = Normalize(skillName)
+    if abilityId and getter then
+        local ok, nativeName = pcall(getter, abilityId)
+        if ok and type(nativeName)=="string" and nativeName~="" then name=Normalize(nativeName) end
+    end
     local found,seen={},{}
-    for _,list in ipairs({self.providerIdIndex[abilityId] or {},self.providerNameIndex[Normalize(skillName)] or {}}) do
+    for _,list in ipairs({self.providerIdIndex[abilityId] or {},self.providerNameIndex[name] or {}}) do
         for _,source in ipairs(list) do
             if not seen[source] then found[#found+1]=source;seen[source]=true end
         end
     end
     return found
+end
+
+-- Grimoire/script identities are read from the native APIs using the submitted IDs.
+-- These native texture names identify the documented script definitions in all client languages.
+-- A valid combination is still required; neither a peer's display text nor a grimoire alone is enough.
+Catalog.scribingTextures={
+    banner="ability_grimoire_support.dds",
+    bannerFocus={
+        ["scribing_primary_flame.dds"]="banner_dot",
+        ["scribing_primary_magicka.dds"]="banner_magical",
+        ["scribing_primary_bonusarmor.dds"]="banner_defense",
+        ["scribing_primary_multihit.dds"]="banner_aoe",
+        ["scribing_primary_physical.dds"]="banner_martial",
+        ["scribing_primary_resourcerestore.dds"]="banner_sustain",
+        ["scribing_primary_shock.dds"]="banner_direct",
+    },
+    bannerAffix={
+        ["scribing_tertiary_berserk.dds"]={"minor_berserk"},
+        ["scribing_tertiary_courage.dds"]={"minor_courage"},
+        ["scribing_tertiary_heroism.dds"]={"minor_heroism"},
+        ["scribing_tertiary_intellectendurance.dds"]={"minor_intellect","minor_endurance"},
+        ["scribing_tertiary_protection.dds"]={"minor_protection"},
+        ["scribing_tertiary_resolve.dds"]={"minor_resolve"},
+    },
+}
+for texture,key in pairs(Catalog.scribingTextures.bannerFocus) do
+    local effect=Catalog.effects[key]
+    effect.nativeIcon="/esoui/art/icons/"..texture
+    effect.providers[#effect.providers+1]={name="Banner Bearer",kind="scribing",conditions="Slot a valid Banner Bearer recipe with the matching Focus. Enable the banner and keep intended allies in its aura."}
+end
+for _,keys in pairs(Catalog.scribingTextures.bannerAffix) do
+    for _,key in ipairs(keys) do
+        Catalog.effects[key].providers[#Catalog.effects[key].providers+1]={name="Banner Bearer Affix",kind="scribing",conditions="The exact Banner Bearer Affix must be shared. The same Affix on a different grimoire may be personal."}
+    end
 end
 
 -- Presentation uses native effect/item textures, never a guessed skill icon.
@@ -963,35 +1026,112 @@ function Catalog:GetDisplayCategory(key)
     local effect=self.effects[key]
     return effect and (effect.boss or effect.kind=="debuff" or effect.kind=="status") and "debuffs" or "buffs"
 end
-local previewCache={}
-local effectVisualCache={}
+local previewCache, effectVisualCache, fallbackCache = {}, {}, {}
+local retryAfter, previewRetryAfter = {}, {}
+local previewLibrary
+local visualProviderByKey={}
+for _,source in ipairs(Catalog.masterySources) do
+    for _,key in ipairs(source.provides or {}) do
+        if source.abilityId then visualProviderByKey[key]=visualProviderByKey[key] or {id=source.abilityId,name=source.name} end
+    end
+end
+for _,source in ipairs(Catalog.skillSources) do
+    for _,key in ipairs(source.provides or {}) do
+        local id=(source.abilityIds or {})[1]
+        if id then visualProviderByKey[key]=visualProviderByKey[key] or {id=id,name=source.label} end
+    end
+end
+local categoryIcons={
+    buffs="/esoui/art/addons/gamepad/gp_mod_listing_category_buffsanddebuffs.dds",
+    debuffs="/esoui/art/inventory/inventory_tabicon_weapons_up.dds",
+    sets="/esoui/art/inventory/inventory_tabicon_armor_up.dds",
+    mythics="/esoui/art/crafting/jewelry_tabicon_icon_up.dds",
+}
+function Catalog:GetCategoryIcon(category)
+    return categoryIcons[category] or categoryIcons.buffs
+end
 local function Native(fn,...)
     if type(fn)~="function" then return nil end
-    local ok,value=pcall(fn,...);if ok then return value end
+    local ok,a,b,c,d,e,f=pcall(fn,...);if ok then return a,b,c,d,e,f end
+end
+local function Texture(value)
+    if type(value)~="string" or value=="" then return nil end
+    local path=value:lower():gsub("\\","/")
+    if path:find("missing",1,true) or path:find("placeholder",1,true) then return nil end
+    return value
+end
+local function ValidSetLink(link,setId)
+    if type(link)~="string" or link=="" then return false end
+    if type(GetItemLinkSetInfo)~="function" then return true end
+    local hasSet,_,_,_,_,actualId=Native(GetItemLinkSetInfo,link,false)
+    if hasSet~=true then return false end
+    local actualBase=Native(GetItemSetUnperfectedSetId,actualId)
+    return actualId==setId or (type(actualBase)=="number" and actualBase>0 and actualBase==setId)
+end
+local function NowForVisuals()
+    local now=Native(GetGameTimeMilliseconds)
+    return type(now)=="number" and now==now and now>=0 and now<math.huge and now or nil
 end
 function Catalog:GetSetPreview(setId)
     if type(setId)~="number" or setId<=0 or setId%1~=0 then return nil end
     if previewCache[setId] then return previewCache[setId] end
+    if previewLibrary~=LibSets then previewRetryAfter={};previewLibrary=LibSets end
+    local now=NowForVisuals()
+    if now and previewRetryAfter[setId] and now<previewRetryAfter[setId] then return nil end
+    if now then previewRetryAfter[setId]=now+5000 end
     local piece=Native(GetItemSetCollectionPieceInfo,setId,1)
-    local link=piece and Native(GetItemSetCollectionPieceItemLink,piece,LINK_STYLE_DEFAULT or 0,ITEM_TRAIT_TYPE_NONE or 0)
-    if type(link)~="string" or link=="" then return nil end
-    local icon=Native(GetItemLinkIcon,link)
-    local result={link=link,icon=icon,reference=true}
+    local link=type(piece)=="number" and piece>0 and Native(GetItemSetCollectionPieceItemLink,piece,LINK_STYLE_DEFAULT or 0,ITEM_TRAIT_TYPE_NONE or 0)
+    if not ValidSetLink(link,setId) then
+        -- Crafted sets do not have collectible pieces. LibSets is optional and already loaded
+        -- when available; ask its public API for one reference item, then verify it natively.
+        local lib=LibSets
+        local itemId=type(lib)=="table" and Native(lib.GetSetItemId,setId)
+        link=type(itemId)=="number" and itemId>0 and Native(lib.buildItemLink,itemId)
+    end
+    if not ValidSetLink(link,setId) then return nil end
+    local icon=Texture(Native(GetItemLinkIcon,link))
+    if not icon then return nil end
+    local result={link=link,icon=icon,reference=true,iconKind="set",isFallback=false}
     previewCache[setId]=result;return result
 end
 function Catalog:GetEffectVisual(key)
     if effectVisualCache[key] then return effectVisualCache[key] end
-    local source=displaySources[key]
-    if source then return self:GetSetPreview(source.setId) end
     local effect=self.effects[key]
-    local id=self.visualAbilityIds and self.visualAbilityIds[key] or effect and effect.abilityIds and effect.abilityIds[1]
-    if id then
-        local icon=Native(GetAbilityIcon,id)
-        if type(icon)=="string" and icon~="" then
-            local result={icon=icon,abilityId=id};effectVisualCache[key]=result;return result
+    local category=self:GetDisplayCategory(key)
+    fallbackCache[category]=fallbackCache[category] or {icon=self:GetCategoryIcon(category),isFallback=true,iconKind="category",category=category}
+    local now=NowForVisuals()
+    if now and retryAfter[key] and now<retryAfter[key] then return fallbackCache[category] end
+    local source=displaySources[key]
+    if source then
+        local result=self:GetSetPreview(source.setId)
+        if result then effectVisualCache[key]=result;return result end
+    elseif effect then
+        local icon=Texture(effect.nativeIcon)
+        local id=self.visualAbilityIds and self.visualAbilityIds[key] or effect.abilityIds and effect.abilityIds[1]
+        local kind="effect"
+        local sourceName
+        if not icon and id then icon=Texture(Native(GetAbilityIcon,id)) end
+        if not icon and visualProviderByKey[key] then
+            local provider=visualProviderByKey[key]
+            id,sourceName,kind=provider.id,provider.name,"source"
+            icon=Texture(Native(GetAbilityIcon,id))
+        end
+        if not icon then
+            for _,cp in ipairs(self.championSources or {}) do
+                for _,provided in ipairs(cp.provides or {}) do
+                    if provided==key then icon="/esoui/art/champion/stars/slottable.dds";kind="champion";break end
+                end
+                if icon then break end
+            end
+        end
+        if icon then
+            local result={icon=icon,abilityId=id,iconKind=kind,isFallback=false,sourceName=sourceName}
+            effectVisualCache[key]=result;return result
         end
     end
-    return nil
+    -- Missing native data is retried slowly and never stored as an exact identity.
+    if now then retryAfter[key]=now+5000 end
+    return fallbackCache[category]
 end
 
 -- Native effect identities cross-checked against LuiExtended's MajorMinor registry.
@@ -1059,3 +1199,9 @@ Catalog.visualAbilityIds.major_brutality_sorcery=Catalog.visualAbilityIds.major_
 Catalog.visualAbilityIds.minor_brutality_sorcery=Catalog.visualAbilityIds.minor_brutality
 Catalog.visualAbilityIds.major_savagery_prophecy=Catalog.visualAbilityIds.major_savagery
 Catalog.visualAbilityIds.minor_savagery_prophecy=Catalog.visualAbilityIds.minor_savagery
+
+-- Native status effect IDs from the maintained combat-effect registry.
+for key,id in pairs({burning=18084,chilled=21481,concussion=21487,overcharged=148797,
+    diseased=21925,hemorrhaging=148801,poisoned=21929,sundered=148800,off_balance=62988,empower=61737}) do
+    Catalog.visualAbilityIds[key]=id
+end

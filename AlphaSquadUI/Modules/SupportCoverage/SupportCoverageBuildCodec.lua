@@ -103,20 +103,36 @@ local function WriteSkills(w,bar)
 end
 local function ReadSkills(r,version)
     local bar,seen={},{}
+    local ultimateSlot=(ACTION_BAR_ULTIMATE_SLOT_INDEX or 7)+1
     for index=1,r:uint(6) do
         local slot,id,bound=r:uint(15),r:uint(2147483647),r:uint(2147483647)
-        if seen[slot] then error("Duplicate skill slot") end
+        if slot<3 or slot>ultimateSlot or seen[slot] or bound==0 then error("Invalid skill slot") end
         seen[slot]=true
         local rank=version>=2 and r:uint(4) or 0
         local skill={slot=slot,abilityId=id,boundAbilityId=bound,rank=rank>0 and rank or nil,name=Call(GetAbilityName,id) or "Unknown skill",
-            icon=Call(GetAbilityIcon,id),ultimate=slot==(ACTION_BAR_ULTIMATE_SLOT_INDEX or 7)+1,
+            icon=Call(GetAbilityIcon,id),ultimate=slot==ultimateSlot,
             craftedAbilityId=r:uint(2147483647),lineId=r:uint(2147483647),scriptsKnown=r:flag(),scripts={}}
         if skill.craftedAbilityId==0 then skill.craftedAbilityId=nil end
         if skill.lineId==0 then skill.lineId=nil end
-        for scriptIndex=1,r:uint(3) do
+        local scriptCount=r:uint(3)
+        local scriptSlots={SCRIBING_SLOT_PRIMARY,SCRIBING_SLOT_SECONDARY,SCRIBING_SLOT_TERTIARY}
+        local seenScripts={}
+        for scriptIndex=1,scriptCount do
             local scriptId=r:uint(2147483647)
-            skill.scripts[#skill.scripts+1]={id=scriptId,name=Call(GetCraftedAbilityScriptDisplayName,scriptId) or "Scribing script"}
+            if scriptId==0 or seenScripts[scriptId] then error("Invalid Scribing script") end
+            seenScripts[scriptId]=true
+            local nativeSlot=Call(GetCraftedAbilityScriptScribingSlot,scriptId)
+            if skill.scriptsKnown and nativeSlot~=nil and scriptSlots[scriptIndex]~=nil and nativeSlot~=scriptSlots[scriptIndex] then
+                error("Scribing script in an incompatible slot")
+            end
+            skill.scripts[#skill.scripts+1]={id=scriptId,name=Call(GetCraftedAbilityScriptDisplayName,scriptId) or "Scribing script",
+                description=skill.craftedAbilityId and Call(GetCraftedAbilityScriptDescription,skill.craftedAbilityId,scriptId)}
         end
+        if skill.craftedAbilityId then
+            if bound~=skill.craftedAbilityId or slot==ultimateSlot or skill.scriptsKnown and scriptCount~=3 then
+                error("Inconsistent Scribing skill")
+            end
+        elseif skill.scriptsKnown or scriptCount>0 then error("Scripts without a grimoire") end
         bar[#bar+1]=skill
     end
     return bar
@@ -148,7 +164,7 @@ local function ValidateEquipment(equipment)
         if item then
             local bar=descriptor and descriptor.bar
             local weapon=bar=="PRIMARY" or bar=="BACKUP"
-            if not descriptor or (bar~="BOTH" and not weapon) or item.setVerified~=true
+            if not descriptor or (bar~="BOTH" and not weapon) or item.setVerified~=true or item.equipSlotValid==false
                 or type(item.hasSet)~="boolean" or weapon and type(item.twoHanded)~="boolean" then complete=false end
             local weight=weapon and item.twoHanded==true and 2 or 1
             if bar=="PRIMARY" then frontWeight=frontWeight+weight
@@ -305,37 +321,53 @@ function Codec.Decode(body)
             equipment.setList[#equipment.setList+1]=set;equipment.sets[tostring(id)]=set
         end
         skills.known=r:flag()
-        for _,bar in ipairs({"primary","backup"}) do skills[bar]=ReadSkills(r,version) end
+        for _,bar in ipairs({"primary","backup"}) do
+            skills[bar]=ReadSkills(r,version)
+            for _,skill in ipairs(skills[bar]) do if skill.abilityId==0 then skills.known=false end end
+        end
         skills.championKnown=r:flag()
-        local seenStars={}
+        local seenStars,seenStarIds={},{}
+        local championLayout=SC.GetChampionSlotLayout and SC:GetChampionSlotLayout()
         for index=1,r:uint(12) do
             local slot,id,points=r:uint(32),r:uint(2147483647),r:uint(version>=2 and 3600 or 65535)
-            if seenStars[slot] then error("Duplicate Champion slot") end
-            seenStars[slot]=true
+            if slot<1 or id==0 or seenStars[slot] or seenStarIds[id] then error("Invalid Champion slot") end
+            seenStars[slot]=true;seenStarIds[id]=true
             local pointsKnown=version>=2 and r:flag() or false
+            local maximum=Call(GetChampionSkillMaxPoints,id)
+            if pointsKnown and type(maximum)=="number" and points>maximum then error("Invalid Champion allocation") end
             local star=SC.DescribeChampionSkill and SC:DescribeChampionSkill(id,slot,points,pointsKnown)
                 or {slot=slot,id=id,points=points,pointsKnown=pointsKnown,name=Call(GetChampionSkillName,id) or "Unknown Champion star",
                     discipline=SC.GetChampionDiscipline and SC:GetChampionDiscipline(id)}
+            if championLayout and (not championLayout[slot] or championLayout[slot].discipline~=star.discipline) then
+                error("Champion discipline does not match its slot")
+            end
             skills.champion[#skills.champion+1]=star
         end
         masteries.known=r:flag();masteries.eligible=r:flag()
+        local selectedIds,lineIds,passiveIds={},{},{}
         for index=1,r:uint(8) do
             local id,rank=r:uint(2147483647),r:uint(10)
+            if id==0 or rank==0 or selectedIds[id] then error("Invalid selected mastery") end
+            selectedIds[id]=true
             masteries.selected[#masteries.selected+1]={id=id,rank=rank,name=Call(GetAbilityName,id) or "Unknown mastery",icon=Call(GetAbilityIcon,id)}
         end
         for index=1,r:uint(128) do
             local id,rank=r:uint(2147483647),r:uint(10)
-            if masteries.learnedIds[id] then error("Duplicate learned skill") end
+            if id==0 or rank==0 or masteries.learnedIds[id] then error("Invalid learned skill") end
             masteries.learnedIds[id]=rank
         end
         for index=1,r:uint(16) do
             local id,classId,rank=r:uint(2147483647),r:uint(255),r:uint(100)
+            if id==0 and masteries.known or id>0 and lineIds[id] then error("Invalid skill line") end
+            if id>0 then lineIds[id]=true end
             masteries.skillLines[#masteries.skillLines+1]={id=id,classId=classId,rank=rank,
                 active=r:flag(),mastery=r:flag(),native=r:flag(),name=Call(GetSkillLineNameById,id) or "Class skill line"}
         end
         masteries.passives={}
         for index=1,r:uint(64) do
             local id,rank,lineId=r:uint(2147483647),r:uint(10),r:uint(2147483647)
+            if id==0 or rank==0 or passiveIds[id] then error("Invalid passive") end
+            passiveIds[id]=true
             masteries.passives[#masteries.passives+1]={id=id,rank=rank,lineId=lineId,name=Call(GetAbilityName,id) or "Class passive"}
         end
         result.food={verified=r:flag(),active=r:flag(),abilityId=r:uint(2147483647)}
@@ -345,11 +377,23 @@ function Codec.Decode(body)
         result.food.timeEnds=remaining>0 and (Call(GetFrameTimeSeconds) or 0)+remaining or nil
         result.food.source="Shared build"
         result.potion={known=r:flag(),selectionKnown=r:flag(),isPotion=r:flag(),link=r:link(),count=r:uint(65535)}
+        local potion=result.potion
+        local itemType=potion.link~="" and Call(GetItemLinkItemType,potion.link)
+        if potion.known and (not potion.selectionKnown or not potion.isPotion or potion.link=="")
+            or potion.isPotion and itemType~=nil and ITEMTYPE_POTION~=nil and itemType~=ITEMTYPE_POTION then
+            error("Inconsistent quickslot item")
+        end
         result.potion.name=Call(GetItemLinkName,result.potion.link) or "Unknown quickslot"
         result.potion.itemId=Call(GetItemLinkItemId,result.potion.link)
         result.poisons={known=r:flag(),items={}}
+        local poisonSlots={}
         for index=1,r:uint(2) do
             local slot,link=r:uint(31),r:link()
+            if poisonSlots[slot] or EQUIP_SLOT_POISON~=nil and EQUIP_SLOT_BACKUP_POISON~=nil
+                and slot~=EQUIP_SLOT_POISON and slot~=EQUIP_SLOT_BACKUP_POISON then error("Invalid poison slot") end
+            poisonSlots[slot]=true
+            local poisonType=link~="" and Call(GetItemLinkItemType,link)
+            if poisonType and ITEMTYPE_POISON~=nil and poisonType~=ITEMTYPE_POISON then error("Invalid poison item") end
             result.poisons.items[#result.poisons.items+1]={slot=slot,link=link,name=Call(GetItemLinkName,link) or ""}
         end
         local schema,count=r:uint(16777214),r:uint(256)
@@ -372,6 +416,8 @@ function Codec.Decode(body)
             end
             result.curse={known=kind>0,kind=CURSE_NAMES[kind],transformed=transformed,stage=stage>0 and stage or nil}
             skills.werewolfKnown=r:flag();skills.werewolf=ReadSkills(r,version)
+            for _,skill in ipairs(skills.werewolf) do if skill.abilityId==0 then skills.werewolfKnown=false end end
+            if kind~=CURSE_IDS.WEREWOLF then skills.werewolfKnown=false end
         end
         if r.pos~=#body+1 then error("Unexpected build data") end
         if SC.DeriveBuildCapabilities then result.capabilities=SC:DeriveBuildCapabilities(result) or result.capabilities end

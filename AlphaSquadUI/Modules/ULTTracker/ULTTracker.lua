@@ -1,7 +1,6 @@
 --[[
     Ąlpha Şquad UI - ULT Tracker
     Module author: SeRuM1
-    Version: 2.6.0
 
     Generic Ultimate tracker for the player's PRIMARY and BACKUP weapon bars.
     No hard-coded ability IDs are required: the module reads the slotted Ultimate,
@@ -94,7 +93,7 @@ end
 function ULT:GetDefaultPosition()
     local width = GuiRoot:GetWidth() or 1920
     local height = GuiRoot:GetHeight() or 1080
-    return math.floor((width - 610) / 2), math.floor(height * 0.13)
+    return math.max(0,math.floor((width - (self.GetWindowWidth and self:GetWindowWidth() or 300)) / 2)), math.floor(height * 0.13)
 end
 
 function ULT:GetUltimatePower()
@@ -416,6 +415,15 @@ function ULT:RegisterSceneCallbacks()
     end
 end
 
+function ULT:ScheduleSlotRefresh(reason)
+    if self.slotRefreshPending or self.loading or not self.sv or not self.sv.enabled then return end
+    self.slotRefreshPending=true
+    zo_callLater(function()
+        ULT.slotRefreshPending=false
+        if ULT.sv and ULT.sv.enabled and not ULT.loading then ULT:Refresh(reason) end
+    end,25)
+end
+
 function ULT:RegisterEvents()
     local prefix = "AlphaSquadUI_ULTTracker"
 
@@ -440,27 +448,27 @@ function ULT:RegisterEvents()
     end
 
     if EVENT_HOTBAR_SLOT_UPDATED then
-        EM:RegisterForEvent(prefix .. "_HotbarSlot", EVENT_HOTBAR_SLOT_UPDATED, function(...)
-            zo_callLater(function() if ULT then ULT:Refresh("hotbar slot") end end, 25)
+        EM:RegisterForEvent(prefix .. "_HotbarSlot", EVENT_HOTBAR_SLOT_UPDATED, function(_,slotNum)
+            if slotNum==ULTIMATE_SLOT then ULT:ScheduleSlotRefresh("hotbar slot") end
         end)
     end
 
     if EVENT_ACTION_SLOTS_ALL_HOTBARS_UPDATED then
         EM:RegisterForEvent(prefix .. "_AllBars", EVENT_ACTION_SLOTS_ALL_HOTBARS_UPDATED, function()
-            zo_callLater(function() if ULT then ULT:Refresh("all hotbars") end end, 25)
+            ULT:ScheduleSlotRefresh("all hotbars")
         end)
     end
 
     if EVENT_ACTION_SLOTS_ACTIVE_HOTBAR_UPDATED then
         EM:RegisterForEvent(prefix .. "_ActiveBar", EVENT_ACTION_SLOTS_ACTIVE_HOTBAR_UPDATED, function()
-            zo_callLater(function() if ULT then ULT:Refresh("active bar") end end, 25)
+            ULT:ScheduleSlotRefresh("active bar")
         end)
     end
 
     if EVENT_ACTION_SLOT_STATE_UPDATED then
         EM:RegisterForEvent(prefix .. "_SlotState", EVENT_ACTION_SLOT_STATE_UPDATED, function(_, slotNum)
             if slotNum == ULTIMATE_SLOT then
-                zo_callLater(function() if ULT then ULT:Refresh("slot state") end end, 25)
+                ULT:ScheduleSlotRefresh("slot state")
             end
         end)
     end
@@ -498,14 +506,16 @@ function ULT:RegisterEvents()
         EM:RegisterForEvent(prefix .. "_ScreenResized", EVENT_SCREEN_RESIZED, function()
             zo_callLater(function()
                 if ULT and ULT.window then
+                    ULT:ApplyPosition()
                     ULT:ApplyLayout()
                     ULT:ApplyAppearance()
-                    ULT:ClampToScreen(true)
+                    ULT:ClampToScreen(false)
                     ULT:RefreshHUD()
                 end
                 if ULT and ULT.Group and ULT.Group.window then
+                    ULT.Group:ApplyPosition()
                     ULT.Group:ApplyAppearance()
-                    ULT.Group:ClampToScreen(true)
+                    ULT.Group:ClampToScreen(false)
                     ULT.Group:RefreshHUD()
                     if ULT.Group.ApplyConfigWindowScale then ULT.Group:ApplyConfigWindowScale() end
                 end
@@ -594,6 +604,7 @@ function ULT:Initialize()
         visible = true,
         locked = true,
         trackMode = "auto",
+        hudOrientation = "horizontal",
         readySound = true,
         readyFlash = true,
         hideInMenus = true,
@@ -614,6 +625,7 @@ function ULT:Initialize()
         end
     end
     self.sv.locked = true -- Global placement never resumes across reloads.
+    if self.sv.hudOrientation~="horizontal" and self.sv.hudOrientation~="vertical" then self.sv.hudOrientation="horizontal" end
     self.sv.scale = Clamp(FiniteOr(self.sv.scale, defaults.scale), 60, 180)
     self.sv.opacity = Clamp(FiniteOr(self.sv.opacity, defaults.opacity), 30, 100)
     self.sv.x = Clamp(FiniteOr(self.sv.x, defaults.x), -100000, 100000)

@@ -3,6 +3,9 @@ local SC=AlphaSquadUI and AlphaSquadUI.Modules and AlphaSquadUI.Modules.SupportC
 if not SC then return end
 local UI,Catalog=SC.UI,SC.Catalog
 local C=UI.colors
+local function EffectTooltip(key)
+    return UI.EffectTooltip and UI.EffectTooltip(key) or Catalog:GetEffectTooltip(key)
+end
 
 function SC:RefreshSettings()
     local settings=AlphaSquadUI.Settings
@@ -36,16 +39,16 @@ function SC:BuildIntegratedSettingsPage(page,ui)
     local appearance=ui.CreateCard(page,"AlphaSquadSupportAppearance",344,218,322,354,"YOUR HUD",C.accent or C.gold)
     local help=ui.CreateLabel(appearance,"AlphaSquadSupportLayoutHelp","ZoFontGameSmall",
         "Arrange and resize every enabled panel in Move HUD. Drag an edge to change its space, or a corner to scale the whole panel.",C.muted)
-    help:SetAnchor(TOPLEFT,appearance,TOPLEFT,14,42);help:SetDimensions(appearance:GetWidth()-28,66)
+    help:SetAnchor(TOPLEFT,appearance,TOPLEFT,14,42);help:SetDimensions(294,66)
     ui.CreateButton(appearance,"AlphaSquadSupportGlobalMove","MOVE HUD",14,122,190,32,function()
         if AlphaSquadUI.Layout and AlphaSquadUI.Layout.Start then AlphaSquadUI.Layout.Start() end
     end)
     local placement=ui.CreateLabel(appearance,"AlphaSquadSupportPlacementNote","ZoFontGameSmall",
-        "Done saves and locks your panels. Dashboard choices and shared group data stay unchanged.",C.muted)
-    placement:SetAnchor(TOPLEFT,appearance,TOPLEFT,14,170);placement:SetDimensions(appearance:GetWidth()-28,62)
+        "Use Preview for sample ready, missing and optional sources. Done saves and locks your panels; previews never change group data.",C.muted)
+    placement:SetAnchor(TOPLEFT,appearance,TOPLEFT,14,170);placement:SetDimensions(294,76)
     local native=ui.CreateLabel(appearance,"AlphaSquadSupportNativeNote","ZoFontGameSmall",
         "Equipment, skills and Champion stars use the game's own icons. Choose the suite design in Dashboard.",C.muted)
-    native:SetAnchor(TOPLEFT,appearance,TOPLEFT,14,250);native:SetDimensions(appearance:GetWidth()-28,70)
+    native:SetAnchor(TOPLEFT,appearance,TOPLEFT,14,258);native:SetDimensions(294,70)
     ui.RegisterRefresher(function()
         local coverage=SC.coverage or {}
         status:SetText(string.format("%d / %d covered  •  %d missing  •  %d players with limited data",coverage.coveredCount or 0,coverage.requiredCount or 0,coverage.missingCount or 0,coverage.limitedPlayers or 0))
@@ -111,6 +114,7 @@ end
 function SC:GetCoverageContributorTooltip(data)return ContributorTooltip(data)end
 function SC:CreateMatrixWindow()
     local win=UI.Window("AlphaSquadSupportCoverageMatrix","Ąlpha Şquad UI  •  Coverage",function() SC:CloseMatrix() end)
+    win.hasContentLayout=true
     self.matrixWindow=win;UI.RegisterWindow("supportCoverage",win,function() SC:CloseMatrix() end)
     win.trial=UI.Button(win,"AlphaSquadSupportTrial","TRIAL",90,28,function() SC:SetActiveProfile("trial") end)
     win.trial:SetAnchor(TOPLEFT,win,TOPLEFT,18,82)
@@ -202,7 +206,7 @@ function SC:RefreshMatrix()
                 row.name=UI.Label(row,name.."Name","","ZoFontGameSmall")
                 row.name:SetAnchor(TOPLEFT,row,TOPLEFT,27,0)
                 if row.name.SetWrapMode then row.name:SetWrapMode(TEXT_WRAP_MODE_ELLIPSIS) end
-                UI.Hover(row.name,function() return row.data and Catalog:GetEffectTooltip(row.data.key) end)
+                UI.Hover(row.name,function() return row.data and EffectTooltip(row.data.key) end)
                 row.toggle=UI.Button(row,name.."Toggle","",31,20,function()
                     if row.data then SC:SetEffectTracking(row.data.key,not SC:IsEffectTracked(row.data.key));SC:RefreshMatrix() end
                 end)
@@ -216,14 +220,14 @@ function SC:RefreshMatrix()
                 row.contributors.label:SetFont("ZoFontGameSmall")
                 row.contributors:SetAnchor(TOPRIGHT,row.toggle,TOPLEFT,-1,0)
                 UI.Hover(row.contributors,function()return ContributorTooltip(row.data) end)
-                UI.Hover(row.icon,function() return row.data and Catalog:GetEffectTooltip(row.data.key) end)
+                UI.Hover(row.icon,function() return row.data and EffectTooltip(row.data.key) end)
                 win.list.rows[count]=row
             end
             row.data=data;row:SetHidden(false)
             local visual=Catalog:GetEffectVisual(key)
             row.icon:SetTexture(visual and visual.icon or "");row.icon:SetHidden(not visual or not visual.icon or visual.icon=="")
             if visual and visual.reference then row.icon:SetHandler("OnMouseEnter",function() UI.ItemTooltip(row.icon,visual,true) end)
-            else row.icon:SetHandler("OnMouseEnter",function() UI.Tooltip(row.icon,Catalog:GetEffectTooltip(row.data.key)) end) end
+            else row.icon:SetHandler("OnMouseEnter",function() UI.Tooltip(row.icon,EffectTooltip(row.data.key)) end) end
             row.name:SetText(UI.Text(effect.label));UI.Color(row.name,tracked and C.white or C.muted)
             row.toggle.label:SetText(tracked and "ON" or "OFF");UI.Color(row.toggle.label,tracked and C.green or C.muted)
             if UI.SetButtonSelected then UI.SetButtonSelected(row.toggle,tracked) end
@@ -239,6 +243,11 @@ function SC:RefreshMatrix()
             row:SetDimensions(layout.laneWidth,layout.pitch-1)
             if row.divider then row.divider:ClearAnchors();row.divider:SetAnchor(BOTTOMLEFT,row,BOTTOMLEFT,0,0);row.divider:SetWidth(layout.laneWidth) end
             row.marker:SetDimensions(2,layout.pitch-1)
+            -- A dense row can be shorter than the default icon; keep its artwork
+            -- inside its own hit area and away from the following source.
+            local iconSize=math.min(18,layout.pitch-3)
+            row.icon:SetDimensions(iconSize,iconSize)
+            row.icon:ClearAnchors();row.icon:SetAnchor(TOPLEFT,row,TOPLEFT,5,(layout.pitch-1-iconSize)/2)
             row.name:SetDimensions(layout.laneWidth-87,layout.pitch-1)
             row.toggle:SetHeight(layout.pitch-1);row.contributors:SetHeight(layout.pitch-1)
         end

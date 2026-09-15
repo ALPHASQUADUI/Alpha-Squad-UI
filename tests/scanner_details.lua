@@ -95,6 +95,13 @@ check(calls==0 and decoded.enchantSuppressedByPoison==nil,
     "Describing a peer's item link never reads the receiver's worn poison state")
 check(decoded.quality==5 and decoded.championPoints==160 and decoded.enchantName=="Glyphe inconnu",
     "Detailed item evidence includes quality, CP level and exact glyph text")
+function GetItemLinkEquipType() return 42 end
+function ZO_Character_DoesEquipSlotUseEquipType(slot,equipType) return slot==EQUIP_SLOT_BACKUP_MAIN and equipType==42 end
+check(SC:DescribeEquipmentItem(EQUIP_SLOT_BACKUP_MAIN,"Back staff").equipSlotValid==true,
+    "Item-link descriptions confirm compatible slots through the native equipment map")
+check(SC:DescribeEquipmentItem(EQUIP_SLOT_HEAD,"Back staff").equipSlotValid==false,
+    "A staff falsely assigned to the head slot is marked incompatible")
+GetItemLinkEquipType=nil;ZO_Character_DoesEquipSlotUseEquipType=nil
 
 local crafted=true
 function GetSlotBoundId(slot,category)

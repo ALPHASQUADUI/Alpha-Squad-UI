@@ -75,6 +75,7 @@ local function Button(parent, name, text, x, y, w, h, callback)
         end
     end)
 
+    if AlphaSquadUI.Input and AlphaSquadUI.Input.Register then AlphaSquadUI.Input.Register(button,{activate=function() if callback then callback(button) end end,label=text}) end
     return button
 end
 
@@ -111,6 +112,11 @@ local function CreateAbilityRow(parent, index)
     row.state:SetHorizontalAlignment(TEXT_ALIGN_RIGHT)
 
     row.ability = nil
+    if AlphaSquadUI.Input and AlphaSquadUI.Input.Register then
+        AlphaSquadUI.Input.Register(row,{activate=function()
+            if row.ability then Group:SetAbilityTracked(row.ability.id,not Group:IsAbilityTracked(row.ability.id)) end
+        end,label="Ultimate filter"})
+    end
     return row
 end
 
@@ -126,8 +132,8 @@ function Group:RefreshAbilityRow(row, ability)
     row:SetHidden(false)
     row.ability = ability
 
-    row.icon:SetHidden(not ability.icon or ability.icon == "")
-    if ability.icon and ability.icon ~= "" then row.icon:SetTexture(ability.icon) end
+    row.icon:SetHidden(false)
+    row.icon:SetTexture(ability.icon and ability.icon~="" and ability.icon or "EsoUI/Art/ActionBar/abilityFrame64_up.dds")
 
     row.name:SetText(ability.name and ability.name ~= "" and ability.name or "Unknown Ultimate")
     row.users:SetText(tostring(ability.users or 0) .. "x")
@@ -157,7 +163,7 @@ function Group:RefreshAbilityRow(row, ability)
             end
             tooltips.ShowText(row, (ability.name or "Unknown Ultimate")
                 .. (description ~= "" and ("\n\n" .. description) or "")
-                .. "\n\nClick to turn tracking on or off. The count shows group members with this Ultimate. You can save up to 24 selections.")
+                .. "\n\nSelect to turn tracking on or off. The count shows group members with this Ultimate. You can save up to 24 selections.")
         end
     end)
 

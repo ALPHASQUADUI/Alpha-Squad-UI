@@ -21,6 +21,7 @@ end
 -- callbacks remain the authority; do not reach into upvalues or SavedVariables.
 -- Ask its existing options producer for data, without creating/opening a panel.
 local function CaptureNativeOptions()
+    if S.capturingOptions then return nil end
     local lam,callbacks,panel=LibAddonMenu2,CALLBACK_MANAGER,LibGroupBroadcastOptions
     if not LibGroupBroadcast or not lam or type(lam.RegisterOptionControls)~="function"
         or not callbacks or type(callbacks.FireCallbacks)~="function" or not panel then return nil end
@@ -30,9 +31,11 @@ local function CaptureNativeOptions()
         if id=="LibGroupBroadcastOptions" and type(options)=="table" then captured=options end
         return original(self,id,options,...)
     end
+    S.capturingOptions=true
     lam.RegisterOptionControls=capture
     local ok=pcall(callbacks.FireCallbacks,callbacks,"LAM-BeforePanelControlsCreated",panel)
     lam.RegisterOptionControls=original
+    S.capturingOptions=false
     if ok then return captured end
 end
 local function NativeControls(kind)

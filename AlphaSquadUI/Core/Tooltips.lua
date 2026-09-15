@@ -13,19 +13,35 @@ local function Number(value, minimum, maximum)
     return type(value)=="number" and value==value and value>=minimum and value<=maximum and value or nil
 end
 local function Id(value) return Number(value,1,2147483647) and value%1==0 and value or nil end
+local function OwnScale(control)
+    local own = Number(Call(control, "GetControlScale"), 0.001, 100)
+    if own and type(control.SetControlScale) == "function" then return own, "SetControlScale" end
+    local scale = Number(Call(control, "GetScale"), 0.001, 100) or 1
+    if Call(control, "GetInheritsScale") == true then
+        local parent = Call(control, "GetParent")
+        scale = scale / (Number(Call(parent, "GetScale"), 0.001, 100) or 1)
+    end
+    return scale, "SetScale"
+end
 local function Text(value, fallback)
     if type(value)~="string" or value=="" then return fallback or "" end
     return (value:gsub("%^.*$",""):gsub("|[cC]%x%x%x%x%x%x",""):gsub("|[rR]",""):gsub("|","||"))
 end
 local function Save(control)
     if not control or control==GuiRoot or saved[control] then return end
+    local scale, scaleMethod = OwnScale(control)
     saved[control]={tier=Call(control,"GetDrawTier"),layer=Call(control,"GetDrawLayer"),
-        level=Call(control,"GetDrawLevel"),scale=Call(control,"GetScale")}
+        level=Call(control,"GetDrawLevel"),scale=scale,scaleMethod=scaleMethod,applied={}}
 end
 local function Restore()
     for control, state in pairs(saved) do
-        for field, method in pairs({tier="SetDrawTier",layer="SetDrawLayer",level="SetDrawLevel",scale="SetScale"}) do
-            if state[field]~=nil then Call(control,method,state[field]) end
+        for field, method in pairs({tier="SetDrawTier",layer="SetDrawLayer",level="SetDrawLevel"}) do
+            local getter=({tier="GetDrawTier",layer="GetDrawLayer",level="GetDrawLevel"})[field]
+            if state[field]~=nil and Call(control,getter)==state.applied[field] then Call(control,method,state[field]) end
+        end
+        if state.resized then
+            local current=OwnScale(control)
+            if math.abs(current-state.appliedScale)<0.000001 then Call(control,state.scaleMethod,state.scale) end
         end
     end
     saved={}
@@ -58,9 +74,11 @@ function T.Raise(tooltip)
     for _, control in ipairs({window or tooltip, tooltip}) do
         if control~=GuiRoot then
             Save(control)
-            if DT_HIGH~=nil then Call(control,"SetDrawTier",DT_HIGH) end
-            if DL_OVERLAY~=nil then Call(control,"SetDrawLayer",DL_OVERLAY) end
-            Call(control,"SetDrawLevel",math.max(10000,Number(Call(control,"GetDrawLevel"),0,1000000) or 0))
+            local applied=saved[control].applied
+            if DT_HIGH~=nil then Call(control,"SetDrawTier",DT_HIGH);applied.tier=DT_HIGH end
+            if DL_OVERLAY~=nil then Call(control,"SetDrawLayer",DL_OVERLAY);applied.layer=DL_OVERLAY end
+            applied.level=math.max(10000,Number(Call(control,"GetDrawLevel"),0,1000000) or 0)
+            Call(control,"SetDrawLevel",applied.level)
         end
     end
     T.active=tooltip
@@ -87,9 +105,17 @@ local function Finish(tooltip)
     local rootH=Number(Call(GuiRoot,"GetHeight"),80,100000)
     local w=Number(Call(tooltip,"GetWidth"),1,100000)
     local rootW=Number(Call(GuiRoot,"GetWidth"),80,100000)
-    local scale=saved[tooltip] and Number(saved[tooltip].scale,0.05,10) or 1
-    if h and rootH and w and rootW then
-        Call(tooltip,"SetScale",math.min(scale,(rootH-32)/h,(rootW-32)/w))
+    local state=saved[tooltip]
+    if h and rootH and w and rootW and state then
+        -- GetWidth/GetHeight include inherited scaling; multiply the existing
+        -- local scale by the fit ratio rather than applying that ratio twice.
+        local fit=math.min(1,(rootH-32)/h,(rootW-32)/w)
+        if fit < 1 then
+            local scale = OwnScale(tooltip)
+            state.resized=true
+            state.appliedScale=scale*fit
+            Call(tooltip,state.scaleMethod,state.appliedScale)
+        end
     end
 end
 function T.ShowText(owner, text)

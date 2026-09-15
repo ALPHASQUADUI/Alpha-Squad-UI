@@ -4,9 +4,9 @@ local function check(value,message) total=total+1;assert(value,message) end
 local controls={}
 local function Control(name,parent)
  local c={name=name,parent=parent,width=0,height=0,x=0,y=0,scale=1,hidden=false,handlers={}}
- function c:SetDimensions(w,h) self.width=w;self.height=h end
- function c:GetWidth() return self.width end
- function c:GetHeight() return self.height end
+ function c:SetDimensions(w,h) self.geometryWrites=(self.geometryWrites or 0)+1;self.width=w;self.height=h end
+ function c:GetWidth() return self.width*self.scale end
+ function c:GetHeight() return self.height*self.scale end
  function c:SetWidth(w) self.width=w end
  function c:SetHeight(h) self.height=h end
  function c:SetScale(value) self.scale=value end
@@ -39,6 +39,8 @@ function GetSlotBoundId(_,category) return category==1 and 101 or 30366 end
 function GetSlotName(_,category) return category==1 and "Meteor" or "Power Overload" end
 function GetSlotTexture(_,category) return category==1 and "native/meteor.dds" or "native/power.dds" end
 function GetSlotAbilityCost() return 100 end
+function GetAbilityName(id) return "Native Ultimate "..id end
+function GetAbilityIcon(id) return "native/"..id..".dds" end
 function GetUnitPower() return 110 end
 function GetNumBuffs() return 0 end
 function IsSlotToggled() return false end
@@ -62,7 +64,13 @@ ULT.sv.hudWidth=900;ULT.sv.hudHeight=200;ULT:RefreshHUD()
 check(ULT.window.width==900 and ULT.window.height==200,"The personal renderer consumes saved edge dimensions")
 check(ULT.window.cards.primary.x<ULT.window.cards.backup.x and ULT.window.cards.primary.y==ULT.window.cards.backup.y,"Wide Both mode lays the two cards side by side")
 ULT.sv.hudWidth=400;ULT.sv.hudHeight=300;ULT:RefreshHUD()
-check(ULT.window.cards.primary.y<ULT.window.cards.backup.y and ULT.window.cards.primary.x==ULT.window.cards.backup.x,"Narrow Both mode reflows into two readable rows")
+check(ULT.window.cards.primary.x<ULT.window.cards.backup.x and ULT.window.height==300,"Narrowing the horizontal template never switches orientation or doubles its height")
+ULT:SetLayoutOrientation("vertical")
+check(ULT.window.cards.primary.y<ULT.window.cards.backup.y and ULT.window.cards.primary.x==ULT.window.cards.backup.x,"The explicit vertical template stacks both cards")
+ULT.sv.hudWidth=224;ULT.sv.hudHeight=410;ULT:RefreshHUD()
+ULT:SetLayoutOrientation("horizontal")
+ULT:SetLayoutOrientation("vertical")
+check(ULT.window.width==224 and ULT.window.height==410,"Each orientation restores its own saved dimensions")
 for _,card in pairs(ULT.window.cards) do
  check(card.icon.width==card.icon.height and card.iconBorder.width==card.iconBorder.height,"Resize preserves square native icons and frames")
  check(card.progress.width<=card.progressBG.width,"Progress remains inside its resized background")
@@ -77,7 +85,7 @@ check(windows==1,"Switching modes never creates another window")
 assert(loadfile("AlphaSquadUI/Core/Layout.lua"))()
 local Layout=AlphaSquadUI.Layout
 function GetUIMousePosition() return 100,200 end
-ULT.sv.hudWidth=400;ULT.sv.hudHeight=300;ULT.sv.scale=100;ULT:RefreshHUD()
+ULT:SetLayoutOrientation("horizontal");ULT.sv.hudWidth=400;ULT.sv.hudHeight=300;ULT.sv.scale=100;ULT:RefreshHUD()
 check(Layout.Start() and Layout.IsMoving(ULT),"The real placement controller selects the unified personal HUD")
 Layout.AdjustSelected("scale",25)
 check(ULT.window:GetScale()==1.25,"Central scale controls repaint the personal HUD immediately")
@@ -91,9 +99,52 @@ Layout.EndResize()
 check(handle.handlers.OnUpdate==nil,"Releasing the corner removes its pointer callback")
 ULT.sv.hudWidth=400;ULT.sv.hudHeight=142;ULT.sv.trackMode="both";GuiRoot:SetDimensions(500,200)
 ULT:ApplyLayout()
-check(ULT.window:GetHeight()*ULT.window:GetScale()<=180.01,"Small-screen fitting uses the actual stacked two-card height")
+check(ULT.window:GetHeight()<=180.01,"Small-screen fitting uses native rendered dimensions exactly once")
 Layout.Finish()
 GuiRoot:SetDimensions(1920,1080)
+ULT:SetTrackMode("both");ULT:SetLayoutOrientation("horizontal")
+ULT.sv.hudWidth=640;ULT.sv.hudHeight=130;ULT.sv.scale=150;ULT:RefreshHUD()
+local renderedWidth=ULT.window:GetWidth()
+for _=1,8 do ULT:RefreshHUD() end
+check(math.abs(ULT.window:GetWidth()-renderedWidth)<0.001,"Repeated refreshes do not double-apply native scale or oscillate")
+local requestedX,requestedY=ULT.sv.x,ULT.sv.y
+ULT.sv.x,ULT.sv.y=1200,720;ULT:ApplyPosition()
+GuiRoot:SetDimensions(720,420);ULT:RefreshHUD()
+check(ULT.sv.x==1200 and ULT.sv.y==720,"Automatic viewport fitting does not overwrite the saved personal anchor")
+check(ULT.window:GetLeft()+ULT.window:GetWidth()<=720.01 and ULT.window:GetTop()+ULT.window:GetHeight()<=420.01,"Native scaled personal bounds fit the smaller viewport without a second scale multiplication")
+GuiRoot:SetDimensions(1920,1080);ULT:ApplyPosition();ULT:RefreshHUD()
+check(ULT.sv.x==1200 and ULT.sv.y==720,"Requested personal position survives return to a larger viewport")
+ULT.sv.x,ULT.sv.y=requestedX,requestedY;ULT:ApplyPosition();ULT:RefreshHUD()
+local geometryWrites=ULT.window.geometryWrites
+ULT.currentUltimate=112;ULT:RefreshHUD()
+check(ULT.window.geometryWrites==geometryWrites,"Resource-only updates do not rebuild unchanged geometry")
+local livePrimary,liveBackup=ULT.bars.primary,ULT.bars.backup
+local livePower=ULT.currentUltimate
+Layout.Start()
+ULT:SetLayoutPreview("mixed")
+check(ULT:GetHUDBar("primary").ready and ULT:GetHUDBar("backup").state=="charging","Mixed personal preview displays ready and charging examples")
+check(ULT.window.cards.primary.icon.texture=="native/40223.dds","Preview icons resolve their real ability identity through the native getter")
+ULT:SetLayoutPreview("missing")
+check(ULT.window.cards.primary.statusLabel.text=="EMPTY" and not ULT.window.cards.primary.icon.hidden,"Missing-slot preview uses the native empty frame with a readable state")
+ULT:SetLayoutPreview("overload")
+check(ULT.window.cards.primary.statusLabel.text=="OVERLOAD ON" and ULT.window.cards.backup.statusLabel.text=="OVERLOAD OFF","Both Overload states can be positioned without changing the slotted abilities")
+check(ULT.bars.primary==livePrimary and ULT.bars.backup==liveBackup and ULT.currentUltimate==livePower,"Examples never replace native live bars or resource values")
+ULT:SetLayoutPreview("live")
+check(ULT:GetHUDBar("primary")==livePrimary,"Live preview uses the real bar without mutating it")
+ULT:SetLayoutPreview("ready");Layout.Finish()
+check(ULT:GetHUDBar("primary")==livePrimary,"Finishing placement immediately discards demo presentation")
+
+assert(loadfile("AlphaSquadUI/Core/Preview.lua"))()
+Layout.Start();Layout.Select(ULT)
+local orientation=ULT:GetLayoutOrientation()
+Layout.CycleOrientation(1)
+check(ULT:GetLayoutOrientation()~=orientation,"The actual toolbar orientation action uses the module contract")
+AlphaSquadUI.Preview.SetMode("missing")
+check(ULT.window.cards.primary.statusLabel.text=="EMPTY","The central preview selector repaints actual personal card text immediately")
+AlphaSquadUI.Preview.SetMode("ready")
+check(ULT.window.cards.primary.statusLabel.text=="READY","Selecting Ready replaces missing examples without a resource event")
+Layout.Finish()
+check(ULT.window.cards.primary.statusLabel.text~="EMPTY" and ULT:GetHUDBar("primary")==livePrimary,"Closing the real editor restores current personal values immediately")
 for _,scale in ipairs({60,180}) do
     ULT.initialized=false
     ZO_SavedVars.NewAccountWide=function(_,name,_,_,defaults)

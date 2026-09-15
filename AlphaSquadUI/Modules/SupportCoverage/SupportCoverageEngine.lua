@@ -166,7 +166,7 @@ function SC:EvaluateCoverage(reason)
         issues = {},
         entries = {},
         duplicates = {},
-        penetration = {target=Catalog.bossArmor, covered=0, remaining=Catalog.bossArmor},
+        penetration = {target=Catalog.bossArmor, covered=0, remaining=Catalog.bossArmor, variableSources={}},
         critical = {cap=Catalog.criticalDamageCap, groupBonus=0},
         foodMissing = {},
         foodExpiring = {},
@@ -259,6 +259,12 @@ function SC:EvaluateCoverage(reason)
             result.duplicates[effectKey] = duplicatePlayers
         end
 
+        local partialRecipients=effect.coverageLimit and effect.coverageLimit<#self.roster or false
+        for _,owner in ipairs(owners) do
+            for _,detail in pairs((owner.capabilities[effectKey] or {}).sourceDetails or {}) do
+                if type(detail.recipientLimit)=="number" and detail.recipientLimit<#self.roster then partialRecipients=true end
+            end
+        end
         result.entries[#result.entries + 1] = {
             key = effectKey,
             effect = effect,
@@ -267,7 +273,7 @@ function SC:EvaluateCoverage(reason)
             assigned = assigned,
             locked = false,
             sourceOnly = true,
-            partialRecipients = effect.coverageLimit and effect.coverageLimit < #self.roster or false,
+            partialRecipients = partialRecipients,
             duplicatePlayers = duplicatePlayers,
             unverified = status == "missing" and unverified,
         }
@@ -284,6 +290,8 @@ function SC:EvaluateCoverage(reason)
         if status == "covered" then
             if effect.penetration then
                 result.penetration.covered = result.penetration.covered + effect.penetration
+            elseif effect.variablePenetration then
+                result.penetration.variableSources[#result.penetration.variableSources+1]=effectKey
             end
             -- Personal buffs may be useful build checks, but they are not group critical-damage coverage.
             if effect.critDamage and not effect.personal then

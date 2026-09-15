@@ -609,6 +609,9 @@ function SC:Initialize()
     self.sv.locked=true
     self.initialized = true
     self.inCombat = self.Try and self.Try(IsUnitInCombat, "player") == true or false
+    -- Worn slots and hotbars are not committed during the initial load screen.
+    -- PLAYER_ACTIVATED is the same readiness gate used by the companion sender.
+    self.loading = true
 
     if self.CreateHUD then self:CreateHUD() end
     if self.InitializeSharing then self:InitializeSharing() end

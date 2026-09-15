@@ -6,7 +6,7 @@ Personal and group Ultimate readiness for **Ąlpha Şquad UI**.
 
 Choose AUTO, FRONT, BACK or BOTH to follow the actual Ultimate and morph slotted on either weapon bar. Class, guild, weapon and subclassed abilities use their native identity; there is no fixed list of supported personal Ultimates.
 
-The panel shows the ability icon/name, cost, current Ultimate resource, active bar and charging/READY/ACTIVE state. Crossing into READY can play a sound and show a pulse. Spending Ultimate clears readiness while native resource state settles. Toggle Ultimates use their actual toggled state instead of continuing to flash READY while active.
+The compact panel shows the native ability icon/name, current Ultimate resource, active bar and charging/READY/ACTIVE state. The native ability tooltip supplies the full skill details and cost. Crossing into READY can play a sound and show a pulse. Spending Ultimate clears readiness while native resource state settles. Toggle Ultimates use their actual toggled state instead of continuing to flash READY while active.
 
 **AUTO**, the new-installation default, follows the active weapon bar. Enabled, applicable Overload behavior can prioritize a slotted Overload morph on either bar in AUTO, FRONT or BACK. **BOTH** always retains both cards. Existing saved display choices are preserved.
 
@@ -18,7 +18,7 @@ Open **ULT Tracker → CONFIGURE GROUP** or `/asult group`. Select Ultimate abil
 
 Each row shows the player's @UserID, native ability icon, charge percentage and readiness state. The HUD omits repeated ability names and raw Ultimate-point totals. If a player matches multiple selected abilities, it prioritizes a ready Ultimate, otherwise the one closest to ready. READY players sort first; recent resource spends are temporarily dimmed.
 
-A spend indicator is inferred from shared resource changes, not a guaranteed remote cast ID. Offline, dead, disconnected and stale records cannot be treated as actionable ready players.
+A spend indicator is inferred from shared resource changes, not a guaranteed remote cast ID. Offline and dead players cannot be treated as actionable ready players. LibGroupCombatStats can stop broadcasting unchanged Ultimate values; their age alone cannot prove they are stale. A connected player who stops sharing may retain their last known value until the library updates or clears it.
 
 ## Group data and sharing
 
@@ -30,7 +30,9 @@ Open **Libraries** for dependency status and **Share group Ultimates**. A new in
 
 ## Placement and saved settings
 
-Use **MOVE HUD** in the main sidebar or `/asmove` outside combat. Position the personal and group panels against the normal game interface. Drag corners to scale proportionally and edges to reshape content; BOTH cards stack when the personal panel becomes narrow. The placement toolbar controls scale, background opacity, fit and reset for the selected panel. Click **DONE** or press Escape to save and lock. Disabled modules stay disabled and normal visibility choices are preserved. Group placement remains possible with no current matching members by showing its placement guide.
+Use **MOVE HUD** in the main sidebar or `/asmove` outside combat. Position the personal and group panels against the normal game interface. Choose **Horizontal** or **Vertical** for the selected Ultimate panel. Personal BOTH cards sit side by side horizontally or stack vertically; the orientation stays fixed while resizing. The group horizontal layout uses four columns for up to twelve players, while its vertical layout uses one list. Each orientation keeps its own size. Drag corners to scale proportionally and edges to add space. The placement toolbar controls scale, background opacity, fit and reset for the selected panel. Choose **DONE** or press Escape to save and lock. Disabled modules stay disabled and normal visibility choices are preserved. Placement defaults to clearly labelled examples even when no abilities are slotted and no group is present. Mixed examples show ready and charging Ultimates, recently spent resources, disabled sharing, missing slots, offline and dead players. The group preview always includes twelve fictional accounts. Ready, Missing, Overload and Live preview modes are available; Live shows only real data. The examples never change the roster, tracking choices, sharing payloads or alert state.
+
+A new personal HUD starts at 300 × 116 logical UI units. Existing saved sizes and bar choices are retained. ESO applies screen and interface scaling once; automatic fitting preserves the requested dimensions, scale and saved position for a larger viewport.
 
 Sizing and opacity are centralized in MOVE HUD. Group rows adapt to the available panel space while keeping their icons square. Cross-sync ON shares settings and positions across characters on the same account/server; OFF keeps native character profiles separate. Existing SavedVariables and group selections survive reloads and travel. Dashboard's Ember Classic, Tactical Compact and Obsidian Studio styles update both personal and group panels without changing status meanings.
 
@@ -38,7 +40,7 @@ Dashboard owns the module switch. Disabling tracking releases its gameplay work 
 
 ## Performance
 
-Native events drive personal slot/resource and Overload effect changes. A shared 1.5-second safety refresh runs only while the tracker is enabled, visible and unobscured. Alert animation exists only while its output is visible and needed. Overload does not create a second personal HUD, resource poll or recovery heartbeat.
+Native events drive personal slot/resource and Overload effect changes. Ultimate slot events coalesce into one refresh per burst; ordinary skill-slot changes do not trigger Ultimate rescans. Resource-only HUD changes reuse unchanged geometry. Group ability identity is cached in a bounded table, with unsupported native lookups handled safely. A shared 1.5-second safety refresh runs only while the tracker is enabled, visible and unobscured. Alert animation exists only while its output is visible and needed. Overload does not create a second personal HUD, resource poll or recovery heartbeat.
 
 Incoming group updates affect the relevant cached player. Membership changes and a two-second visible-state safety check rebuild the roster as needed. Up to twelve pooled rows are reused. Hidden/disabled group panels do not rebuild continuously; alerts and safety timers stop during placement or loading. No combat-log parsing is required.
 

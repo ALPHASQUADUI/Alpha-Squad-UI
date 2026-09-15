@@ -48,7 +48,7 @@ function ULT:BuildIntegratedSettingsPage(page,ui)
     if not page or not ui then return end
     local C=ui.colors or COLORS
     page.responsiveCards=true;page.contentHeight=590
-    local width=page:GetWidth()-16;local half=(width-16)/2
+    local width=(AlphaSquadUI.Utils and AlphaSquadUI.Utils.GetLogicalWidth and AlphaSquadUI.Utils.GetLogicalWidth(page) or page:GetWidth()/math.max(0.001,page.GetScale and page:GetScale() or 1))-16;local half=(width-16)/2
     local function Label(parent,name,text,x,y,w,h,font,color)
         local label=ui.CreateLabel(parent,name,font or "ZoFontGameSmall",text,color or C.muted)
         label:SetAnchor(TOPLEFT,parent,TOPLEFT,x,y);label:SetDimensions(w,h)
@@ -62,7 +62,7 @@ function ULT:BuildIntegratedSettingsPage(page,ui)
         function() return ULT.sv and ULT.sv.visible==true end,function(v) ULT:SetVisible(v) end)
     ui.AddToggleRow(general,"AlphaSquadULTIntegratedMenus","Hide in game menus",82,
         function() return ULT.sv and ULT.sv.hideInMenus==true end,function(v) ULT.sv.hideInMenus=v==true;ULT:ApplyVisibility() end)
-    Label(general,"AlphaSquadULTPlacementHelp","Position, size and opacity are adjusted together in Move HUD. Drag edges to rearrange the panel; drag corners to scale it.",14,132,half-28,66)
+    Label(general,"AlphaSquadULTPlacementHelp","Position, size and opacity are adjusted together in Move HUD. Choose Horizontal or Vertical; use corners for proportional sizing and edges for extra space.",14,132,half-28,66)
     local tracking=ui.CreateCard(page,"AlphaSquadULTIntegratedTracking",half+24,86,half,216,"BARS & READINESS",C.cyan)
     local choices={{"auto","AUTO"},{"main","FRONT"},{"back","BACK"},{"both","BOTH"}}
     local buttons={};local buttonWidth=(half-28-24)/4
@@ -128,7 +128,7 @@ end
 function ULT:BuildOverloadSettingsPage(page,ui)
     local C=ui.colors or COLORS
     page.responsiveCards=true;page.contentHeight=590
-    local width=page:GetWidth()-16;local half=(width-16)/2
+    local width=(AlphaSquadUI.Utils and AlphaSquadUI.Utils.GetLogicalWidth and AlphaSquadUI.Utils.GetLogicalWidth(page) or page:GetWidth()/math.max(0.001,page.GetScale and page:GetScale() or 1))-16;local half=(width-16)/2
     local function Label(parent,name,text,x,y,w,h,font,color)
         local label=ui.CreateLabel(parent,name,font or "ZoFontGameSmall",text,color or C.muted)
         label:SetAnchor(TOPLEFT,parent,TOPLEFT,x,y);label:SetDimensions(w,h)

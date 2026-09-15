@@ -166,6 +166,10 @@ function SC:DescribeEquipmentItem(slot, link)
         enchantName=tostring(enchantName or ""), enchantDescription=tostring(enchantDescription or ""),
         isArmor=ARMOR_SLOTS[slot] == true, isWeapon=descriptor.bar ~= "BOTH",
     }
+    -- The receiver's native equipment map validates the transmitted position;
+    -- a genuine helmet link cannot stand in for a second ring or an off hand.
+    local equipType=SafeCall(GetItemLinkEquipType,link)
+    if equipType~=nil then item.equipSlotValid=SafeCall(ZO_Character_DoesEquipSlotUseEquipType,slot,equipType) end
     item.twoHanded = self:IsTwoHandedWeapon(item)
     if hasEnchant == nil then item.enchant = "unknown"
     elseif not hasEnchant then item.enchant = "missing"

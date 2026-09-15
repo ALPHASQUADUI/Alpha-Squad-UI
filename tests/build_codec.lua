@@ -173,4 +173,90 @@ function SC:DescribeEquipmentItem(slot,link)
 end
 check(not DecodeBuild(EquippedBuild()).equipment.complete,"Unreadable native set identity cannot become verified equipment")
 SC.DescribeEquipmentItem=verifiedDescriptor
+function SC:DescribeEquipmentItem(slot,link)
+    local item=verifiedDescriptor(self,slot,link)
+    if item then item.equipSlotValid=slot~=1 end
+    return item
+end
+check(not DecodeBuild(EquippedBuild()).equipment.complete,
+    "An item that cannot occupy its claimed native equipment slot never proves a set")
+SC.DescribeEquipmentItem=verifiedDescriptor
+
+local function SkillBuild()
+    return {skills={known=true,primary={{slot=3,abilityId=100,boundAbilityId=100}},backup={}}}
+end
+local function Rejected(build,message)
+    check(SC.BuildCodec.Decode(assert(SC.BuildCodec.Encode(build)))==nil,message)
+end
+for _,slot in ipairs({0,1,2,9,15}) do
+    local build=SkillBuild();build.skills.primary[1].slot=slot
+    Rejected(build,"Non-assignable ability slot is rejected: "..slot)
+end
+local build=SkillBuild();build.skills.primary[1].abilityId=0
+check(not DecodeBuild(build).skills.known,"An unresolved effective ability cannot establish a complete bar")
+build=SkillBuild();build.skills.primary[1].boundAbilityId=0
+Rejected(build,"An occupied ability record requires a bound native ID")
+build=SkillBuild();build.skills.primary[1].scripts={{id=11}};build.skills.primary[1].scriptsKnown=true
+Rejected(build,"A normal ability cannot inject a Scribing source")
+local function ScribedBuild()
+    local build=SkillBuild();local skill=build.skills.primary[1]
+    skill.craftedAbilityId=2;skill.boundAbilityId=2;skill.scriptsKnown=true
+    skill.scripts={{id=11},{id=12},{id=13}}
+    return build
+end
+build=ScribedBuild();build.skills.primary[1].boundAbilityId=3
+Rejected(build,"Bound grimoire and Scribing identity must agree")
+build=ScribedBuild();build.skills.primary[1].slot=8
+Rejected(build,"A grimoire cannot occupy the Ultimate slot")
+build=ScribedBuild();build.skills.primary[1].scripts[3]=nil
+Rejected(build,"Verified Scribing requires all three scripts")
+build=ScribedBuild();build.skills.primary[1].scripts[3].id=11
+Rejected(build,"Duplicate scripts cannot establish a Scribing combination")
+SCRIBING_SLOT_PRIMARY=1;SCRIBING_SLOT_SECONDARY=2;SCRIBING_SLOT_TERTIARY=3
+function GetCraftedAbilityScriptScribingSlot(id) return id-10 end
+build=ScribedBuild();build.skills.primary[1].scripts={{id=13},{id=12},{id=11}}
+Rejected(build,"Native script categories validate the reported script order")
+build.skills.primary[1].scriptsKnown=false
+check(DecodeBuild(build).skills.primary[1].scriptsKnown==false,"Partial scripts remain inspectable without proving a combination")
+build=ScribedBuild()
+check(DecodeBuild(build).skills.primary[1].scriptsKnown,"A native ordered Scribing combination remains compatible")
+GetCraftedAbilityScriptScribingSlot=nil
+
+build={skills={championKnown=true,champion={{slot=1,id=33,points=50},{slot=2,id=33,points=50}}}}
+Rejected(build,"The same Champion star cannot occupy two slots")
+build.skills.champion[2]=nil;build.skills.champion[1].slot=0
+Rejected(build,"Champion slot zero is not assignable")
+build.skills.champion[1].slot=1
+SC.GetChampionSlotLayout=function()return {[1]={discipline="WORLD"}}end
+SC.DescribeChampionSkill=function(_,id,slot,points,known)return {id=id,slot=slot,points=points,pointsKnown=known,discipline="COMBAT"}end
+Rejected(build,"A combat Champion star cannot occupy a world discipline slot")
+SC.GetChampionSlotLayout=function()return {[1]={discipline="COMBAT"}}end
+function GetChampionSkillMaxPoints()return 25 end
+Rejected(build,"Reported Champion allocation cannot exceed its native node maximum")
+build.skills.champion[1].points=25
+check(DecodeBuild(build).skills.champion[1].points==25,"Compatible Champion slots retain exact invested points")
+SC.GetChampionSlotLayout=nil;GetChampionSkillMaxPoints=nil
+
+build={masteries={known=true,selected={{id=1200,rank=1},{id=1200,rank=1}}}}
+Rejected(build,"Duplicate selected masteries are rejected")
+build={masteries={known=true,skillLines={{id=20},{id=20}}}}
+Rejected(build,"Duplicate class skill lines are rejected")
+build={masteries={known=true,passives={{id=100,rank=1},{id=100,rank=1}}}}
+Rejected(build,"Duplicate learned passive records are rejected")
+build={masteries={known=false,skillLines={{rank=0},{rank=0}}}}
+check(not DecodeBuild(build).masteries.known,"Unreadable class-line identities do not discard unrelated build sections")
+
+ITEMTYPE_POTION=1;ITEMTYPE_POISON=2
+function GetItemLinkItemType()return ITEMTYPE_POISON end
+build={potion={known=true,selectionKnown=true,isPotion=true,link=link}}
+Rejected(build,"A native poison link cannot be advertised as a potion")
+GetItemLinkItemType=function()return ITEMTYPE_POTION end
+check(DecodeBuild(build).potion.isPotion,"A genuine potion link remains available")
+build.potion.selectionKnown=false
+Rejected(build,"A known potion cannot claim an unknown selected quickslot")
+build={poisons={known=true,items={{slot=15,link=link},{slot=15,link=link}}}}
+Rejected(build,"Duplicate poison slots are rejected")
+build.poisons.items[2]=nil
+Rejected(build,"A native potion link cannot be advertised as equipped poison")
+GetItemLinkItemType=nil
 print("Build codec: "..count.." assertions passed")

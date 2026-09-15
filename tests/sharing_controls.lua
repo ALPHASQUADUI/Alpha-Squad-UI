@@ -67,6 +67,16 @@ CALLBACK_MANAGER.FireCallbacks=function()error('Library initialization unavailab
 local enabled,reason,available=S.GetStatus('sets')
 check(not enabled and not available and type(reason)=='string','Missing controls report unavailable instead of a false active status')
 check(LibAddonMenu2.RegisterOptionControls==originalRegister and opens==0,'Failed options discovery restores the library method and leaves the window alone')
+S.nativeControls={}
+local reentries=0
+CALLBACK_MANAGER.FireCallbacks=function()
+    reentries=reentries+1
+    S.GetStatus('sets')
+    LibAddonMenu2:RegisterOptionControls('LibGroupBroadcastOptions',optionTables)
+end
+local _,_,availableAfterReentry=S.GetStatus('sets')
+check(reentries==1 and availableAfterReentry and LibAddonMenu2.RegisterOptionControls==originalRegister,
+    'An options callback that queries sharing cannot recurse or leave an interceptor installed')
 -- Upgrade from the previous ineffective bridge honors explicit Alpha choices.
 S.nativeControls={};prefs.sharingDefaultsVersion=nil
 prefs.buildSharing=false;prefs.ultimateSharing=false;prefs.setsSharing=true

@@ -15,8 +15,9 @@ local function Control(name, parent)
         self.height=h
         if self.handlers.OnRectHeightChanged then self.handlers.OnRectHeightChanged(self) end
     end
-    function c:GetWidth() return self.width end
-    function c:GetHeight() return self.height end
+    function c:GetScale() return (self.scale or 1) * (self.parent and self.parent:GetScale() or 1) end
+    function c:GetWidth() return self.width * self:GetScale() end
+    function c:GetHeight() return self.height * self:GetScale() end
     function c:SetText(text) self.text=text end
     function c:SetAnchor(...) self.anchor={...} end
     function c:SetAnchorFill(target) target=target or self.parent;self.width,self.height=target.width,target.height end
@@ -119,6 +120,13 @@ GuiRoot:SetDimensions(854,480);Shell:ApplySettingsGeometry()
 check(Shell.settingsWindow.width*Shell.settingsWindow.scale<=814 and Shell.settingsWindow.height*Shell.settingsWindow.scale<=440,
     "The complete settings canvas fits a smaller viewport without clipping")
 check(Shell.settingsScroll.maximum==0,"Libraries still needs no scrollbar at a smaller viewport")
+local logicalLibraryWidth = AlphaSquadUI.Utils.GetLogicalWidth(controls.AlphaSquadLibraryCard1)
+for _, dimensions in ipairs({{1920,1080},{3440,1440},{800,600},{3840,2160},{1280,720}}) do
+    GuiRoot:SetDimensions(dimensions[1],dimensions[2]);Shell:ApplySettingsGeometry();Shell:ShowSettingsPage("libraries")
+    check(math.abs(AlphaSquadUI.Utils.GetLogicalWidth(controls.AlphaSquadLibraryCard1)-logicalLibraryWidth)<0.00001,
+        "Viewport changes retain the logical library-card width")
+    check(Shell.settingsScroll.maximum==0,"Scaled inherited dimensions do not invent a Libraries scrollbar")
+end
 GuiRoot:SetDimensions(1280,720);Shell:ApplySettingsGeometry()
 check(controls.AlphaSquadSettingsClose==nil,"Parent settings has no close cross")
 check(Shell.settingsPages.dashboard~=nil,"Dashboard is available independently of modules")

@@ -15,10 +15,14 @@ end
 local function Print(text) if d then d("Ąlpha Şquad Build Share: "..text) end end
 local function Refresh()
     if not SC.sv or not SC.sv.enabled or not SC:IsGrouped() or SC.inCombat or SC.loading then return end
-    SC.localSnapshot=SC:ScanLocalPlayer()
+    if SC.scanDirty or not SC.localSnapshot then
+        SC.localSnapshot=SC:ScanLocalPlayer()
+        SC.scanDirty=false
+    elseif SC.RefreshReadinessFacts then SC:RefreshReadinessFacts() end
     SC:ShareLocalSnapshot("companion build update")
 end
-local function ScheduleCapture()
+local function ScheduleCapture(buildChanged)
+    if buildChanged==true then SC.scanDirty=true end
     if not SC.sv or not SC.sv.enabled or not SC:IsGrouped() or SC.inCombat or SC.loading or SC.capturePending then return end
     SC.capturePending=true
     local token=generation
@@ -44,7 +48,7 @@ local function SetEnabled(value)
     SC.sv.experimentalSharing=value==true
     SC.sv.shareData=value==true
     Reset()
-    if value then SC:InitializeSharing();ScheduleCapture() end
+    if value then SC:InitializeSharing();ScheduleCapture(true) end
 end
 local function Register(event,callback)
     if event then EM:RegisterForEvent(addon,event,callback) end
@@ -58,6 +62,7 @@ local function Loaded(_,name)
     SC.sv.shareData=SC.sv.enabled
     SC.sv.experimentalSharing=SC.sv.enabled
     SC.inCombat=IsUnitInCombat("player")==true
+    SC.scanDirty=true
     SC.loading=true -- First capture waits for the initial PLAYER_ACTIVATED.
     SLASH_COMMANDS["/asbuildshare"]=function(text)
         local command=tostring(text or ""):lower():match("^%s*(.-)%s*$")
@@ -73,7 +78,7 @@ local function Loaded(_,name)
     Register(EVENT_PLAYER_ACTIVATED,function()
         SC.loading=false
         SC.inCombat=IsUnitInCombat("player")==true
-        Reset();SC:InitializeSharing();ScheduleCapture()
+        Reset();SC:InitializeSharing();ScheduleCapture(true)
     end)
     Register(EVENT_PLAYER_DEACTIVATED,function()
         SC.loading=true
@@ -93,18 +98,19 @@ local function Loaded(_,name)
     Register(EVENT_GROUP_MEMBER_JOINED,GroupChanged)
     Register(EVENT_GROUP_MEMBER_LEFT,GroupChanged)
     Register(EVENT_GROUP_UPDATE,GroupChanged)
-    Register(EVENT_INVENTORY_SINGLE_SLOT_UPDATE,function(_,bag) if bag==BAG_WORN then ScheduleCapture() end end)
-    Register(EVENT_ACTION_SLOT_UPDATED,ScheduleCapture)
-    Register(EVENT_ACTION_SLOTS_ALL_HOTBARS_UPDATED,ScheduleCapture)
-    Register(EVENT_WEREWOLF_STATE_CHANGED,ScheduleCapture)
+    local function Dirty() ScheduleCapture(true) end
+    Register(EVENT_INVENTORY_SINGLE_SLOT_UPDATE,function(_,bag) if bag==BAG_WORN then Dirty() end end)
+    Register(EVENT_ACTION_SLOT_UPDATED,Dirty)
+    Register(EVENT_ACTION_SLOTS_ALL_HOTBARS_UPDATED,Dirty)
+    Register(EVENT_WEREWOLF_STATE_CHANGED,Dirty)
     Register(EVENT_ACTIVE_QUICKSLOT_CHANGED,ScheduleCapture)
-    Register(EVENT_CHAMPION_PURCHASE_RESULT,ScheduleCapture)
-    Register(EVENT_SKILL_POINTS_CHANGED,ScheduleCapture)
-    Register(EVENT_SKILLS_FULL_UPDATE,ScheduleCapture)
-    Register(EVENT_SKILL_BUILD_SELECTION_UPDATED,ScheduleCapture)
-    Register(EVENT_SKILL_RESPEC_RESULT,ScheduleCapture)
-    Register(EVENT_SKILL_LINE_ADDED,ScheduleCapture)
-    Register(EVENT_ARMORY_BUILD_CHAMPION_SLOTS_MODIFIED,ScheduleCapture)
+    Register(EVENT_CHAMPION_PURCHASE_RESULT,Dirty)
+    Register(EVENT_SKILL_POINTS_CHANGED,Dirty)
+    Register(EVENT_SKILLS_FULL_UPDATE,Dirty)
+    Register(EVENT_SKILL_BUILD_SELECTION_UPDATED,Dirty)
+    Register(EVENT_SKILL_RESPEC_RESULT,Dirty)
+    Register(EVENT_SKILL_LINE_ADDED,Dirty)
+    Register(EVENT_ARMORY_BUILD_CHAMPION_SLOTS_MODIFIED,Dirty)
     Register(EVENT_GROUP_MEMBER_CONNECTED_STATUS,GroupChanged)
     Register(EVENT_EFFECT_CHANGED,function(_,_,_,_,tag) if tag=="player" then ScheduleCapture() end end)
     if EVENT_EFFECT_CHANGED and REGISTER_FILTER_UNIT_TAG then

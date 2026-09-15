@@ -2,8 +2,8 @@
 local total=0
 local function check(value,message) total=total+1;assert(value,message) end
 local events,sceneCallbacks,controls={},{},{}
-local function Control()
-    local control={hidden=true,handlers={},width=320,height=120,scale=1,left=40,top=80}
+local function Control(parent)
+    local control={hidden=true,handlers={},width=320,height=120,scale=1,left=40,top=80,parent=parent}
     function control:SetHidden(hidden)local changed=self.hidden~=hidden;self.hidden=hidden;if changed and hidden and self.handlers.OnHide then self.handlers.OnHide(self)end end
     function control:IsHidden()return self.hidden end
     function control:SetHandler(name,callback)self.handlers[name]=callback end
@@ -11,10 +11,12 @@ local function Control()
     function control:SetDimensions(w,h)self.width=w;self.height=h end
     function control:SetWidth(w)self.width=w end
     function control:SetHeight(h)self.height=h end
-    function control:GetWidth()return self.width end
-    function control:GetHeight()return self.height end
+    -- ESO SetDimensions is logical; native getters return scaled dimensions.
+    -- See ZO_RadialMenu:PerformLayout and ZO_ScrollContainer_Shared:UpdateScrollBar.
+    function control:GetWidth()return self.width*self:GetScale() end
+    function control:GetHeight()return self.height*self:GetScale() end
     function control:SetScale(value)self.scale=value end
-    function control:GetScale()return self.scale end
+    function control:GetScale()return self.scale*(self.parent and self.parent:GetScale() or 1) end
     function control:GetLeft()return self.left end
     function control:GetTop()return self.top end
     function control:SetAnchor(point,parent,relative,x,y)if point==TOPLEFT then self.left=x or 0;self.top=y or 0 end end
@@ -25,8 +27,9 @@ end
 TOPLEFT,TOP,TOPRIGHT,RIGHT,BOTTOMRIGHT,BOTTOM,BOTTOMLEFT,LEFT=1,2,3,4,5,6,7,8
 MOUSE_BUTTON_INDEX_LEFT=1
 GuiRoot=Control();GuiRoot:SetDimensions(1920,1080)
-WINDOW_MANAGER={CreateControl=function()return Control()end,CreateTopLevelWindow=function()return Control()end}
+WINDOW_MANAGER={CreateControl=function(_,_,parent)return Control(parent)end,CreateTopLevelWindow=function()return Control()end}
 EVENT_PLAYER_DEACTIVATED,EVENT_PLAYER_COMBAT_STATE,EVENT_GLOBAL_MOUSE_UP,EVENT_SCREEN_RESIZED=1,2,3,4
+EVENT_ALL_GUI_SCREENS_RESIZE_STARTED,EVENT_ALL_GUI_SCREENS_RESIZED=6,7
 SCENE_SHOWING=5
 EVENT_MANAGER={RegisterForEvent=function(_,_,event,callback)events[event]=callback end,
     UnregisterForEvent=function(_,_,event)events[event]=nil end,
@@ -127,7 +130,104 @@ events[EVENT_PLAYER_DEACTIVATED]()
 check(not L.active and ult.refreshes==refreshes,'Loading saves placement without rendering dormant modules')
 L.Start();GuiRoot:SetDimensions(640,480);events[EVENT_SCREEN_RESIZED]()
 check(L.toolbar.scale<1 and L.toolbar.width*L.toolbar.scale<=616,'Toolbar fits narrow screens proportionally')
-L.Finish();ult.sv.enabled=false;support.sv.enabled=false
+L.Finish()
+-- A scaled native control must never be interpreted as a larger logical panel.
+local function near(a,b)return math.abs(a-b)<0.00001 end
+GuiRoot:SetDimensions(1920,1080)
+ult.sv.hudWidth,ult.sv.hudHeight,ult.sv.scale=400,160,150
+ult.window:SetAnchor(TOPLEFT,GuiRoot,TOPLEFT,200,180)
+check(L.Start(),'A saved enlarged layout reopens for editing')
+mouseX,mouseY=0,0
+local priorSaves,priorRefreshes=ult.saves,ult.refreshes
+L.BeginResize(ult,1,1,handles[5]);L.UpdateResize(0,0)
+check(ult.sv.hudWidth==400 and ult.sv.hudHeight==160 and ult.sv.scale==150,
+    'Grabbing a 150 percent panel does not bake scaled native dimensions into saved dimensions')
+L.EndResize()
+check(ult.saves==priorSaves and ult.refreshes==priorRefreshes,'Clicking a handle without moving leaves saved geometry and render work unchanged')
+L.BeginResize(ult,1,1,handles[5])
+local initialWidth=ult.window:GetWidth()
+L.UpdateResize(0.2,0.08)
+check(near(ult.sv.scale,150.05) and near(ult.window:GetWidth(),initialWidth+0.2),
+    'Subpixel corner movement scales immediately without integer-percent steps')
+check(ult.refreshes==priorRefreshes,'Corner scaling uses native parent scaling without rebuilding panel contents')
+local lastWidth=ult.window:GetWidth()
+for step=2,60 do
+    L.UpdateResize(step*0.2,step*0.08)
+    check(near(ult.window:GetWidth()-lastWidth,0.2),'Successive pointer samples remain linear and continuous')
+    lastWidth=ult.window:GetWidth()
+end
+L.EndResize()
+local oppositeRight=ult.window:GetLeft()+ult.window:GetWidth()
+local oppositeBottom=ult.window:GetTop()+ult.window:GetHeight()
+L.BeginResize(ult,-1,-1,handles[1]);L.UpdateResize(-40,-16)
+check(near(ult.window:GetLeft()+ult.window:GetWidth(),oppositeRight)
+    and near(ult.window:GetTop()+ult.window:GetHeight(),oppositeBottom),
+    'Dragging the top-left corner anchors the opposite screen edges at non-unit scale')
+check(ult.sv.hudWidth==400 and ult.sv.hudHeight==160,'Repeated corner edits retain one stable logical panel size')
+L.EndResize()
+local scaleNow=ult.window:GetScale()
+local leftNow,topNow=ult.window:GetLeft(),ult.window:GetTop()
+L.BeginResize(ult,1,0,handles[4]);L.UpdateResize(20*scaleNow,0)
+check(near(ult.sv.hudWidth,420) and near(ult.window:GetWidth(),420*scaleNow),
+    'An edge edit after repeated scaling converts pointer movement exactly once')
+check(near(ult.window:GetLeft(),leftNow) and near(ult.window:GetTop(),topNow),'Right-edge resizing holds the top-left position')
+L.EndResize()
+L.BeginResize(ult,1,0,handles[4]);L.UpdateResize(10000,0)
+local boundedRefreshes=ult.refreshes
+L.UpdateResize(11000,0)
+check(ult.refreshes==boundedRefreshes,'Dragging beyond a size or screen limit does not rebuild unchanged content')
+check(ult.window:GetLeft()+ult.window:GetWidth()<=1920.00001,'Edge expansion remains within the viewport')
+L.EndResize()
+ult.sv.hudWidth,ult.sv.hudHeight,ult.sv.scale=400,160,100
+ult:ApplyLayout();ult.window:SetAnchor(TOPLEFT,GuiRoot,TOPLEFT,1500,500)
+L.BeginResize(ult,1,1,handles[5]);L.UpdateResize(400,160)
+check(near(ult.window:GetLeft(),1500) and near(ult.window:GetTop(),500)
+    and near(ult.window:GetWidth(),420),'Corner expansion stops at the screen edge without moving the opposite anchor')
+L.EndResize()
+L.BeginResize(ult,1,0,handles[4])
+local requestedWidth,requestedHeight,requestedScale=ult.sv.hudWidth,ult.sv.hudHeight,ult.sv.scale
+events[EVENT_ALL_GUI_SCREENS_RESIZE_STARTED]()
+check(L.active and not L.drag and not handles[4].handlers.OnUpdate,
+    'Native canvas resize-start stops pointer sampling before UI coordinates change')
+GuiRoot:SetDimensions(800,600);events[EVENT_ALL_GUI_SCREENS_RESIZED]()
+check(ult.sv.hudWidth==requestedWidth and ult.sv.hudHeight==requestedHeight and ult.sv.scale==requestedScale,
+    'Completed custom UI scaling refits the editor without overwriting requested geometry')
+GuiRoot:SetDimensions(1920,1080);events[EVENT_ALL_GUI_SCREENS_RESIZED]()
+ult.sv.hudWidth,ult.sv.hudHeight,ult.sv.scale=400,160,180
+ult:ApplyLayout()
+GuiRoot:SetDimensions(400,240)
+for _=1,8 do ult.window:SetScale(L.GetScale(ult)) end
+check(near(ult.window:GetScale(),0.95) and ult.sv.scale==180,
+    'Repeated screen fitting is stable and leaves the requested scale available for a larger display')
+GuiRoot:SetDimensions(1920,1080);ult.window:SetScale(L.GetScale(ult))
+check(near(ult.window:GetScale(),1.8),'Restoring the viewport restores the exact requested scale')
+ult.window:SetAnchor(TOPLEFT,GuiRoot,TOPLEFT,100,100)
+L.Select(ult);L.MoveSelected(5,7)
+check(near(ult.window:GetLeft(),105) and near(ult.window:GetTop(),107),'Controller movement uses screen/UI coordinates')
+L.ResizeSelected(18,0)
+check(near(ult.sv.hudWidth,410) and near(ult.sv.hudHeight,160),'Controller edge resizing divides by the effective scale once')
+function ult:GetLayoutOrientation()return self.sv.layoutOrientation or 'horizontal'end
+function ult:SetLayoutOrientation(value)self.sv.layoutOrientation=value end
+check(L.CycleOrientation(1) and ult.sv.layoutOrientation=='vertical','The shared toolbar changes the selected panel template')
+check(L.CycleOrientation(-1) and ult.sv.layoutOrientation=='horizontal','Template selection cycles in both directions')
+local previewMode='mixed'
+AlphaSquadUI.Preview={GetMode=function()return previewMode end,SetMode=function(value)previewMode=value end}
+check(L.CyclePreview(1) and previewMode=='ready','The toolbar advances presentation-only preview states')
+check(L.CyclePreview(-1) and previewMode=='mixed','Preview navigation reverses without editing tracking settings')
+check(L.CycleSelected(1) and L.selected==ult,'Panel selection excludes disabled panels')
+L.Finish()
+check(not L.MoveSelected(10,10) and not L.ResizeSelected(10,10) and not L.CyclePreview(1),
+    'Controller/editor commands are inert after placement closes')
+local inactiveWidth,inactiveHeight,inactiveScale=ult.sv.hudWidth,ult.sv.hudHeight,ult.sv.scale
+local inactiveRefreshes,disabledRefreshes=ult.refreshes,support.refreshes
+GuiRoot:SetDimensions(640,480);events[EVENT_ALL_GUI_SCREENS_RESIZED]()
+check(ult.refreshes==inactiveRefreshes+1 and not L.active and L.toolbar:IsHidden(),
+    'Completed native canvas resize also refits normal gameplay HUDs outside the editor')
+check(ult.sv.hudWidth==inactiveWidth and ult.sv.hudHeight==inactiveHeight and ult.sv.scale==inactiveScale,
+    'Runtime canvas adaptation preserves saved requested dimensions and scale')
+check(support.refreshes==disabledRefreshes and handles[4]:IsHidden() and not handles[4].handlers.OnUpdate,
+    'Canvas adaptation neither rebuilds disabled modules nor exposes editing handles or idle callbacks')
+ult.sv.enabled=false;support.sv.enabled=false
 local oldShown,oldScenes=shown,baseScenes
 check(not L.Start() and shown==oldShown and baseScenes==oldScenes,'No empty editor opens with every module disabled')
 check(type(SLASH_COMMANDS['/asmove'])=='function','One command opens global placement')

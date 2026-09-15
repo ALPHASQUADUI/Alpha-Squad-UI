@@ -6,8 +6,8 @@ local function Control()
     function c:SetDimensions(w,h)self.width=w;self.height=h end
     function c:SetWidth(v)self.width=v end
     function c:SetHeight(v)self.height=v end
-    function c:GetWidth()return self.width end
-    function c:GetHeight()return self.height end
+    function c:GetWidth()return self.width*self.scale end
+    function c:GetHeight()return self.height*self.scale end
     function c:SetScale(v)self.scale=v end
     function c:GetScale()return self.scale end
     function c:GetLeft()return self.left end
@@ -24,6 +24,9 @@ local function Control()
         'SetWrapMode','SetTextureCoords','SetTexture','SetBlendMode','ClearAnchors','StartMoving','StopMovingOrResizing'})do c[name]=function()end end
     return c
 end
+function zo_strformat(_,value) return value end
+function GetAbilityName(id) return "Native Ultimate "..id end
+function GetAbilityIcon(id) return "native/"..id..".dds" end
 TOPLEFT,TOP,TOPRIGHT,RIGHT,BOTTOMRIGHT,BOTTOM,BOTTOMLEFT,LEFT,CENTER=1,2,3,4,5,6,7,8,9
 MOUSE_BUTTON_INDEX_LEFT=1
 CT_TEXTURE,CT_CONTROL,CT_LABEL,CT_BUTTON=10,11,12,13
@@ -58,15 +61,15 @@ check(G.window.rows[1].user:GetWidth()>300,'Extra width is used for account name
 G.sv.hudHeight=90;G:ApplyLayout()
 check(G.window:GetHeight()>=12*28+24,'A too-short saved panel retains enough room for all current players')
 G.sv.hudHeight=800;G.sv.scale=150;G:ApplyLayout()
-check(G.window:GetWidth()==620 and G.window:GetHeight()==800 and G.sv.scale==150,'Corner scale leaves logical dimensions intact')
+check(G.window.width==620 and G.window.height==800 and G.sv.scale==150,'Corner scale leaves logical dimensions intact')
 check(G.window:GetScale()<1.5,'A large scaled list fits inside the screen')
 GuiRoot:SetDimensions(2560,1600);G:ApplyLayout()
 check(G.window:GetScale()==1.5 and G.sv.scale==150,'The requested scale returns on a larger screen without a preference rewrite')
 local saved=G.sv;G:EnsureSavedVariables();G:ApplyLayout()
-check(G.sv==saved and G.window:GetHeight()==800 and G.window:GetWidth()==620,'Reload normalization preserves custom height and width')
+check(G.sv==saved and G.window.height==800 and G.window.width==620,'Reload normalization preserves custom height and width')
 G.sv.hudHeight=0/0;G.sv.hudWidth=math.huge;G:EnsureSavedVariables();G:ApplyLayout()
-check(G.window:GetWidth()==312 and G.window:GetHeight()==G.layoutBounds.minHeight,'Corrupt geometry is normalized before it reaches native controls')
-entries={};G.sv.hudHeight=nil;G:ApplyLayout()
+check(G.window.width==312 and G.window.height==G.layoutBounds.minHeight,'Corrupt geometry is normalized before it reaches native controls')
+entries={};G.sv.hudHeight=nil;G.sv.scale=100;G:ApplyLayout()
 check(G.window:GetHeight()>=70 and G.window.empty.anchor[4]+G.window.empty:GetHeight()<=G.window:GetHeight(),'An empty group hint fits entirely within its compact panel')
 check(#AlphaSquadUI.Layout.attachments[G]==8,'Group ULT attaches the shared resize handles once')
 entries={{displayName='@Ready',key='@Ready',chargePercent=100,anyReady=true,bestUltimate={icon='native_ultimate.dds'}},
@@ -80,4 +83,21 @@ check(G.window.bg.color[1]==AlphaSquadUI.Theme.colors.bg[1],'Group background us
 local L=AlphaSquadUI.Layout;L.active=true;L.participants[G]=true
 G:ApplyVisibility()
 check(not updates.AlphaSquadUI_ULTGroup_ReadyPulse and not updates.AlphaSquadUI_ULTGroup_Safety,'Placement suppresses group animation and safety polling')
+local liveEntries=entries
+G:SetLayoutPreview("mixed");G:RefreshHUD()
+local demos=G:GetHUDEntries()
+check(#demos==12 and demos[1].displayName=="@Tank01" and demos[12].displayName=="@Damage08","Move HUD supplies twelve clearly fictional accounts")
+check(G:GetTrackedEntries()==liveEntries and #G.roster==0 and next(G.readyState)==nil,"Group examples never enter live roster, filters or readiness state")
+check(demos[7].recentlyUsed and demos[8].previewState=="off" and demos[9].previewState=="missing" and demos[10].connected==false,"The group preview includes spent, sharing-off, missing and offline states")
+check(not G.window.rows[9].icon.hidden,"Missing Ultimate examples still show a native empty-slot frame")
+G:SetLayoutOrientation("horizontal")
+check(G.layoutColumns==4 and G.window.rows[4].anchor[3]>G.window.rows[1].anchor[3] and G.window.rows[5].anchor[4]>G.window.rows[1].anchor[4],"The horizontal group template arranges twelve accounts in a stable 4 by 3 grid")
+local logicalW,logicalH=G.window.width,G.window.height
+G.sv.hudWidth=1100;G.sv.hudHeight=210;G:RefreshHUD()
+G:SetLayoutOrientation("vertical");G:SetLayoutOrientation("horizontal")
+check(G.window.width==1100 and G.window.height==210,"Switching templates retains each orientation's saved size")
+G:SetLayoutPreview("ready");check(G:GetHUDEntries()[12].anyReady,"All twelve accounts can preview ready")
+G:SetLayoutPreview("missing");check(G:GetHUDEntries()[1].previewState=="missing","Missing preview covers all group rows")
+L.active=false;G:RefreshHUD()
+check(G:GetHUDEntries()==liveEntries,"Closing placement restores the real group immediately")
 print('Group HUD resizing: '..count..' assertions passed')

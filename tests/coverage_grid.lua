@@ -14,6 +14,7 @@ local function Control(name,parent)
     function c:SetHidden(v)self.hidden=v end
     function c:IsHidden()return self.hidden end
     function c:SetText(v)self.text=v end
+    function c:SetTexture(v)self.texture=v end
     function c:SetColor(...)self.color={...}end
     function c:SetHandler(event,fn)self.handlers[event]=fn end
     function c:SetScale(v)self.scale=v end
@@ -45,10 +46,12 @@ local totalKeys=#SC.Catalog:GetAllEffectKeys()
 local pool
 for _,size in ipairs({{1920,1080},{1366,768},{1280,720},{800,600}})do
     GuiRoot:SetDimensions(size[1],size[2]);SC:RefreshMatrix()
-    local layout=win.gridLayout;local shown,inside,unique,distinct=0,true,true,{}
+    local layout=win.gridLayout;local shown,inside,iconsInside,iconsVisible,unique,distinct=0,true,true,true,true,{}
     for _,row in ipairs(win.list.rows)do
         if not row.hidden then
             shown=shown+1
+            iconsInside=iconsInside and row.icon.y>=0 and row.icon.y+row.icon.height<=row.height
+            iconsVisible=iconsVisible and not row.icon.hidden and type(row.icon.texture)=='string' and row.icon.texture~=''
             inside=inside and row.x>=0 and row.x+row.width<=win.list.width+.01 and row.y>=0 and row.y+row.height<=win.list.height+.01
             local position=tostring(row.x)..':'..tostring(row.y)
             unique=unique and not distinct[position];distinct[position]=true
@@ -57,6 +60,8 @@ for _,size in ipairs({{1920,1080},{1366,768},{1280,720},{800,600}})do
     check(shown==totalKeys,'Every catalog effect is visible without scrolling or pagination')
     check(unique,'Catalog entries never share a grid cell')
     check(inside,'Every compact tile fits inside its grid at the current viewport')
+    check(iconsInside,'Every native icon stays inside its own dense grid row')
+    check(iconsVisible,'Every catalog row has a native icon or explicit category glyph even without optional libraries')
     check(win.list.y+win.list.height<=win.height-48,'Coverage grid never overlaps its footer')
     check(win.width*win.scale<=size[1]-24+.01 and win.height*win.scale<=size[2]-24+.01,'Full page fits within the current display')
     local panelsFit=true

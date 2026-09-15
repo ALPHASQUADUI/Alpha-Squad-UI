@@ -1,10 +1,10 @@
 -- Optional compatible-library evidence. No extra broadcasts or full-build claims.
--- LGCS timestamps describe its last update, not a separate slot confirmation.
+-- LGCS owns its character-indexed group cache and sends slot/line changes, not heartbeats.
+-- Preserve the reported timestamp; polling never reconfirms an unchanged loadout.
 -- LibSetDetection is change-driven: receipts stay valid only in this group session.
 local SC=AlphaSquadUI and AlphaSquadUI.Modules and AlphaSquadUI.Modules.SupportCoverage
 if not SC then return end
 local Catalog=SC.Catalog
-local LGCS_MAX_AGE_MS=75000
 local function Call(fn,...)
     if type(fn)~="function" then return nil end
     local ok,a,b,c=pcall(fn,...)
@@ -30,10 +30,10 @@ local function MemberIdentity(tag,allowDead)
         or type(characterName)~="string" or characterName=="" or #characterName>200 then return nil end
     return displayName.."\031"..characterName,displayName,characterName
 end
-local function Fresh(data,now)
+local function ReportedTimestamp(data,now)
     if type(data)~="table" or not now then return false end
     local updated=Number(data._lastUpdated,1,now)
-    return updated and now-updated<=LGCS_MAX_AGE_MS and updated or false
+    return updated or false
 end
 local function CloneCapabilities(capabilities)
     local out={}
@@ -66,7 +66,7 @@ local function CloneCapabilities(capabilities)
     end
     return out
 end
-local function Add(entry,key,name,kind,conditions,front,back,evidence,updatedAt)
+local function Add(entry,key,name,kind,conditions,front,back,evidence,updatedAt,recipientLimit)
     local effect=Catalog.effects[key]
     if not effect or effect.personal==true then return end
     local cap=entry.capabilities[key]
@@ -79,7 +79,7 @@ local function Add(entry,key,name,kind,conditions,front,back,evidence,updatedAt)
     cap.mainBar=cap.mainBar or front;cap.backBar=cap.backBar or back
     cap.evidence=cap.evidence or evidence
     cap.sourceDetails[name]={name=name,kind=kind,conditions=conditions,mainBar=front,backBar=back,
-        evidence=evidence,external=true,updatedAt=updatedAt}
+        evidence=evidence,external=true,updatedAt=updatedAt,recipientLimit=recipientLimit}
 end
 local skillIndex,setIndex,indexedSkills,indexedSets={},{},nil,nil
 local function RebuildSourceIndexes()
@@ -111,7 +111,7 @@ local function MergeCombatStats(entry,now,skillsAuthoritative)
     local consumer=ult and ult.Group and ult.Group.lgcs
     if not consumer then return end
     local data=Call(consumer.GetUnitULT,consumer,entry.unitTag)
-    local updated=Fresh(data,now)
+    local updated=ReportedTimestamp(data,now)
     if updated then
         local list={}
         for index,field in ipairs({"ult1ID","ult2ID"}) do
@@ -133,7 +133,7 @@ local function MergeCombatStats(entry,now,skillsAuthoritative)
         if #list>0 then entry.externalUltimates=list end
     end
     local lines=Call(consumer.GetUnitSkillLines,consumer,entry.unitTag)
-    local linesUpdated=Fresh(lines,now)
+    local linesUpdated=ReportedTimestamp(lines,now)
     if linesUpdated then
         local result={ids={},names={},updatedAt=linesUpdated,evidence="LGCS_SKILL_LINES"}
         local seen={}
@@ -158,6 +158,7 @@ local function ReadSetReport(lib,tag,updatedAt)
     local out={source="LibSetDetection — last reported",updatedAt=updatedAt,fresh=true,sessionValid=true,
         complete=true,incognito=false,knownBars={body=true,front=true,back=true},setList={}}
     local count,totalBody,totalFront,totalBack=0,0,0,0
+    local families={}
     for rawId,value in pairs(data) do
         count=count+1;if count>16 then return nil end
         local id=Integer(rawId,0,2147483647)
@@ -176,10 +177,18 @@ local function ReadSetReport(lib,tag,updatedAt)
             local name=value.setName
             if type(name)~="string" or name=="" then name=Call(lib.GetSetName,id) end
             if type(name)~="string" or name=="" then name=Catalog.setNameById and Catalog.setNameById[id] or "Unknown set" end
-            out.setList[#out.setList+1]={id=id,name=name,bodyCount=body,frontWeaponCount=front,backWeaponCount=back,
-                mainCount=body+front,backCount=body+back,frontKnown=true,backKnown=true,
-                activeOnMain=active==constants.active_type_dual or active==constants.active_type_front,
-                activeOnBack=active==constants.active_type_dual or active==constants.active_type_back}
+            local base=Integer(Call(GetItemSetUnperfectedSetId,id),2,2147483647) or id
+            local set=families[base]
+            if not set then
+                set={id=base,name=Catalog.setNameById[base] or name,bodyCount=0,frontWeaponCount=0,backWeaponCount=0,
+                    mainCount=0,backCount=0,frontKnown=true,backKnown=true,activeOnMain=false,activeOnBack=false}
+                families[base]=set;out.setList[#out.setList+1]=set
+            end
+            set.bodyCount=set.bodyCount+body
+            set.frontWeaponCount=set.frontWeaponCount+front;set.backWeaponCount=set.backWeaponCount+back
+            set.mainCount=set.bodyCount+set.frontWeaponCount;set.backCount=set.bodyCount+set.backWeaponCount
+            set.activeOnMain=set.activeOnMain or active==constants.active_type_dual or active==constants.active_type_front
+            set.activeOnBack=set.activeOnBack or active==constants.active_type_dual or active==constants.active_type_back
         end
     end
     table.sort(out.setList,function(a,b) return a.id<b.id end)
@@ -271,7 +280,7 @@ function SC:MergeExternalCapabilities(entry,rosterAlreadyPruned)
                     for _,effectKey in ipairs(source.provides or {}) do
                         Add(entry,effectKey,label,"set",(source.conditions or "Meet the set's activation and recipient conditions.")
                             .." Last reported this group session; the library sends changes without a heartbeat.",
-                            front,back,"LIBSETDETECTION",report.updatedAt)
+                            front,back,"LIBSETDETECTION",report.updatedAt,source.recipientLimit)
                     end
                 end
             end
