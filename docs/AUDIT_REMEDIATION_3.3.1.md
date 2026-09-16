@@ -1,6 +1,6 @@
 # 3.3.1 remediation and acceptance
 
-This maintenance candidate addresses the reviewed data, presentation and packaging boundaries. Development publication to `dev` is authorized. A merge, tag, public release, account-setting change or historical rewrite remains a separate operation. The development branch is `dev`; `main` remains the reviewed release base.
+This maintenance candidate addresses the reviewed data, presentation and packaging boundaries. On 2026-09-16, the maintainer reported the delivered version stable and authorized promotion from `dev` to `main` and release preparation. Public release still requires the recorded external prerequisites below. Account-setting changes and historical rewrites remain separate operations.
 
 ## Code changes
 
@@ -24,7 +24,7 @@ Full equipment/skill changes can affect native descriptions, passives and derive
 
 Local validation on 2026-09-16 passed all 33 Lua suites under both Lua 5.1 and Lua 5.4: 2,888 assertions per runtime, 5,776 total. All 20 Python security/publication tests passed, including the narrowly scoped Dependabot sign-off and authorized public project mailbox policies. The validator tested the files extracted from both installable ZIPs, checked manifests and versions, and scanned the final payloads. An independent reload probe confirmed that failed queue recovery cannot silently restore a native OFF to ON.
 
-Those initial results describe local development sources. Each published development commit must also pass its own GitHub CI run, and retained provenance records the exact source commit and clean/modified state. Native acceptance remains unrecorded. The public publisher rejects modified source bundles.
+Those initial results describe local development sources. Development commit `6c07ce9da879474f4a8fe93b66c55f7957649e4d` also passed [GitHub CI](https://github.com/ALPHASQUADUI/Alpha-Squad-UI/actions/runs/35041171828), including both installable packages. Each subsequent publication must pass its own checks, and retained provenance records the exact source commit and clean/modified state. The maintainer subsequently reported native stability; detailed environment and scenario evidence remain unrecorded in [client acceptance](CLIENT_ACCEPTANCE.md). The public publisher rejects modified source bundles.
 
 ## External actions still required
 

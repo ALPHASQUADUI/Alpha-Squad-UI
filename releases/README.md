@@ -2,7 +2,7 @@
 
 [Release downloads](https://github.com/ALPHASQUADUI/Alpha-Squad-UI/releases) · [Build artifacts](https://github.com/ALPHASQUADUI/Alpha-Squad-UI/actions) · [Version 3.3.1 notes](3.3.1.md)
 
-The 3.3.1 package is a development validation build, not a published stable release. The previous published packages remain unchanged. Use the candidate only for the documented acceptance checks and retain a private backup of your existing SavedVariables.
+The maintainer accepted the 3.3.1 candidate as stable in the tested setup on 2026-09-16 and authorized promotion to `main`. A public GitHub Release remains pending formal protocol reservation, coexistence evidence and release-environment configuration. The previous published packages remain unchanged. Retain a private backup of your existing SavedVariables when installing the candidate.
 
 ## Install
 

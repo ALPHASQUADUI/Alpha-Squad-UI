@@ -39,6 +39,8 @@ Combat, loading and group transitions revoke only the owned pending frames. If r
 
 Protocols 507 and 510 remain provisional. Conflict handling prevents repeated declarations, but stable public transport still requires reserved IDs and coexistence checks with other installed libraries.
 
+The maintainer must verify and reserve unique IDs and names in the [official LibGroupBroadcast registry](https://wiki.esoui.com/LibGroupBroadcast_IDs), as required by the [library's handler API](https://github.com/sirinsidiator/ESO-LibGroupBroadcast/blob/main/src/Handler.lua). The current declarations are `507` / `AlphaSquadSupportDetails` and `510` / `AlphaSquadSupportCoverage`, under handler `AlphaSquadUI` / `ASUI`. These are proposed registrations, not evidence that the entries are available or reserved. Retain the registry revision as evidence and record coexistence with other group-sharing addons before setting the publication gates to complete.
+
 ## Runtime and resource use
 
 Both the full addon and the companion wait for `EVENT_PLAYER_ACTIVATED` before scanning initial equipment. Loading and combat pause captures and local detail traffic. Build changes during combat remain dirty and are captured after combat. Disabling tracking preserves only the sender work authorized in Libraries.

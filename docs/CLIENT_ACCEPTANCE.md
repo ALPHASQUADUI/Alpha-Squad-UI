@@ -2,6 +2,12 @@
 
 This checklist records behavior that automated Lua and packaging checks cannot establish. No row is passed until someone runs it in ESO on the stated versions. Never substitute a mock result for a native result.
 
+## Maintainer acceptance for 3.3.1
+
+On 2026-09-16, following delivery of development commit `6c07ce9da879474f4a8fe93b66c55f7957649e4d`, the maintainer reported that the version was stable and authorized promotion to `main` and release preparation. This records maintainer-reported acceptance; it is not an automated or independently observed native result.
+
+The report did not include an ESO build, library versions, per-scenario results or performance measurements. The detailed rows below therefore remain unrecorded. Formal protocol reservation, coexistence evidence and release-environment administration are separate publication prerequisites.
+
 ## Record the environment
 
 Record the Alpha Squad UI and companion versions, ESO API/build, library versions, operating system, display resolution, native UI scale and input device. Use synthetic account labels in any published evidence; keep private chats and SavedVariables out of screenshots.
