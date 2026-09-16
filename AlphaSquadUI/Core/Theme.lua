@@ -102,7 +102,11 @@ function Theme.ConfigureDropdown(combo)
     if not combo or combo.alphaSquadDropdown then return combo and combo.alphaSquadDropdown end
     if type(combo.SetDropdownObject)~="function" or not WINDOW_MANAGER
         or type(WINDOW_MANAGER.CreateControlFromVirtual)~="function" or CT_TEXTURE==nil then return nil end
-    local control=WINDOW_MANAGER:CreateControlFromVirtual(nil,GuiRoot,"ZO_ComboBoxDropdown_Keyboard_Template")
+    -- Native XML names its children $(parent)BG/$(parent)Scroll. Anonymous roots
+    -- collide as soon as another picker instantiates the same template.
+    Theme.dropdownSerial=(Theme.dropdownSerial or 0)+1
+    local name="AlphaSquadPrivateDropdown"..Theme.dropdownSerial
+    local control=WINDOW_MANAGER:CreateControlFromVirtual(name,GuiRoot,"ZO_ComboBoxDropdown_Keyboard_Template")
     if not control or not control.object then return nil end
     local background=WINDOW_MANAGER:CreateControl(nil,control,CT_TEXTURE)
     background:SetAnchorFill(control)

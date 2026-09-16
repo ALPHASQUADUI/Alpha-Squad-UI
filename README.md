@@ -2,7 +2,7 @@
 
 A modular **The Elder Scrolls Online** addon by **@SeRuM1** for group preparation, visual build inspection and Ultimate tracking.
 
-Version **3.4.0** is a development validation build. Native ESO acceptance and formal reservation/coexistence validation of the build transport remain outstanding; development pushes do not publish a release.
+Version **3.4.1** is a development hotfix for the Dashboard `BG` / `Scroll` initialization errors reported in 3.4.0. Native ESO retesting and formal reservation/coexistence validation of the build transport remain outstanding; development pushes do not publish a release.
 
 [Website](https://alphasquadeso.com/) · [Releases](https://github.com/ALPHASQUADUI/Alpha-Squad-UI/releases) · [Changelog](CHANGELOG.md) · [Downloads and installation](releases/README.md) · [Security](SECURITY.md) · [Current development audit](docs/AUDIT_3.4.0.md)
 
@@ -134,15 +134,15 @@ The companion needs LibGroupBroadcast and its dependencies. Use `/asbuildshare o
 
 The personal Ultimate HUD handles normal Ultimates and optional Overload behavior in one panel.
 
-- **AUTO** follows the active weapon bar. When enabled and applicable, Overload behavior prioritizes an Overload morph slotted on either bar.
-- **FRONT** or **BACK** selects a weapon bar; enabled Overload behavior can still take priority.
-- **BOTH** keeps both Ultimate cards visible and does not collapse the view into an Overload-only card.
+- Both weapon-bar slots remain visible in either horizontal or vertical orientation.
+- A green marker identifies the verified active bar; the inactive slot is dimmed.
+- Overload status appears in the same compact view, without hiding the other weapon slot.
 
-New installations use AUTO. Existing FRONT, BACK and BOTH choices are preserved. **ULT Tracker → OVERLOAD SETTINGS** controls reserve warnings, the ready reminder and the PvP preference. Turn **Use Overload behavior** OFF to retain standard Ultimate tracking. **Warning starts** sets the low-reserve alert threshold. Alerts do not stop Overload: activation and stopping stay under your control through your Ultimate binding. Automatic cancellation and its obsolete settings have been removed.
+The former AUTO/FRONT/BACK/BOTH selectors are retired. **ULT Tracker → OVERLOAD SETTINGS** controls reserve warnings, the ready reminder and the PvP preference. Turn **Use Overload behavior** OFF to retain standard Ultimate tracking. **Warning starts** sets the low-reserve alert threshold. Alerts do not stop Overload: activation and stopping stay under your control through your Ultimate binding. Automatic cancellation and its obsolete settings have been removed.
 
 Use the single **Group tracking** switch in **ULT Tracker → Group Ultimates** to enable or disable the group view. **CONFIGURE** selects which shared Ultimates to follow. The group view shows teammates, sorts ready players first and dims recent spends; your own Ultimate remains in the personal HUD. Repeated copies of the same Ultimate use the lowest verified reported cost; rounded percentages never display 100% before readiness. There are no separate group HUD visibility, self-tracking or group ready-sound switches. Group tracking and library sharing remain independent of the personal display mode.
 
-While a transformation or another special action bar is active, the personal HUD uses that native bar's actual Ultimate, morph, icon and cost. Native remaining-effect time can identify an active timed Ultimate. Your saved AUTO/FRONT/BACK/BOTH selection returns afterward. Group tracking accepts the actual Ultimate identities reported by LibGroupCombatStats, including transformation Ultimates; that library does not independently report a teammate's transformed action bar or active transformation state.
+While a transformation or another special action bar is active, the personal HUD uses that native bar's actual Ultimate, morph, icon and cost without falsely marking an ordinary weapon bar active. Native remaining-effect time can identify an active timed Ultimate. The ordinary front/back state returns afterward. Group tracking accepts the actual Ultimate identities reported by LibGroupCombatStats, including transformation Ultimates; that library does not independently report a teammate's transformed action bar or active transformation state.
 
 ## Community
 
@@ -164,6 +164,6 @@ Open **About** for the Alpha Squad website, ESOUI, release notes and the **JOIN 
 
 Shared snapshots are bounded reports from compatible senders, not proof against a modified client. Invalid or contradictory equipment data cannot certify a complete build, and unknown fields remain unknown. The addon never executes received code or automatically equips items, consumes potions or posts group messages.
 
-See the [3.3.1 development notes](releases/3.3.1.md), [architecture](docs/ARCHITECTURE.md), [performance](docs/PERFORMANCE.md), [client acceptance](docs/CLIENT_ACCEPTANCE.md) and [contributing](CONTRIBUTING.md) for technical details. Screenshots and bug reports should omit private chats, unrelated account information and SavedVariables containing group data.
+See the [3.4.1 development notes](releases/3.4.1.md), [architecture](docs/ARCHITECTURE.md), [performance](docs/PERFORMANCE.md), [client acceptance](docs/CLIENT_ACCEPTANCE.md) and [contributing](CONTRIBUTING.md) for technical details. Screenshots and bug reports should omit private chats, unrelated account information and SavedVariables containing group data.
 
 The addon code is available under the [MIT license](LICENSE). ESO artwork and third-party libraries retain their respective ownership and licenses.

@@ -1,6 +1,6 @@
 # ESO acceptance checklist
 
-Version **3.4.0** / **30400**. This checklist is not a record of completed in-game tests. Record current results in the [client acceptance matrix](CLIENT_ACCEPTANCE.md).
+Version **3.4.1** / **30401**. This checklist is not a record of completed in-game tests. Record current results in the [client acceptance matrix](CLIENT_ACCEPTANCE.md).
 
 ## Native Add-Ons menu
 
@@ -40,24 +40,25 @@ Check a fresh installation separately from migrated preferences. Fresh supported
 | Independent tracking | Disable each Dashboard module: its navigation and gameplay HUD disappear; permitted grouped sharing remains available |
 | MOVE HUD entry | Open from keyboard Settings, gamepad Settings and `/asmove`: wait for native Settings to finish closing, then show one editor with the normal action bar; repeated clicks create no duplicate or stranded pending request |
 | Placement preferences | Disabled modules stay disabled; temporary placement previews do not permanently enable hidden HUDs |
-| Placement completion | Done or Back/Escape saves, locks and restores the originating addon window; combat, loading or another game menu ends placement without reopening settings |
+| Placement completion | Done or Back/Escape saves, locks and selects Alpha Squad in native Settings; combat, loading or another game menu ends placement without reopening settings |
 | Placement scene changes | Enter and leave cursor mode (`hud`/`hudui`) while arranging panels: placement and its input remain usable; an unrelated game menu cancels active or pending placement |
 | Secondary Close/Back | Open Group configuration, Coverage and Builds through settings and through each other; X/CLOSE and keyboard/controller Back restore the preceding addon window, without leaving a blank native Settings category |
 | Navigation cleanup | Combat, loading and forced scene cleanup must not reopen a prior addon window; repeated Coverage/Builds round trips do not accumulate duplicate history |
 | Empty group placement | Group HUD can be positioned with no matching players without inventing actual group evidence |
 | Cross-sync ON | Move panels and change settings, then reload and change character on the same account/server: positions/settings remain shared |
 | Cross-sync OFF | Two character profiles remain separate; switching mode keeps the active layout without requiring reload |
-| Unified Ultimate migration | Existing FRONT/BACK/BOTH preferences survive; new settings default to AUTO; supported Overload options and applicable legacy placement migrate into the one personal HUD |
-| AUTO and Overload | AUTO follows the active bar; optional applicable Overload takes priority outside BOTH mode; toggling specialized behavior OFF restores normal Ultimate behavior without a second panel |
-| BOTH mode | Both cards remain visible with an Overload morph; the saved horizontal/vertical layout remains stable while resizing |
+| Unified Ultimate migration | Both weapon slots remain visible; retired AUTO/FRONT/BACK/BOTH selectors do not return through profile migration; supported Overload options and applicable legacy placement migrate into the one personal HUD |
+| Active bar and Overload | The verified active weapon slot has a green left-side marker; the inactive slot is dimmed; toggling specialized Overload behavior OFF restores normal status without a second panel |
+| Dual-slot layout | Both slots remain visible with an Overload morph; the saved horizontal/vertical layout remains stable while resizing |
 | Independent shell | Main settings, Libraries and About remain usable with every gameplay module disabled |
-| Theme selection | Ember Classic, Tactical Compact and default Obsidian Studio repaint existing menu/HUD surfaces immediately, preserve status/quality/discipline colors, and survive reload/profile changes; the open dropdown has an opaque backdrop and its options remain readable over the page |
+| Theme selection | Ember Classic, Tactical Compact and default Obsidian Studio repaint settings surfaces immediately, preserve status/quality/discipline colors, and survive reload/profile changes; gameplay HUDs stay neutral and Ultimate HUDs transparent; the open dropdown has an opaque backdrop and readable options |
+| Dashboard dropdown ownership | Reload with both theme and language selectors present, alternate their menus and selections, then reopen settings; no duplicate BG/Scroll errors, crossed menu entries or changes to unrelated native menus |
 | Resize corners | Drag every corner proportionally with icons/text intact; release, Escape, combat and loading remove temporary resize callbacks |
 | Resize edges | Edge drags reshape personal/group/Support HUD contents without stretching icons; minimum/maximum bounds and screen fitting remain correct |
 | Placement toolbar | Selected-panel scale/background opacity/reset/fit affect only that panel; icons/text stay opaque and all changes persist |
 | Branding | Ą and Ş render fully in the static orange gradient; UI stays white; @SeRuM1 uses the blue gradient |
 | External links | Website, ESOUI, Minion and Discord confirmations appear above addon windows and can be accepted or cancelled normally; About's JOIN DISCORD opens the direct verified invitation, without an intermediate page or build data |
-| Viewport | At 720p, 1080p and ultrawide UI scales, Libraries stays on one page, the main settings shell has no close cross, Workspace labels remain readable, and long detail text remains available on hover |
+| Viewport | At 720p, 1080p and ultrawide UI scales, Libraries remains usable, the main Close action returns to gameplay, Workspace labels remain readable, and long detail text remains available on hover |
 | Continuous resizing | Repeatedly drag all corners and edges through their range; no sudden half-size change, cumulative shrinking or opposite-edge jump; unchanged pointer positions do not redraw contents |
 | Display transitions | Change fullscreen/windowed/borderless, custom keyboard/gamepad UI scale and viewport dimensions; fitting preserves saved requested sizes/positions and the active drag ends before coordinates change |
 | Preview states | Mixed, ready, missing/charging, Overload and live choices repaint immediately; Group examples contain 12 fictional accounts; changing modes never changes live roster, transport or build snapshots |
@@ -108,10 +109,10 @@ Check a fresh installation separately from migrated preferences. Fresh supported
 | Group lifecycle | Late join, leave/rejoin, disband, reconnect and character change invalidate inappropriate cached state |
 | Combat | No Support scan or detailed build send during combat; queued invalidation is handled after combat ends; no uptime/report sampler appears |
 | Loading/travel | Overland, housing, dungeon, trial and PvP transitions pause local work during loading, then resume without changing preferences |
-| Personal ULT | AUTO/FRONT/BACK/BOTH, swap, spend, ready sound/pulse, hide/disable, shared Overload behavior and saved geometry remain functional |
+| Personal ULT | Both weapon slots, active marker, inactive dimming, swap, spend, ready sound/pulse, hide/disable, shared Overload behavior and saved geometry remain functional |
 | Group ULT controls | The parent Group tracking switch controls the teammate HUD; no group self/HUD-visibility/ready-sound switches or sound behavior remain; saved filters/layout survive and a formerly hidden group HUD migrates to OFF |
 | Group ULT values | Filters, readiness sorting, dead/offline players, rejoin and missing-library states remain correct; the local account never appears, repeated same-ID Ultimates use the lower valid cost, changed IDs discard stale cost and percentages stay below 100 until ready |
-| Personal transformation ULT | Test Vampire and Werewolf forms and other special native hotbars: show the active native Ultimate/morph/icon/cost, use available native effect duration for ACTIVE, then restore the saved ordinary-bar mode after the form ends |
+| Personal transformation ULT | Test Vampire and Werewolf forms and other special native hotbars: show the active native Ultimate/morph/icon/cost, use available native effect duration for ACTIVE, then restore ordinary front/back state after the form ends |
 | Group transformation ULT | Accept the actual transformation Ultimate reported by LibGroupCombatStats without a fixed whitelist; do not infer transformed-bar slots or another player's active form from a front/back report |
 | Overload | All morphs, optional behavior OFF, Warning starts, reserve/reminder behavior and PvP suppression remain functional in the shared personal tracker; no effect-cancellation action or cutoff setting remains, and hidden/loading/placement states play no alerts |
 | Resize bursts | Repeated screen-size notifications coalesce into one deferred Support refresh using current dimensions; no repeated follow-up refreshes remain after the burst ends |
@@ -135,8 +136,11 @@ Primary API and implementation references:
 
 These references describe contracts and resources, not completed in-game acceptance results.
 
-## 3.4.0 interface acceptance
+## 3.4.1 interface acceptance
 
+The maintainer reported duplicate native `BG` / `Scroll` initialization errors in 3.4.0. The 3.4.1 dropdown fix awaits native retesting; the failed 3.4.0 run does not establish any of the outcomes below.
+
+- Install 3.4.1, reload and open Dashboard with both theme and language selectors present. Open each menu repeatedly, alternate selections, close/reopen settings and reload again. No duplicate-control errors, crossed menu entries or stale translations; popup fills remain opaque and unrelated native menus retain their appearance.
 - Start a fresh English client and French client: Automatic selects the matching addon language. Other client locales fall back to English. Switch EN/FR/Automatic without reload on every page and already-open window; reconnect and change character to verify persistence. Native names/tooltips remain in ESO's client language.
 - Test 720p, 1080p and the actual custom UI scale. Inspect long French buttons, dropdowns, tooltips, contributor details and narrow Builds/Coverage layouts. No overlapped actions or clipped essential status.
 - Personal ULT: verify both slots in both orientations, left-side green marker through rapid weapon swaps, dimmed inactive slot, distinct costs, empty slot, unknown cost, transformation/temporary hotbar and recovery. No stale READY after spending.

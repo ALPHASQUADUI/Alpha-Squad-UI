@@ -14,6 +14,8 @@ AlphaSquadUI.Settings.RegisterPage(id, builder)
 
 The shell fits its actual dimensions to the viewport while retaining native text size. Pages register `ui.RegisterLayout(page, callback)` to reflow cards and controls using the available width and height. Narrow layouts replace the side navigation with a wrapped horizontal strip. Pages that cannot fit at a readable size use native scrolling rather than globally shrinking every label.
 
+Theme and language selectors each own a private native dropdown, cached on the combo box. `Theme.dropdownSerial` supplies distinct `AlphaSquadPrivateDropdown{n}` roots: ESO derives its `BG`, `Scroll` and nested control names from that root. Anonymous roots collide in the global control registry. The opaque fill and scale adjustment remain instance-local; ESO's shared dropdown and other addons' controls are untouched.
+
 `Core/AddOnMenu.lua` post-hooks the native Add-Ons manager's `BuildMasterList` once and augments only the suite's entry before native row sizing. Library availability uses the selected character's native addon records and dependency/version API, not Lua globals that remain loaded after a checkbox changes. Libraries remain optional at load time; missing group integrations do not disable local tracking. Compact Title/Author metadata stays within a 64-byte compatibility budget, including color codes. The static description is the fallback before the suite's Lua is loaded.
 
 ## Module boundaries

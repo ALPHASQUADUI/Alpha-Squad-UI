@@ -2,11 +2,18 @@
 
 This checklist records behavior that automated Lua and packaging checks cannot establish. No row is passed until someone runs it in ESO on the stated versions. Never substitute a mock result for a native result.
 
-## 3.4.0 acceptance pending
+## 3.4.1 native retest pending
 
-The 3.4.0 interface has not been tested in ESO by the maintainer yet. The previous acceptance below remains historical and does not approve this development cycle, a PR or a release. Run the [3.4.0 interface route](SUPPORT_COVERAGE_TESTING.md#340-interface-acceptance) against the delivered commit, including both client languages, manual override, both Ultimate slots, Overload, Move HUD, native settings return and realistic UI scales.
+The maintainer tested development build 3.4.0 and reported duplicate native `BG` and `Scroll` controls during Dashboard initialization at `Core/Theme.lua:105`, reached through the language selector. This is a recorded native failure, not acceptance of the interface. The earlier single-dropdown mock did not model ESO's global child-name registry and missed this collision.
 
-## Maintainer acceptance for 3.3.1
+Version 3.4.1 assigns each private dropdown a unique addon-prefixed root and adds multiple-dropdown naming regressions. Native retesting remains pending. Run the [3.4.1 interface route](SUPPORT_COVERAGE_TESTING.md#341-interface-acceptance) against the delivered commit, starting with a reload and repeated use of both theme and language selectors, then both client languages, manual override, both Ultimate slots, Overload, Move HUD, native settings return and realistic UI scales. No automated result passes these native checks or authorizes a PR or release.
+
+| Development build | Native evidence | Status |
+| --- | --- | --- |
+| 3.4.0 | Maintainer-reported duplicate `BG` / `Scroll` errors during Dashboard creation | Failed initialization |
+| 3.4.1 | Hotfix awaiting the maintainer's ESO retest | Not recorded |
+
+## Historical maintainer acceptance for 3.3.1
 
 On 2026-09-16, following delivery of development commit `6c07ce9da879474f4a8fe93b66c55f7957649e4d`, the maintainer reported that the version was stable and authorized promotion to `main` and release preparation. This records maintainer-reported acceptance; it is not an automated or independently observed native result.
 
@@ -20,6 +27,7 @@ Record the Alpha Squad UI and companion versions, ESO API/build, library version
 
 | Scenario | Expected result | Native result |
 | --- | --- | --- |
+| Reload, open Dashboard, alternate theme and language selectors, then reopen settings | Both native menus populate and select independently; no duplicate controls, stale language choices or transparent popup text | Not recorded for 3.4.1 |
 | Open with the gameplay keybind, then close | Cursor is usable immediately and returns to the prior gameplay state | Not recorded |
 | Open Group configuration, Coverage and Builds; close each | The previous addon window returns; combat/loading never reopens it | Not recorded |
 | Read an item, skill and Champion tooltip for 15 seconds | Unchanged refreshes preserve the tooltip; changing the player replaces its content | Not recorded |

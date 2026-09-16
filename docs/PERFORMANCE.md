@@ -13,6 +13,8 @@ Performance is a design constraint for **Ąlpha Şquad UI**. The design reduces 
 7. Guard missing optional libraries and malformed values at integration boundaries.
 8. Do not parse combat logs for a precombat readiness question.
 
+Dashboard theme and language selectors allocate one uniquely named native dropdown per combo and reuse it on refresh. Language/theme changes do not create replacement popup trees, and the private opaque fills do not repaint ESO's shared menu. Naming regressions check reuse and isolation; they do not measure native frame time or memory.
+
 ## Personal ULT and Overload
 
 Native events drive shared personal slot/resource changes and relevant Overload effects. A single 1.5-second fallback refresh runs only while the personal tracker is enabled, visible and unobscured. READY, reserve and reminder animation runs only while visible and needed. Overload uses the same HUD, resource state and lifecycle; it has no separate recovery heartbeat.

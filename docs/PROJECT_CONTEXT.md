@@ -1,6 +1,6 @@
 # Project context
 
-Ąlpha Şquad UI 3.4.0 is a development candidate for a compact bilingual interface. It combines precombat Support Coverage, visual build inspection and personal/group Ultimate tracking with optional integrated Overload behavior. Public maintainer: **@SeRuM1**; Git identity: **SeRuM1 <info@alphasquadeso.com>**.
+Ąlpha Şquad UI 3.4.1 is a development hotfix for the compact bilingual interface. It combines precombat Support Coverage, visual build inspection and personal/group Ultimate tracking with optional integrated Overload behavior. Public maintainer: **@SeRuM1**; Git identity: **SeRuM1 <info@alphasquadeso.com>**.
 
 ## Git workflow
 
@@ -21,5 +21,7 @@ Support Coverage is a precombat availability check with Trial/Dungeon contexts a
 Existing account/server preferences and SavedVariables namespaces are preserved; character profiles retain current placement. New sharing starts OFF until an explicit choice. Native OFF states and existing choices remain respected, independently of tracking and visibility. Protocol IDs remain provisional until actual reservation and coexistence evidence is recorded.
 
 ## Acceptance
+
+The maintainer reported native duplicate `BG` and `Scroll` errors when the 3.4.0 Dashboard created its language dropdown. Version 3.4.1 gives each private native dropdown a distinct addon-prefixed root and retains per-combo reuse. Automated regression coverage now models native child-name collisions; the corrected build awaits an ESO retest with both selectors.
 
 Automated validation does not establish native rendering, translated text fit, frame time or multiplayer coexistence. See the changelog, current development audit and client checklist. A screenshot of the previous UI is design input, not evidence that the new build has passed ESO testing.
