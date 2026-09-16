@@ -205,4 +205,37 @@ check(not updates.AlphaSquadUI_ULTGroup_Safety,'Solo gameplay does not retain th
 G.roster={{key='@Example'}};G:SetSafetyUpdateActive(true)
 check(updates.AlphaSquadUI_ULTGroup_Safety,'The fallback resumes when a roster exists')
 G.roster={};G:SetSafetyUpdateActive(false)
+-- Food evidence stays compact in both orientations, with non-color markers.
+entries={{displayName="@FoodActive",key="@FoodActive",connected=true,foodState="active",chargePercent=50,
+    bestUltimate={name="Native Ultimate",icon="native.dds",cost=200}}}
+G:RefreshHUD()
+local foodRow=G.window.rows[1]
+check(foodRow.foodStatus.text=="+" and foodRow.foodIcon.color[2]>foodRow.foodIcon.color[1],
+    "Verified active food uses a green icon and plus marker before the account")
+entries[1].foodState="inactive";G:RefreshHUD()
+check(foodRow.foodStatus.text=="−" and foodRow.foodIcon.color[1]>foodRow.foodIcon.color[2],
+    "Verified absence has a distinct minus marker as well as red color")
+entries[1].foodState=nil;G:RefreshHUD()
+check(foodRow.foodStatus.text=="?","Missing food stays visibly unknown")
+for _,orientation in ipairs({"vertical","horizontal"}) do
+    G:SetLayoutOrientation(orientation)
+    G.sv.hudWidth=orientation=="horizontal" and 856 or 240;G:RefreshHUD()
+    check(foodRow.foodStatus.anchor[3]+foodRow.foodStatus.width<=foodRow.user.anchor[3]
+        and foodRow.user.anchor[3]+foodRow.user.width<G:GetRowWidth()-74,
+        "Food, account and charge have separate bounded space in "..orientation)
+end
+entries[1].bestUltimate.cost=0;entries[1].anyReady=true;G:RefreshHUD()
+check(foodRow.percent.text=="?" and foodRow.progress.hidden and not foodRow.ready,
+    "Unknown native cost cannot display invented charge or actionable readiness")
+entries[1].bestUltimate.cost=200;entries[1].anyReady=false;G:RefreshHUD()
+check(foodRow.percent.text=="50%" and not foodRow.progress.hidden,
+    "Known native cost restores the actual charge presentation")
+local textWrites,textureWrites=0,0
+local userText,percentText,foodText,iconTexture=foodRow.user.SetText,foodRow.percent.SetText,foodRow.foodStatus.SetText,foodRow.icon.SetTexture
+foodRow.user.SetText=function(self,value)textWrites=textWrites+1;return userText(self,value)end
+foodRow.percent.SetText=function(self,value)textWrites=textWrites+1;return percentText(self,value)end
+foodRow.foodStatus.SetText=function(self,value)textWrites=textWrites+1;return foodText(self,value)end
+foodRow.icon.SetTexture=function(self,value)textureWrites=textureWrites+1;return iconTexture(self,value)end
+G:RefreshHUD()
+check(textWrites==0 and textureWrites==0,"Unchanged rows skip repeated native text and texture writes")
 print('Group HUD resizing and live language: '..count..' assertions passed')

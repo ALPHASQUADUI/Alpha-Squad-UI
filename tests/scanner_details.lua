@@ -184,6 +184,7 @@ nativeCount=3;activeCount=3;lineRank=0/0
 check(SC:ScanClassMasteries().known==false,"Non-finite skill-line ranks remain unknown")
 
 LFDB_BUFF_TYPE_NONE=0
+function GetGameTimeMilliseconds() return 1000000 end
 LibFoodDrinkBuff={GetFoodBuffInfos=function(_,unitTag)
     if unitTag=="group2" then return 1,false,123,"Group food",0,2000,"food.dds" end
     return LFDB_BUFF_TYPE_NONE
@@ -191,6 +192,20 @@ end}
 check(SC:ScanFood("group2").verified,"Recognized native group food can be seen without a build sender")
 check(not SC:ScanFood("group3").verified,"No visible remote food does not prove that the player has none")
 check(SC:ScanFood("player").verified and not SC:ScanFood("player").active,"A local library-confirmed missing food is explicit")
+for _,expiration in ipairs({999,1000,0,-1,0/0,math.huge,-math.huge,"invalid"}) do
+    LibFoodDrinkBuff.GetFoodBuffInfos=function() return 1,false,123,"Group food",0,expiration,"food.dds" end
+    for _,tag in ipairs({"player","group2"}) do
+        local stale=SC:ScanFood(tag)
+        check(not stale.verified and not stale.active,"Expired or malformed food evidence stays unknown: "..tag)
+    end
+end
+LibFoodDrinkBuff.GetFoodBuffInfos=function() return 1,false,123,"Group food",0,nil,"food.dds" end
+check(not SC:ScanFood("player").verified,"A missing food expiry is not a confirmed active buff")
+LibFoodDrinkBuff.GetFoodBuffInfos=function() return 1,false,123,"Group food",0,1001,"food.dds" end
+check(SC:ScanFood("group2").verified and SC:ScanFood("group2").active,"A valid future native expiry remains active")
+GetGameTimeMilliseconds=function() return 0/0 end
+check(not SC:ScanFood("group2").verified,"An invalid native clock cannot confirm food freshness")
+GetGameTimeMilliseconds=function() return 1000000 end
 SC.sv={roleOverrides=true}
 check(SC:GetRoleHint("player",{})=="UNKNOWN","Legacy role overrides do not override native group facts or break the scanner")
 local refreshed=0

@@ -426,7 +426,7 @@ local function LanguageDropdown(parent,ui,width)
     local combo=ZO_ComboBox_ObjectFromContainer(container)
     combo:SetSortsItems(false)
     if ASUI.Theme.ConfigureDropdown then ASUI.Theme.ConfigureDropdown(combo) end
-    local choices={{id="auto",name="Game language"},{id="en",name="English"},{id="fr",name="Français"}}
+    local choices={{id="en",name="English"},{id="fr",name="Français"}}
     local renderedLanguage
     local function Refresh()
         local localization=ASUI.Localization
@@ -436,14 +436,14 @@ local function LanguageDropdown(parent,ui,width)
             if combo.ClearItems then combo:ClearItems() elseif combo.entries then combo.entries={} end
             for _,choice in ipairs(choices) do
                 local id=choice.id
-                local name=id=="auto" and L("Game language: %s",L(language=="fr" and "Français" or "English")) or L(choice.name)
+                local name=L(choice.name)
                 local entry=combo:CreateItemEntry(name,function()
                     if ASUI.Localization then ASUI.Localization.SetLanguage(id) end
                 end)
                 entry.id=id;combo:AddItem(entry)
             end
         end
-        local selected=localization and localization.GetPreference() or "auto"
+        local selected=localization and localization.GetPreference() or language
         combo:SetSelectedItemByEval(function(entry)return entry.id==selected end,true)
     end
     Refresh();ui.RegisterRefresher(Refresh)

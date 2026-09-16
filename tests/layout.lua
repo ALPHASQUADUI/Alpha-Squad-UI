@@ -21,11 +21,17 @@ local function Control(parent)
     function control:GetTop()return self.top end
     function control:SetAnchor(point,parent,relative,x,y)self.anchor={point,parent,relative,x,y};if point==TOPLEFT then self.left=x or 0;self.top=y or 0 end end
     function control:SetText(text)self.text=text end
-    for _,method in ipairs({'SetClampedToScreen','SetMouseEnabled','SetDrawTier','SetDrawLevel','SetDrawLayer','SetAnchorFill','SetColor','SetFont','StopMovingOrResizing','ClearAnchors'})do control[method]=function()end end
+    function control:SetDrawLayer(value)self.drawLayer=value end
+    function control:SetDrawLevel(value)self.drawLevel=value end
+    function control:SetAnchorFill(value)self.fills=value end
+    function control:StartMoving()self.moving=true end
+    function control:StopMovingOrResizing()self.moving=false end
+    for _,method in ipairs({'SetClampedToScreen','SetMouseEnabled','SetDrawTier','SetColor','SetFont','ClearAnchors'})do control[method]=function()end end
     controls[#controls+1]=control;return control
 end
 TOPLEFT,TOP,TOPRIGHT,RIGHT,BOTTOMRIGHT,BOTTOM,BOTTOMLEFT,LEFT=1,2,3,4,5,6,7,8
 MOUSE_BUTTON_INDEX_LEFT=1
+DL_OVERLAY=4
 GuiRoot=Control();GuiRoot:SetDimensions(1920,1080)
 WINDOW_MANAGER={CreateControl=function(_,_,parent)return Control(parent)end,CreateTopLevelWindow=function()return Control()end}
 EVENT_PLAYER_DEACTIVATED,EVENT_PLAYER_COMBAT_STATE,EVENT_GLOBAL_MOUSE_UP,EVENT_SCREEN_RESIZED=1,2,3,4
@@ -65,6 +71,10 @@ local function Module(enabled,name)
     return module
 end
 local overload,ult,group,support=Module(true,'Unused'),Module(true,'Personal Ultimate'),Module(true,'Group Ultimates'),Module(false,'Support Coverage')
+local legacyMouseDown=function()error('The header must not own editor row dragging')end
+group.window.dragSurface=Control(group.window)
+group.window.dragSurface:SetHeight(20)
+group.window.dragSurface:SetHandler('OnMouseDown',legacyMouseDown)
 overload.sv.addonEnabled=true;ult.Group=group;ult.sv.visible=false
 function ult:GetLayoutOrientation()return self.sv.layoutOrientation or 'horizontal'end
 function ult:SetLayoutOrientation(value)self.sv.layoutOrientation=value end
@@ -246,9 +256,17 @@ freshHandles.orientation.handlers.OnMouseUp(nil,MOUSE_BUTTON_INDEX_LEFT,true)
 check(ult.sv.layoutOrientation=='vertical','Clicking the adjacent icon changes its own HUD orientation')
 ult.layoutBackground=false
 local preservedOpacity=ult.sv.opacity
+L.RefreshToolbar()
+check(L.toolbar.opacity:IsHidden() and L.toolbar.opacityPlus:IsHidden()
+    and L.toolbar.reset.anchor[4]==184 and L.toolbar.fit.anchor[4]==304,
+    'Transparent HUDs hide meaningless background controls and close the wide toolbar gap')
 L.AdjustSelected('opacity',-5)
 check(ult.sv.opacity==preservedOpacity,'Transparent HUDs do not expose a misleading background opacity mutation')
 ult.layoutBackground=nil
+L.RefreshToolbar()
+check(not L.toolbar.opacity:IsHidden() and not L.toolbar.opacityPlus:IsHidden()
+    and L.toolbar.reset.anchor[4]==410 and L.toolbar.fit.anchor[4]==530,
+    'Selecting a panel with a background restores its opacity controls and bounded layout')
 
 local previewMode='mixed'
 AlphaSquadUI.Preview={GetMode=function()return previewMode end,SetMode=function(value)previewMode=value end}
@@ -268,6 +286,71 @@ check(ult.sv.hudWidth==inactiveWidth and ult.sv.hudHeight==inactiveHeight and ul
     'Runtime canvas adaptation preserves saved requested dimensions and scale')
 check(support.refreshes==disabledRefreshes and handles[4]:IsHidden() and not handles[4].handlers.OnUpdate,
     'Canvas adaptation neither rebuilds disabled modules nor exposes editing handles or idle callbacks')
+
+-- Group rows are mouse-enabled and the transparent header is only 20 pixels.
+-- Every visible row must instead share an editor-only hit surface above content.
+GuiRoot:SetDimensions(1920,1080);group.sv.enabled=true;group.sv.scale=150
+check(L.Start(),'The group pointer scenario opens placement')
+local groupHandles=L.attachments[group];local move=groupHandles.moveSurface
+check(move and not move:IsHidden() and move.fills==group.window,
+    'Group movement uses the complete scaled panel, not only its invisible header')
+check(move.drawLayer==DL_OVERLAY and move.drawLevel<groupHandles[4].drawLevel
+    and move.drawLevel<groupHandles[5].drawLevel,
+    'The move surface intercepts content clicks while edges and corners remain reachable')
+check(group.window.dragSurface:GetHandler('OnMouseDown')==legacyMouseDown,
+    'Placement never wraps or overwrites the normal HUD mouse handlers')
+local originalSelection=L.selected;move:GetHandler('OnMouseDown')(move,2)
+check(not L.drag and not group.window.moving and L.selected==originalSelection,
+    'Right-click does not move or unexpectedly select a panel')
+local pointer=GetUIMousePosition;GetUIMousePosition=nil
+move:GetHandler('OnMouseDown')(move,MOUSE_BUTTON_INDEX_LEFT)
+GetUIMousePosition=pointer
+check(L.selected==group and L.drag and L.drag.move and group.window.moving,
+    'Clicking the group body selects it and delegates translation to native movement')
+check(not move:GetHandler('OnUpdate') and events[EVENT_GLOBAL_MOUSE_UP],
+    'Native movement has a global release guard without a per-frame sampler')
+local groupSaves,groupRefreshes=group.saves,group.refreshes
+local startLeft,startTop=group.window:GetLeft(),group.window:GetTop()
+group.window.left,group.window.top=startLeft+75.25,startTop+26.5
+events[EVENT_GLOBAL_MOUSE_UP](EVENT_GLOBAL_MOUSE_UP,2)
+check(L.drag and group.window.moving,'Releasing another mouse button does not cancel the left drag')
+events[EVENT_GLOBAL_MOUSE_UP](EVENT_GLOBAL_MOUSE_UP,MOUSE_BUTTON_INDEX_LEFT)
+check(not L.drag and not group.window.moving and not events[EVENT_GLOBAL_MOUSE_UP],
+    'Releasing beyond the group panel always stops movement and removes its event handler')
+check(group.saves==groupSaves+1 and group.sv.x==startLeft+75.25 and group.sv.y==startTop+26.5,
+    'Native movement retains its exact position at 150 percent without another scale conversion')
+check(group.refreshes==groupRefreshes,'Dragging a group panel does not rebuild group rows')
+move:GetHandler('OnMouseUp')(move,MOUSE_BUTTON_INDEX_LEFT)
+check(group.saves==groupSaves+1,'The local release after a global release cannot resave')
+move:GetHandler('OnMouseDown')(move,MOUSE_BUTTON_INDEX_LEFT)
+move:GetHandler('OnMouseUp')(move,MOUSE_BUTTON_INDEX_LEFT)
+check(group.saves==groupSaves+1,'Selecting without translation leaves the saved position untouched')
+move:GetHandler('OnMouseDown')(move,MOUSE_BUTTON_INDEX_LEFT)
+L.BeginResize(group,1,0,groupHandles[4])
+check(L.drag and not L.drag.move and not group.window.moving and groupHandles[4]:GetHandler('OnUpdate'),
+    'Starting a resize releases native movement before sampling the edge')
+L.EndResize()
+move:GetHandler('OnMouseDown')(move,MOUSE_BUTTON_INDEX_LEFT)
+move:GetHandler('OnEffectivelyHidden')(move)
+check(not L.drag and not group.window.moving and not events[EVENT_GLOBAL_MOUSE_UP],
+    'Hiding an ancestor stops native movement even without a local OnHide event')
+move:GetHandler('OnMouseDown')(move,MOUSE_BUTTON_INDEX_LEFT)
+group.sv.enabled=false;L.Refresh()
+check(move:IsHidden() and not L.drag and not group.window.moving,
+    'Disabling a participating group panel removes its editor hit surface and active move')
+group.sv.enabled=true;L.Refresh();move:GetHandler('OnMouseDown')(move,MOUSE_BUTTON_INDEX_LEFT)
+events[EVENT_PLAYER_COMBAT_STATE](EVENT_PLAYER_COMBAT_STATE,true)
+check(not L.active and not L.drag and not group.window.moving and move:IsHidden(),
+    'Combat releases native movement and restores gameplay hit-testing immediately')
+move:GetHandler('OnMouseDown')(move,MOUSE_BUTTON_INDEX_LEFT)
+check(not L.drag and not group.window.moving,'Hidden editor controls cannot restart a drag')
+check(L.Start() and L.attachments[group].moveSurface==move,'Reopening reuses the same group move surface')
+move:GetHandler('OnMouseDown')(move,MOUSE_BUTTON_INDEX_LEFT)
+events[EVENT_ALL_GUI_SCREENS_RESIZE_STARTED]()
+check(not L.drag and not group.window.moving,'A native canvas scale transition stops native movement')
+L.Finish()
+check(move:IsHidden() and not move:GetHandler('OnUpdate') and not events[EVENT_GLOBAL_MOUSE_UP],
+    'Closing the editor leaves no visible hit surface or pointer work')
 ult.sv.enabled=false;support.sv.enabled=false
 local oldShown,oldScenes=shown,baseScenes
 check(not L.Start() and shown==oldShown and baseScenes==oldScenes,'No empty editor opens with every module disabled')

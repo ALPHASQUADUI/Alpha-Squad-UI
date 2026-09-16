@@ -28,6 +28,8 @@ Both weapon bars retain five skills and their actual Ultimate morph. A reported 
 
 An empty slot and an unavailable slot are different states. Incomplete snapshots cannot certify equipment totals. Missing transformation or Vampire-stage information stays unknown. Native shared-skill descriptions can use the viewer's stat-dependent values and do not certify the sender's damage or healing.
 
+Dashboard's saved English/French choice applies to addon text and verified supported set/skill name mappings. Weapon-bar labels are separate from navigation labels. Unmapped identities retain their native names; full item/skill tooltips remain in the ESO client language, and exact item links are unchanged.
+
 ## Understand coverage
 
 `SOURCE` means a qualifying build source is available before combat. A set can qualify on either weapon bar; it need not reach its threshold on both. Casts, range, target caps, synergies and proc conditions still apply. Availability does not prove that an effect is active or reaches every group member.
@@ -35,6 +37,8 @@ An empty slot and an unavailable slot are different states. Incomplete snapshots
 Class identity alone does not prove purchased passives, selected masteries or slotted skills. A named Major/Minor effect does not stack just because another player supplies it. A selected potion is preparation evidence, not proof of consumption. No role-specific loadout is forced.
 
 There is no pull-report, uptime-history or recorded-build planner workflow. Builds integrates food and potion readiness; there is no separate Food Check menu.
+
+Food evidence retains its actual observation and known expiry. Rereading a buff or delivering an older detailed build does not extend that evidence. Group Ultimate can reuse fresh identity-matched food facts for its +/−/? marker without adding a scan or send; absent and unknown remain distinct. Dragonknight Standard group coverage uses its verified supporting morphs, excluding Shifting Standard and unrelated debuff effect IDs.
 
 ## Sharing and dependencies
 

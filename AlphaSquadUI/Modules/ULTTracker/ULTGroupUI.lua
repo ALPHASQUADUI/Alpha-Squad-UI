@@ -28,6 +28,17 @@ Group.layoutName="Group Ultimates"
 Group.layoutBounds={minWidth=240,minHeight=70,maxWidth=1800,maxHeight=1200}
 
 local READY_GREEN = {0.34, 0.88, 0.48, 1.00}
+local FOOD_RED = {0.95, 0.38, 0.38, 1.00}
+local FOOD_ICON = "EsoUI/Art/Crafting/provisioner_indexIcon_meat_up.dds"
+local function FoodText(state)
+    return L(state=="active" and "Food active" or state=="inactive" and "No active food or drink detected." or "Food information is unavailable.")
+end
+local function CachedText(control,value)
+    if control.cachedText~=value then control.cachedText=value;control:SetText(value) end
+end
+local function CachedTexture(control,value)
+    if control.cachedTexture~=value then control.cachedTexture=value;control:SetTexture(value) end
+end
 
 local function Palette(role,fallback)
     local theme=AlphaSquadUI.Theme
@@ -75,11 +86,12 @@ function Group:GetHUDEntries()
         previewMode=mode;previewEntries={}
         for index=1,12 do
             local name=index<=2 and string.format("@Tank%02d",index) or index<=4 and string.format("@Healer%02d",index-2) or string.format("@Damage%02d",index-4)
-            local id=index<=4 and 40223 or (index%2==0 and 122174 or 30366)
+            local id=index<=4 and 40223 or (index%2==0 and 122174 or 195031)
             local nativeName,nativeIcon=self:GetAbilityMeta(id)
             local state=mode=="ready" and "ready" or mode=="missing" and "missing" or ({"ready","ready","charging","ready","charging","charging","used","off","missing","offline","dead","charging"})[index]
             local percent=state=="ready" and 100 or state=="charging" and (97-index*5) or state=="used" and 8 or 0
             previewEntries[index]={key=name,displayName=name,preview=true,previewState=state,chargePercent=percent,
+                foodState=index%3==1 and "active" or index%3==2 and "inactive" or "unknown",
                 connected=state~="offline",dead=state=="dead",shared=state~="off" and state~="missing",
                 anyReady=state=="ready",unavailable=state=="offline" or state=="dead" or state=="off" or state=="missing",
                 recentlyUsed=state=="used",bestUltimate={id=state=="missing" and 0 or id,name=state=="missing" and L("No Ultimate slotted") or nativeName,icon=state=="missing" and EMPTY_ICON or (nativeIcon~="" and nativeIcon or EMPTY_ICON)}}
@@ -190,6 +202,13 @@ local function CreateRow(parent, index)
     row.icon:SetAnchor(CENTER, row.iconBorder, CENTER, 0, 0)
     row.icon:SetTextureCoords(0.04, 0.96, 0.04, 0.96)
 
+    row.foodIcon = WINDOW_MANAGER:CreateControl("AlphaSquadULTGroupListRow" .. index .. "FoodIcon", row, CT_TEXTURE)
+    row.foodIcon:SetTexture(FOOD_ICON)
+    row.foodIcon:SetDimensions(16,16)
+    row.foodStatus = Label(row,"AlphaSquadULTGroupListRow" .. index .. "FoodStatus","ZoFontGameBold","",COLORS.muted)
+    row.foodStatus:SetDimensions(12,BASE_ROW_H)
+    row.foodStatus:SetHorizontalAlignment(TEXT_ALIGN_CENTER)
+
     row.user = Label(row, "AlphaSquadULTGroupListRow" .. index .. "User", "ZoFontGameBold", "", COLORS.white)
     row.user:SetDimensions(184, BASE_ROW_H)
     row.user:SetAnchor(LEFT, row, LEFT, 47, 0)
@@ -224,9 +243,9 @@ local function CreateRow(parent, index)
         local tips=AlphaSquadUI.Tooltips
         if not entry or not tips or not tips.ShowText then return end
         local ultimate=entry.bestUltimate
-        local state=entry.previewState or (entry.connected==false and "offline" or entry.dead and "dead" or entry.stale and "stale" or entry.recentlyUsed and "used" or entry.anyReady and "ready" or "charging")
-        local states={ready="Ready",charging="Charging",used="Recently spent",offline="Offline",dead="Dead",stale="Update needed",missing="No Ultimate available",off="Sharing off"}
-        tips.ShowText(row,(entry.preview and (L("Placement example").."\n") or "")..(entry.displayName or "").."\n"..(ultimate and ultimate.name or L("Ultimate unavailable")).."\n"..L(states[state] or "Unknown"))
+        local state=entry.previewState or (entry.connected==false and "offline" or entry.dead and "dead" or entry.stale and "stale" or ultimate and ultimate.cost==0 and "unknown" or entry.recentlyUsed and "used" or entry.anyReady and "ready" or "charging")
+        local states={ready="Ready",charging="Charging",used="Recently spent",offline="Offline",dead="Dead",stale="Update needed",missing="No Ultimate available",off="Ultimate data unavailable"}
+        tips.ShowText(row,(entry.preview and (L("Placement example").."\n") or "")..(entry.displayName or "").."\n"..(ultimate and ultimate.name or L("Ultimate unavailable")).."\n"..L(states[state] or "Unknown").."\n"..FoodText(entry.foodState).."\n"..L("Latest verified food report; ? means unavailable."))
     end)
     row:SetHandler("OnMouseExit",function() if AlphaSquadUI.Tooltips then AlphaSquadUI.Tooltips.Hide() end end)
     if AlphaSquadUI.Input and AlphaSquadUI.Input.Register then AlphaSquadUI.Input.Register(row,{label="Group Ultimate"}) end
@@ -241,7 +260,8 @@ function Group:ApplyRowGeometry(row)
     local iconSize = self:GetIconSize()
     local iconBorderSize = iconSize + 4
     local iconX = 7
-    local userX = iconX + iconBorderSize + 8
+    local foodX = iconX + iconBorderSize + 5
+    local userX = foodX + 32
     local percentWidth = 74
     local rightPadding = 8
     local userWidth = math.max(1, width - userX - percentWidth - rightPadding - 8)
@@ -255,6 +275,12 @@ function Group:ApplyRowGeometry(row)
     row.iconBorder:SetAnchor(LEFT, row, LEFT, iconX, 0)
 
     row.icon:SetDimensions(iconSize, iconSize)
+
+    row.foodIcon:ClearAnchors()
+    row.foodIcon:SetAnchor(LEFT,row,LEFT,foodX,0)
+    row.foodStatus:ClearAnchors()
+    row.foodStatus:SetAnchor(LEFT,row,LEFT,foodX+16,0)
+    row.foodStatus:SetHeight(height)
 
     row.user:SetFont(width<260 and "ZoFontGameSmall" or "ZoFontGameBold")
     row.user:SetDimensions(userWidth, height)
@@ -454,7 +480,12 @@ function Group:RefreshRow(row, entry)
     row:SetHidden(false)
 
     local userId = entry.displayName ~= "" and entry.displayName or entry.key or "@Unknown"
-    row.user:SetText(AlphaSquadUI.Theme and AlphaSquadUI.Theme.PlayerName and AlphaSquadUI.Theme.PlayerName(userId) or userId)
+    CachedText(row.user,AlphaSquadUI.Theme and AlphaSquadUI.Theme.PlayerName and AlphaSquadUI.Theme.PlayerName(userId) or userId)
+    local foodState=entry.foodState or "unknown"
+    local foodColor=foodState=="active" and READY_GREEN or foodState=="inactive" and FOOD_RED or COLORS.muted
+    CachedText(row.foodStatus,foodState=="active" and "+" or foodState=="inactive" and "−" or "?")
+    SetColor(row.foodIcon,foodColor)
+    SetColor(row.foodStatus,foodColor)
 
     local ultimate = entry.bestUltimate
     if not ultimate then
@@ -462,22 +493,25 @@ function Group:RefreshRow(row, entry)
     end
 
     row.icon:SetHidden(false)
-    row.icon:SetTexture(ultimate and ultimate.icon and ultimate.icon~="" and ultimate.icon or EMPTY_ICON)
+    CachedTexture(row.icon,ultimate and ultimate.icon and ultimate.icon~="" and ultimate.icon or EMPTY_ICON)
 
+    local costUnknown=ultimate and ultimate.cost~=nil and ultimate.cost<=0
     local percent = tonumber(entry.chargePercent) or 0
     percent = math.min(100, math.max(0, math.floor(percent + 0.5)))
-    if entry.connected == false then row.percent:SetText(L("OFFLINE"))
-    elseif entry.dead == true then row.percent:SetText(L("DEAD"))
-    elseif entry.previewState=="missing" then row.percent:SetText(L("NONE"))
-    elseif entry.previewState=="off" then row.percent:SetText(L("OFF"))
-    elseif entry.stale then row.percent:SetText(L("STALE"))
-    elseif entry.recentlyUsed then row.percent:SetText(L("USED"))
-    else row.percent:SetText(tostring(percent) .. "%") end
+    if entry.connected == false then CachedText(row.percent,L("OFFLINE"))
+    elseif entry.dead == true then CachedText(row.percent,L("DEAD"))
+    elseif entry.previewState=="missing" then CachedText(row.percent,L("NONE"))
+    elseif entry.previewState=="off" then CachedText(row.percent,L("NO DATA"))
+    elseif entry.stale then CachedText(row.percent,L("STALE"))
+    elseif costUnknown then CachedText(row.percent,"?")
+    elseif entry.recentlyUsed then CachedText(row.percent,L("USED"))
+    else CachedText(row.percent,tostring(percent) .. "%") end
 
     local progressWidth = row.geometryProgressWidth or math.max(80, self:GetRowWidth() - 52)
+    row.progress:SetHidden(costUnknown==true)
     row.progress:SetWidth(math.floor(progressWidth * (percent / 100)))
 
-    row.unavailable = entry.unavailable == true or entry.connected == false or entry.dead == true or entry.stale == true
+    row.unavailable = entry.unavailable == true or entry.connected == false or entry.dead == true or entry.stale == true or costUnknown==true
     row.ready = entry.anyReady == true and not row.unavailable
     row.recentlyUsed = entry.recentlyUsed == true
 

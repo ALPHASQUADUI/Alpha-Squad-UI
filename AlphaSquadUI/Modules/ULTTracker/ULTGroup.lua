@@ -179,6 +179,7 @@ function Group:EnsureSavedVariables()
     ULT.sv.group.x = ULT.Clamp(FiniteOr(ULT.sv.group.x, defaults.x), -100000, 100000)
     ULT.sv.group.y = ULT.Clamp(FiniteOr(ULT.sv.group.y, defaults.y), -100000, 100000)
     self.sv = ULT.sv.group
+    if self.NormalizeTrackedFamilies then self:NormalizeTrackedFamilies() end
 end
 
 function Group:IsAbilityTracked(abilityId)
@@ -276,7 +277,12 @@ function Group:GetAbilityMeta(abilityId)
     abilityId=IsAbilityId(abilityId)
     if not abilityId then return L("No Ultimate"), "", 0 end
     local cached=abilityMeta[abilityId]
-    if cached then return cached.fallback and L("Unknown Ultimate") or cached.name,cached.icon,abilityId end
+    if cached then
+        local name=cached.fallback and L("Unknown Ultimate") or cached.name
+        local locale=AlphaSquadUI.Localization
+        if locale and locale.GetNativeName then name=locale.GetNativeName("ability",abilityId,name) end
+        return name,cached.icon,abilityId
+    end
     local name,icon="",""
     if GetAbilityName then
         local ok,value=pcall(GetAbilityName,abilityId)
@@ -291,7 +297,10 @@ function Group:GetAbilityMeta(abilityId)
     -- At most two slots per player plus saved filters; never grow with peer IDs.
     if abilityMetaCount>=128 then abilityMeta={};abilityMetaCount=0 end
     abilityMeta[abilityId]={name=name,icon=icon,fallback=fallback};abilityMetaCount=abilityMetaCount+1
-    return fallback and L("Unknown Ultimate") or name,icon,abilityId
+    name=fallback and L("Unknown Ultimate") or name
+    local locale=AlphaSquadUI.Localization
+    if locale and locale.GetNativeName then name=locale.GetNativeName("ability",abilityId,name) end
+    return name,icon,abilityId
 end
 
 function Group:InitializeSharing()
@@ -359,6 +368,7 @@ local function IsLocalPlayer(unitTag)
 end
 
 function Group:BuildRoster()
+    if self.Sync then self.Sync:RefreshContext() end
     local roster = {}
     local byKey = {}
     local byUnitTag = {}
@@ -554,6 +564,39 @@ function Group:GetBestMatchingUltimate(entry)
     return best, math.max(0, bestPercent)
 end
 
+
+-- Reuse Support Coverage's existing cache. No new inspection, buff scan or
+-- packet is initiated by the group HUD; unavailable evidence stays unknown.
+function Group:GetFoodState(entry)
+    if not entry or entry.connected==false or type(entry.key)~="string" or entry.key=="" then return "unknown" end
+    local sc=AlphaSquadUI.Modules.SupportCoverage
+    if not sc or sc.loading then return "unknown" end
+    local peer=sc.peerData and sc.peerData[entry.key]
+    local snapshot=peer or sc.byKey and sc.byKey[entry.key]
+    if not snapshot or snapshot.connected==false or snapshot.displayName~=entry.key
+        or snapshot.unitTag~=entry.unitTag then return "unknown" end
+    if peer or snapshot.asui==true then
+        if not sc.sv or sc.sv.shareData~=true or sc.sv.experimentalSharing~=true
+            or sc.share and sc.share.transportResumeRequired then return "unknown" end
+    end
+    -- Unit tags can be reused after a departure and accounts can change character.
+    local character=GetUnitName and GetUnitName(entry.unitTag)
+    if not character or character=="" or snapshot.characterName~=character then return "unknown" end
+    local sampled=FiniteOr(snapshot.scannedAt,nil)
+    local now=FiniteOr(NowMs(),nil)
+    if not sampled or not now or sampled<=0 or now<sampled or now-sampled>75000 then return "unknown" end
+    local food=peer and (peer.summaryFood or peer.food) or snapshot.food
+    if type(food)~="table" or food.verified~=true or type(food.active)~="boolean" then return "unknown" end
+    if food.active then
+        if food.timeEnds~=nil then
+            local ending=FiniteOr(food.timeEnds,nil)
+            if not ending or ending<0 or ending>0 and ending<=now/1000 then return "unknown" end
+        end
+        return "active"
+    end
+    return "inactive"
+end
+
 function Group:GetTrackedEntries()
     local result = {}
 
@@ -571,6 +614,7 @@ function Group:GetTrackedEntries()
                     end
                 end
 
+                entry.foodState = self:GetFoodState(entry)
                 entry.recentlyUsed = NowMs() < (self.recentlyUsedUntil[entry.key] or 0)
                 entry.bestUltimate, entry.chargePercent = self:GetBestMatchingUltimate(entry)
                 table.insert(result, entry)
@@ -765,6 +809,7 @@ function Group:SetSafetyUpdateActive(enabled)
 end
 
 function Group:SetTrackingEventsActive()
+    if self.Sync then self.Sync:RefreshContext() end
     local active=not ULT.loading and ULT.sv and ULT.sv.enabled and self.sv and self.sv.enabled
     if EM.SetActive then EM:SetActive(active==true) end
 end
@@ -793,6 +838,7 @@ end
 function Group:Initialize()
     if self.initialized then return end
     self:EnsureSavedVariables()
+    if self.Sync then self.Sync:Initialize() end
     self.sv.locked = true
     if not self.sv.positionSaved then
         local defaults = self:GetDefaults()

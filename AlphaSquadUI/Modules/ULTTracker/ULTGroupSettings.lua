@@ -84,41 +84,110 @@ local function Button(parent, name, text, x, y, w, h, callback)
     return button
 end
 
+function Group:ShowAuthorityNotice(reason)
+    local win = self.configWindow
+    if win and win.permission then
+        win.notice = reason or "Only the designated raid leader can change Ultimate filters."
+        win.permission:SetText(L(win.notice))
+        SetColor(win.permission, COLORS.gold)
+    end
+end
+
+function Group:TrySetTracked(key, enabled)
+    if self.CanEditFilters then
+        local allowed, reason = self:CanEditFilters()
+        if not allowed then self:ShowAuthorityNotice(reason); return false end
+    end
+    local changed, reason = self:SetAbilityTracked(key, enabled)
+    if changed == false then self:ShowAuthorityNotice(reason); return false end
+    if self.configWindow then self.configWindow.notice = nil end
+    self:RefreshConfig()
+    return true
+end
+
+function Group:RefreshLeaderChoice()
+    local win, sync = self.configWindow, self.Sync
+    if not win then return end
+    local members = sync and sync.GetMembers and sync:GetMembers() or {}
+    local leader = sync and sync.GetLeader and sync:GetLeader() or nil
+    local canAssign = sync and sync.CanAssignLeader and sync:CanAssignLeader() or false
+    local language = AlphaSquadUI.Localization and AlphaSquadUI.Localization.GetLanguage() or "en"
+    local signature = {language}
+    for _, member in ipairs(members) do
+        signature[#signature + 1] = tostring(member.account) .. (member.isCrown and "1" or "0")
+    end
+    signature = table.concat(signature, "|")
+    local authority = table.concat({signature, tostring(leader), tostring(canAssign)}, "|")
+    if win.authoritySignature ~= authority then win.notice = nil; win.authoritySignature = authority end
+    local combo = win.leaderCombo
+    if combo then
+        if win.leaderSignature ~= signature then
+            win.leaderSignature = signature
+            combo:ClearItems()
+            for _, member in ipairs(members) do
+                local account = member.account
+                local text = member.isCrown and L("%s (crown)", account) or account
+                local item = combo:CreateItemEntry(text, function()
+                    local current = Group.Sync
+                    if not current then return end
+                    local allowed, reason = current:CanAssignLeader()
+                    if not allowed then Group:ShowAuthorityNotice(reason); return end
+                    local changed, failure = current:SetLeader(account)
+                    if changed == false then Group:ShowAuthorityNotice(failure)
+                    else win.notice = nil; Group:RefreshConfig() end
+                end)
+                item.account = account
+                combo:AddItem(item)
+            end
+        end
+        if #members > 0 then
+            combo:SetSelectedItemByEval(function(item) return item.account == leader end, true)
+        elseif combo.SetSelectedItem then combo:SetSelectedItem(L("No group")) end
+        if combo.SetEnabled then combo:SetEnabled(canAssign) end
+    elseif win.leaderFallback then
+        win.leaderFallback:SetText(leader or L("No group"))
+    end
+    if win.permission then
+        local text = win.notice or (#members == 0 and "Solo: filters are saved for your next group."
+            or "The crown appoints the raid leader. The raid leader controls these filters.")
+        win.permission:SetText(L(text))
+        SetColor(win.permission, win.notice and COLORS.gold or COLORS.muted)
+    end
+    if win.syncStatus then
+        win.syncStatus:SetText(L(sync and sync.GetStatus and sync:GetStatus() or "Settings sync unavailable"))
+    end
+end
+
 local function CreateAbilityRow(parent, index)
     local row = WINDOW_MANAGER:CreateControl("AlphaSquadULTGroupAbilityRow" .. index, parent, CT_CONTROL)
-    row:SetDimensions(354, 32)
+    row:SetDimensions(232, 64)
     row:SetMouseEnabled(true)
 
     row.bg = Solid(row, "AlphaSquadULTGroupAbilityRow" .. index .. "BG", Palette("surface"))
     if AlphaSquadUI.Theme and AlphaSquadUI.Theme.RegisterSurface then AlphaSquadUI.Theme.RegisterSurface(row,row.bg,"tile") end
 
     row.icon = WINDOW_MANAGER:CreateControl("AlphaSquadULTGroupAbilityRow" .. index .. "Icon", row, CT_TEXTURE)
-    row.icon:SetDimensions(24, 24)
-    row.icon:SetAnchor(LEFT, row, LEFT, 6, 0)
+    row.icon:SetDimensions(32, 32)
+    row.icon:SetAnchor(LEFT, row, LEFT, 8, 0)
     row.icon:SetTextureCoords(0.05, 0.95, 0.05, 0.95)
 
     row.name = Label(row, "AlphaSquadULTGroupAbilityRow" .. index .. "Name", "ZoFontGameSmall", "", COLORS.white)
-    row.name:SetDimensions(220, 30)
-    row.name:SetAnchor(LEFT, row, LEFT, 36, 0)
+    row.name:SetDimensions(138, 42)
+    row.name:SetAnchor(LEFT, row, LEFT, 46, 0)
     row.name:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
-    row.name:SetMaxLineCount(1)
+    row.name:SetMaxLineCount(2)
     if row.name.SetWrapMode and TEXT_WRAP_MODE_ELLIPSIS then
         row.name:SetWrapMode(TEXT_WRAP_MODE_ELLIPSIS)
     end
 
-    row.users = Label(row, "AlphaSquadULTGroupAbilityRow" .. index .. "Users", "ZoFontGameSmall", "", COLORS.muted)
-    row.users:SetDimensions(42, 30)
-    row.users:SetAnchor(RIGHT, row, RIGHT, -52, 0)
-    row.users:SetHorizontalAlignment(TEXT_ALIGN_RIGHT)
-
     row.state = Label(row, "AlphaSquadULTGroupAbilityRow" .. index .. "State", "ZoFontGameBold", "", COLORS.muted)
-    row.state:SetDimensions(48, 30)
+    row.state:SetDimensions(38, 30)
     row.state:SetAnchor(RIGHT, row, RIGHT, -4, 0)
     row.state:SetHorizontalAlignment(TEXT_ALIGN_RIGHT)
 
     row.ability = nil
     row:SetHandler("OnMouseEnter", function()
-        if row.ability and Group:IsAbilityTracked(row.ability.id) then
+        if row.ability and Group:IsAbilityTracked(row.ability.key or row.ability.id) then
             SetColor(row.bg,Palette("selected",COLORS.panel))
         else
             SetColor(row.bg,Palette("hover",COLORS.panel))
@@ -133,13 +202,14 @@ local function CreateAbilityRow(parent, index)
             end
             tooltips.ShowText(row, (ability.name or L("Unknown Ultimate"))
                 .. (description ~= "" and ("\n\n" .. description) or "")
-                .. "\n\n" .. L("Select to track. Count: group members with this Ultimate. Up to 24 selections."))
+                .. "\n\n" .. L("One toggle includes every listed morph in this family.")
+                .. "\n" .. L("%d group members", ability.users or 0))
         end
     end)
 
     row:SetHandler("OnMouseExit", function()
         if AlphaSquadUI.Tooltips then AlphaSquadUI.Tooltips.Hide() end
-        if row.ability and Group:IsAbilityTracked(row.ability.id) then
+        if row.ability and Group:IsAbilityTracked(row.ability.key or row.ability.id) then
             SetColor(row.bg,Palette("selected",COLORS.panel))
         else
             SetColor(row.bg,Palette("surface"))
@@ -148,19 +218,19 @@ local function CreateAbilityRow(parent, index)
 
     row:SetHandler("OnMouseUp", function(_, button, upInside)
         if button == MOUSE_BUTTON_INDEX_LEFT and upInside ~= false and row.ability then
-            local enabled = Group:IsAbilityTracked(row.ability.id)
-            Group:SetAbilityTracked(row.ability.id, not enabled)
+            local enabled = Group:IsAbilityTracked(row.ability.key or row.ability.id)
+            Group:TrySetTracked(row.ability.key or row.ability.id, not enabled)
         end
     end)
     if AlphaSquadUI.Input and AlphaSquadUI.Input.Register then
         AlphaSquadUI.Input.Register(row,{activate=function()
-            if row.ability then Group:SetAbilityTracked(row.ability.id,not Group:IsAbilityTracked(row.ability.id)) end
+            if row.ability then Group:TrySetTracked(row.ability.key or row.ability.id,not Group:IsAbilityTracked(row.ability.key or row.ability.id)) end
         end,label="Ultimate filter"})
     end
     return row
 end
 
-function Group:RefreshAbilityRow(row, ability)
+function Group:RefreshAbilityRow(row, ability, canEdit)
     if not row then return end
 
     if not ability then
@@ -176,9 +246,9 @@ function Group:RefreshAbilityRow(row, ability)
     row.icon:SetTexture(ability.icon and ability.icon~="" and ability.icon or "EsoUI/Art/ActionBar/abilityFrame64_up.dds")
 
     row.name:SetText(ability.name and ability.name ~= "" and ability.name or L("Unknown Ultimate"))
-    row.users:SetText(tostring(ability.users or 0) .. "x")
+    row:SetAlpha(canEdit and 1 or 0.65)
 
-    local tracked = self:IsAbilityTracked(ability.id)
+    local tracked = self:IsAbilityTracked(ability.key or ability.id)
     row.state:SetText(L(tracked and "ON" or "OFF"))
     SetColor(row.state, tracked and COLORS.green or COLORS.muted)
 
@@ -192,6 +262,7 @@ end
 function Group:RefreshConfig()
     if not self.configWindow or self.configWindow:IsHidden() then return end
 
+    self:RefreshLeaderChoice()
     local abilities = self:GetAvailableAbilities()
     local shared, total = self:GetSharingCount()
     local trackedCount = self:GetTrackedAbilityCount()
@@ -200,8 +271,8 @@ function Group:RefreshConfig()
         self.configWindow.source:SetText(L("Group sharing unavailable • Check Libraries"))
         SetColor(self.configWindow.source, COLORS.red)
     else
-        self.configWindow.source:SetText(L("%d/%d sharing • %d Ultimates • %d selected",
-            shared, total, #abilities, trackedCount))
+        self.configWindow.source:SetText(L("%d/%d sharing • %d families selected",
+            shared, total, trackedCount))
         SetColor(self.configWindow.source, shared > 0 and COLORS.green or COLORS.muted)
     end
 
@@ -211,30 +282,29 @@ function Group:RefreshConfig()
             or "No shared Ultimates. Check Libraries."))
     end
 
+    local canEdit = not self.CanEditFilters or self:CanEditFilters()
     for index, row in ipairs(self.configWindow.abilityRows) do
         local ability = abilities[index]
-        self:RefreshAbilityRow(row, ability)
+        self:RefreshAbilityRow(row, ability, canEdit)
 
         if ability then
             row:ClearAnchors()
-            if self.configWindow.abilityContent then
-                row:SetAnchor(TOPLEFT, self.configWindow.abilityContent, TOPLEFT, 0, (index - 1) * 34)
-            else
-                local col = index <= 12 and 0 or 1
-                local rowIndex = col == 0 and index or (index - 12)
-                row:SetAnchor(TOPLEFT, self.configWindow, TOPLEFT, col == 0 and 22 or 404,
-                    122 + ((rowIndex - 1) * 34))
-            end
+            local column = (index - 1) % 3
+            local line = math.floor((index - 1) / 3)
+            local parent = self.configWindow.abilityContent or self.configWindow
+            row:SetAnchor(TOPLEFT, parent, TOPLEFT, (self.configWindow.abilityContent and 0 or 22) + column * 242,
+                (self.configWindow.abilityContent and 0 or 216) + line * 72)
         end
     end
     if self.configWindow.abilityContent then
-        self.configWindow.abilityContent:SetHeight(math.max(420, math.min(#abilities, 48) * 34))
+        self.configWindow.abilityContent:SetHeight(math.max(324, math.ceil(math.min(#abilities, 24) / 3) * 72))
     end
 
 end
 
 function Group:OpenConfig()
     if not self.configWindow then return end
+    if self.Sync and self.Sync.RequestRefresh then self.Sync:RequestRefresh() end
     self:BuildRoster()
     self:ApplyConfigWindowScale()
     local settings = AlphaSquadUI.Settings
@@ -307,7 +377,7 @@ function Group:CreateConfigWindow()
     if title.SetWrapMode and TEXT_WRAP_MODE_ELLIPSIS then title:SetWrapMode(TEXT_WRAP_MODE_ELLIPSIS) end
 
     local sub = Label(win, "AlphaSquadULTGroupConfigSub", "ZoFontGameSmall",
-        "Select the shared Ultimates to display.", COLORS.muted)
+        "Group support Ultimates and their morphs.", COLORS.muted)
     sub:SetDimensions(704, 24)
     sub:SetMaxLineCount(1)
     sub:SetAnchor(TOPLEFT, win, TOPLEFT, 21, 39)
@@ -325,56 +395,85 @@ function Group:CreateConfigWindow()
     win.source:SetAnchor(TOPLEFT, win, TOPLEFT, 22, 68)
     win.source:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
 
+    local leaderLabel = Label(win, "AlphaSquadULTGroupLeaderLabel", "ZoFontGameBold", "RAID LEADER", COLORS.white)
+    leaderLabel:SetDimensions(166, 30)
+    leaderLabel:SetAnchor(TOPLEFT, win, TOPLEFT, 22, 102)
+    if WINDOW_MANAGER.CreateControlFromVirtual and type(ZO_ComboBox_ObjectFromContainer) == "function" then
+        local container = WINDOW_MANAGER:CreateControlFromVirtual("AlphaSquadULTGroupLeaderChoice", win, "ZO_ComboBox")
+        container:SetDimensions(400, 32)
+        container:SetAnchor(TOPLEFT, win, TOPLEFT, 192, 100)
+        win.leaderCombo = ZO_ComboBox_ObjectFromContainer(container)
+        win.leaderCombo:SetSortsItems(false)
+        if AlphaSquadUI.Theme and AlphaSquadUI.Theme.ConfigureDropdown then
+            AlphaSquadUI.Theme.ConfigureDropdown(win.leaderCombo)
+        end
+        if AlphaSquadUI.Input then
+            AlphaSquadUI.Input.Register(container, {kind="dropdown", combo=win.leaderCombo, label="Raid leader"})
+        end
+    else
+        win.leaderFallback = Label(win, "AlphaSquadULTGroupLeaderFallback", "ZoFontGame", "No group", COLORS.muted)
+        win.leaderFallback:SetDimensions(400, 32)
+        win.leaderFallback:SetAnchor(TOPLEFT, win, TOPLEFT, 192, 100)
+    end
+    win.permission = Label(win, "AlphaSquadULTGroupPermission", "ZoFontGameSmall", "", COLORS.muted)
+    win.permission:SetDimensions(736, 38)
+    win.permission:SetMaxLineCount(2)
+    win.permission:SetAnchor(TOPLEFT, win, TOPLEFT, 22, 138)
+    win.permission:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
+    win.syncStatus = Label(win, "AlphaSquadULTGroupSyncStatus", "ZoFontGameSmall", "", COLORS.muted)
+    win.syncStatus:SetDimensions(480, 22)
+    win.syncStatus:SetMaxLineCount(1)
+    win.syncStatus:SetAnchor(TOPRIGHT, win, TOPRIGHT, -22, 186)
+    win.syncStatus:SetHorizontalAlignment(TEXT_ALIGN_RIGHT)
+
     local listHeader = Label(win, "AlphaSquadULTGroupAbilitiesHeader", "ZoFontGameBold",
         "ULTIMATE FILTERS", COLORS.orange)
     listHeader:SetDimensions(736, 22)
-    listHeader:SetAnchor(TOPLEFT, win, TOPLEFT, 22, 98)
+    listHeader:SetAnchor(TOPLEFT, win, TOPLEFT, 22, 186)
     listHeader:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
 
     win.abilityRows = {}
     if settings and settings.CreateScrollArea then
-        win.abilityContent, win.abilityScroll = settings.CreateScrollArea(win, "AlphaSquadULTGroupAbilityScroll", 22, 122, 736, 420, 420)
+        win.abilityContent, win.abilityScroll = settings.CreateScrollArea(win, "AlphaSquadULTGroupAbilityScroll", 22, 216, 736, 324, 324)
     end
-    for index = 1, (win.abilityContent and 48 or 24) do
+    for index = 1, 24 do
         win.abilityRows[index] = CreateAbilityRow(win.abilityContent or win, index)
-        if win.abilityContent then
-            win.abilityRows[index]:SetWidth(720)
-            win.abilityRows[index].name:SetWidth(578)
-        end
         win.abilityRows[index]:SetHidden(true)
     end
 
     win.empty = Label(win, "AlphaSquadULTGroupConfigEmpty", "ZoFontGame", "No shared Ultimates. Check Libraries.", COLORS.muted)
     win.empty:SetDimensions(736, 80)
-    win.empty:SetAnchor(TOPLEFT, win, TOPLEFT, 22, 210)
+    win.empty:SetAnchor(TOPLEFT, win, TOPLEFT, 22, 270)
     win.empty:SetHorizontalAlignment(TEXT_ALIGN_CENTER)
     win.empty:SetHidden(true)
 
     local controlsY = 552
 
-    Button(win, "AlphaSquadULTGroupSelectAll", "SELECT ALL", 22, controlsY, 148, 28, function()
-        local count = Group:GetTrackedAbilityCount()
-        for _, ability in ipairs(Group:GetAvailableAbilities()) do
-            local key = tostring(ability.id)
-            if not Group.sv.trackedAbilities[key] and count < 24 then
-                Group.sv.trackedAbilities[key] = true
-                count = count + 1
+    local function SetAll(enabled)
+        if Group.CanEditFilters then
+            local allowed, reason = Group:CanEditFilters()
+            if not allowed then Group:ShowAuthorityNotice(reason); return end
+        end
+        if Group.SetAllTracked then
+            local changed, reason = Group:SetAllTracked(enabled)
+            if changed == false then Group:ShowAuthorityNotice(reason); return end
+        else
+            for _, ability in ipairs(Group:GetAvailableAbilities()) do
+                Group:SetAbilityTracked(ability.key or ability.id, enabled)
             end
         end
-        Group:Refresh("select all abilities")
-    end)
-
-    Button(win, "AlphaSquadULTGroupClearAll", "CLEAR ALL", 178, controlsY, 148, 28, function()
-        Group.sv.trackedAbilities = {}
-        Group:Refresh("clear tracked abilities")
-    end)
+        win.notice = nil
+        Group:RefreshConfig()
+    end
+    Button(win, "AlphaSquadULTGroupSelectAll", "SELECT ALL", 22, controlsY, 148, 28, function() SetAll(true) end)
+    Button(win, "AlphaSquadULTGroupClearAll", "CLEAR ALL", 178, controlsY, 148, 28, function() SetAll(false) end)
 
     Button(win, "AlphaSquadULTGroupMoveHUD", "MOVE HUD", 590, controlsY, 168, 28, function()
         if AlphaSquadUI.Layout and AlphaSquadUI.Layout.Start then AlphaSquadUI.Layout.Start(Group) end
     end)
 
     local saveNote=Label(win,"AlphaSquadULTGroupSaveNote","ZoFontGameSmall",
-        "Saved automatically.",COLORS.muted)
+        "Food: green = active; red = verified absent; ? = unknown.",COLORS.muted)
     saveNote:SetDimensions(736,32)
     saveNote:SetAnchor(TOPLEFT,win,TOPLEFT,22,586)
     saveNote:SetHorizontalAlignment(TEXT_ALIGN_LEFT)

@@ -262,10 +262,10 @@ AlphaSquadUI.Preferences={sv={language="auto"},Initialize=function()end}
 Settings.OpenPage("dashboard")
 local language=controls.AlphaSquadLanguageChoice.combo
 Shell:RefreshSettingsWindow()
-check(#language.entries==3 and language.selected.id=="auto","The language picker defaults to the game's language")
+check(#language.entries==2 and language.selected.id=="en","The language picker defaults to the game's language")
 local closeControl=controls.AlphaSquadSettingsClose
 local contentWidth=Shell.settingsPages.dashboard.width
-language.entries[3].callback()
+language.entries[2].callback()
 check(AlphaSquadUI.Localization.GetLanguage()=="fr" and AlphaSquadUI.Preferences.sv.language=="fr",
     "Selecting French changes and persists addon language without reload")
 check(closeControl==controls.AlphaSquadSettingsClose and closeControl.label.text=="FERMER",
@@ -273,20 +273,20 @@ check(closeControl==controls.AlphaSquadSettingsClose and closeControl.label.text
 check(Shell.settingsNavButtons.community.label.text==AlphaSquadUI.L("About")
     and controls.AlphaSquadLibrariesTitle.text==AlphaSquadUI.L("LIBRARIES & SHARING"),
     "Navigation and hidden settings pages refresh together")
-check(language.selected.id=="fr" and #language.entries==3 and #choice.entries==3,
+check(language.selected.id=="fr" and #language.entries==2 and #choice.entries==3,
     "Localized dropdowns retain stable selection and never duplicate items")
 check(Shell.settingsPages.dashboard.width==contentWidth and controls.AlphaSquadLanguageChoice.width<=contentWidth-28,
     "Changing language keeps the dropdown inside its responsive card")
-language.entries[2].callback()
+language.entries[1].callback()
 check(closeControl.label.text=="CLOSE" and controls.AlphaSquadLibrariesTitle.text=="LIBRARIES & SHARING",
     "Switching back to English does not preserve stale French text")
 local languageClient="fr"
 GetCVar=function()return languageClient end
 language.entries[1].callback()
-check(AlphaSquadUI.Localization.GetLanguage()=="fr" and language.selected.id=="auto",
-    "Automatic follows French game language while retaining the Automatic preference")
-languageClient="en";AlphaSquadUI.Localization.SetLanguage("auto")
-check(AlphaSquadUI.Localization.GetLanguage()=="en","Automatic also follows an English game client")
+check(AlphaSquadUI.Localization.GetLanguage()=="en" and language.selected.id=="en",
+    "The saved English choice is not replaced when the game language changes")
+check(language.entries[1].name=="English" and language.entries[2].name=="Français",
+    "Only the two supported languages appear, without an automatic or game-language entry")
 GetCVar=nil
 
 -- Done returns to the actual native category, even when Move HUD was opened
@@ -325,20 +325,17 @@ closeControl.handlers.OnMouseUp(nil,MOUSE_BUTTON_INDEX_LEFT,true)
 check(resumed==1 and not Settings.AnyExclusiveWindowVisible(),"Top-right Close leaves settings and resumes gameplay")
 SCENE_MANAGER=nil;ZO_GameMenu_InGame=nil
 
--- Configuration must retain access to currently shared skills plus saved filters.
+-- Curated support families remain configurable without shared slot packets.
 local ULT={COLORS=nil,Group={sv={trackedAbilities={}},ApplyConfigWindowScale=function() end}}
 AlphaSquadUI.Modules.ULTTracker=ULT
 local Group=ULT.Group
-function Group:GetTrackedAbilityCount()
-    local count=0;for _ in pairs(self.sv.trackedAbilities) do count=count+1 end;return count
-end
-function Group:GetAvailableAbilities()
-    local result={};for i=1,48 do result[i]={id=i,name="Ultimate "..i} end;return result
-end
+function Group:GetAbilityMeta(id)return "Native Ultimate "..id,"native.dds" end
 function Group:Refresh() self.refreshes=(self.refreshes or 0)+1 end
+assert(loadfile("AlphaSquadUI/Modules/ULTTracker/ULTGroupCatalog.lua"))()
+Group:NormalizeTrackedFamilies()
 assert(loadfile("AlphaSquadUI/Modules/ULTTracker/ULTGroupSettings.lua"))()
 Group:CreateConfigWindow()
-check(#Group.configWindow.abilityRows==48 and Group.configWindow.abilityScroll~=nil,"The group configuration scrolls all possible current and saved Ultimates")
+check(#Group.configWindow.abilityRows==24 and Group.configWindow.abilityScroll~=nil,"The curated family grid has bounded reusable controls and scrolling")
 controls.AlphaSquadULTGroupSelectAll.handlers.OnMouseUp(nil,MOUSE_BUTTON_INDEX_LEFT,true)
-check(Group:GetTrackedAbilityCount()==24 and Group.refreshes==1,"Select All honors the persistent 24-filter cap with one refresh")
+check(Group:GetTrackedAbilityCount()==#Group.catalogFamilies and Group.refreshes==1,"Select All changes the curated families with one refresh")
 print(string.format("PASS: %d assertions; Lua %s. No ESO-runtime certification.",total,_VERSION))

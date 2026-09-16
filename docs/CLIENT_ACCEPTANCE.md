@@ -2,17 +2,18 @@
 
 This checklist records behavior that automated Lua and packaging checks cannot establish. No row is passed until someone runs it in ESO on the stated versions. Never substitute a mock result for a native result.
 
-## 3.5.0 native acceptance pending
+## 3.6.0 native acceptance pending
 
 The maintainer tested development build 3.4.0 and reported duplicate native `BG` and `Scroll` controls during Dashboard initialization at `Core/Theme.lua:105`, reached through the language selector. This is a recorded native failure, not acceptance of the interface. The earlier single-dropdown mock did not model ESO's global child-name registry and missed this collision.
 
-Version 3.4.1 assigns each private dropdown a unique addon-prefixed root and adds multiple-dropdown naming regressions; no native retest has been reported. Version 3.5.0 retains the correction and implements the selected personal HUD with reversible native Ultimate-slot replacement. Run the [3.5.0 personal Ultimate route](SUPPORT_COVERAGE_TESTING.md#350-personal-ultimate-acceptance), then the retained [3.4 interface route](SUPPORT_COVERAGE_TESTING.md#341-interface-acceptance) against the delivered commit. No automated result passes these native checks or authorizes a PR or release.
+Version 3.4.1 assigns each private dropdown a unique addon-prefixed root and adds multiple-dropdown naming regressions. The later gameplay recording supplies interaction evidence but not a complete versioned acceptance record. Version 3.6.0 retains the dropdown correction and removes the rejected 3.5.0 native-slot replacement. Run the [3.6.0 acceptance route](SUPPORT_COVERAGE_TESTING.md#360-interface-and-raid-coordination-acceptance) against the delivered commit. No automated result passes these native checks or authorizes a PR or release.
 
 | Development build | Native evidence | Status |
 | --- | --- | --- |
 | 3.4.0 | Maintainer-reported duplicate `BG` / `Scroll` errors during Dashboard creation | Failed initialization |
 | 3.4.1 | Hotfix awaiting the maintainer's ESO retest | Not recorded |
-| 3.5.0 | Personal Ultimate design 2 and native-slot replacement awaiting ESO acceptance | Not recorded |
+| 3.5.0 | Native-slot replacement subsequently rejected because of addon coexistence concerns | Replacement retired in 3.6.0 |
+| 3.6.0 | Current interface, food evidence and raid coordination changes | Native acceptance pending |
 
 ## Historical maintainer acceptance for 3.3.1
 
@@ -28,7 +29,7 @@ Record the Alpha Squad UI and companion versions, ESO API/build, library version
 
 | Scenario | Expected result | Native result |
 | --- | --- | --- |
-| Reload, open Dashboard, alternate theme and language selectors, then reopen settings | Both native menus populate and select independently; no duplicate controls, stale language choices or transparent popup text | Not recorded for 3.5.0 |
+| Reload, open Dashboard, alternate theme and language selectors, then reopen settings | Both native menus populate independently; no duplicate controls, stale choices or transparent popup text; language offers EN/FR only | Not recorded for 3.6.0 |
 | Open with the gameplay keybind, then close | Cursor is usable immediately and returns to the prior gameplay state | Not recorded |
 | Open Group configuration, Coverage and Builds; close each | The previous addon window returns; combat/loading never reopens it | Not recorded |
 | Read an item, skill and Champion tooltip for 15 seconds | Unchanged refreshes preserve the tooltip; changing the player replaces its content | Not recorded |
@@ -52,13 +53,26 @@ Record the Alpha Squad UI and companion versions, ESO API/build, library version
 | Compare both normal slots in horizontal/vertical layouts | Native icons, actual points/native costs, bounded progress, green active marker and dimmed other slot remain readable | Not recorded |
 | Spend, recharge, exceed cost, clear a slot and encounter an unknown cost | No stale READY or clipped counter; raw points remain accurate; unknown/empty states do not invent readiness | Not recorded |
 | Use a transformation or temporary native bar, then return | Actual special-bar Ultimate appears without a false normal-bar marker; normal pair returns afterward | Not recorded |
-| Enable personal tracking, hide/show it, disable/re-enable the module | Native Ultimate button is visually replaced only while the personal HUD is enabled and visible; casting/keybind still works | Not recorded |
-| Hide personal HUD with group tracking ON | Native Ultimate button returns; group HUD and sharing keep their chosen state | Not recorded |
-| Enter settings, inventory, loading and MOVE HUD, then return | Replacement releases cleanly, no stranded hidden native slot, no placement example used as live state | Not recorded |
-| Switch keyboard/gamepad modes, including with menus open | Correct native button presentation and restoration in each mode; no change to other action buttons | Not recorded |
-| Test with each installed action-bar addon | Record versions and ordering; no lost button, stale alpha or unrelated action-bar change after release | Not recorded |
-| Change English/French/Automatic and Cross-sync while tracking | Labels update, explicit language follows its saved choice, placement persists and native visibility follows the current personal option | Not recorded |
+| Enable personal tracking, hide/show it, disable/re-enable the module | Native Ultimate presentation/input stays under ESO and other-addon ownership in every state | Not recorded |
+| Hide personal HUD with group tracking ON | Group HUD and sharing keep their chosen state; native Ultimate controls are untouched | Not recorded |
+| Enter settings, inventory, loading and MOVE HUD, then return | No native action-bar mutation; placement examples never become live evidence | Not recorded |
+| Switch keyboard/gamepad modes, including with menus open | ESO and other action-bar addons retain their button presentation and input | Not recorded |
+| Test with each installed action-bar addon | Record versions/order; Alpha Squad never forces its native button visibility or opacity choice | Not recorded |
+| Change English/French and Cross-sync while tracking | Explicit language remains saved, native tooltip locale remains identified, placement persists | Not recorded |
 | Use all Overload morphs and optional behavior OFF | Actual remaining points, reserve tick and neutral/gold/green/red states agree with the configured thresholds; no automatic cast or cancellation | Not recorded |
+
+## Group coordination acceptance
+
+| Scenario | Expected result | Native result |
+| --- | --- | --- |
+| Crown assigns a current group account as raid leader | All compatible clients converge on that identity; another member cannot assign a leader | Not recorded |
+| Raid leader toggles families; another player attempts a change | Accepted changes converge; unauthorized edits explain the restriction and do not alter shared settings | Not recorded |
+| Join late, reconnect, change crown, delegate leaves, disband/rejoin | Old contexts/revisions cannot retain or regain authority | Not recorded |
+| Disable native protocol 511 or remove its dependency | Synchronization reports unavailable; build and Ultimate sharing are not enabled as a side effect | Not recorded |
+| Slot each supported base/morph and an excluded sibling | Only the verified family matches; the row retains actual reported skill/cost; Cryptcanon requires its dedicated Ultimate | Not recorded |
+| Feed fresh active/absent, expired, missing and identity-changed food evidence | +/−/? stay distinct; expiry or lack of sharing never invents absence | Not recorded |
+| Drag the group panel over a player name, food marker and skill icon | Whole-panel movement remains responsive; resize handles retain their separate behavior | Not recorded |
+| Compare EN/FR at narrow and enlarged UI scales | Status, selectors, food explanations and verified names fit; native tooltip language is not misrepresented | Not recorded |
 
 ## Performance comparison
 

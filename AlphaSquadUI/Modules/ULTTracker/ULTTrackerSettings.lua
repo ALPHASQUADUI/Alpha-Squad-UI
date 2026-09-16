@@ -91,7 +91,7 @@ function ULT:BuildIntegratedSettingsPage(page,ui)
     local general=ui.CreateCard(page,"AlphaSquadULTIntegratedGeneral",8,86,half,216,"PERSONAL HUD",C.orange)
     ui.AddToggleRow(general,"AlphaSquadULTIntegratedVisible","Show personal HUD",42,
         function() return ULT.sv and ULT.sv.visible==true end,function(v) ULT:SetVisible(v) end,
-        "Replaces the game's Ultimate display while this HUD is visible. Turn OFF to restore the native display. Your Ultimate binding stays unchanged.")
+        "Shows your Ultimate points without changing the game action bar or other addons.")
     ui.AddToggleRow(general,"AlphaSquadULTIntegratedMenus","Hide in game menus",82,
         function() return ULT.sv and ULT.sv.hideInMenus==true end,function(v) ULT.sv.hideInMenus=v==true;ULT:ApplyVisibility() end)
     ui.CreateButton(general,"AlphaSquadULTMoveHUD","MOVE HUD",14,134,190,36,MovePersonalHUD)
@@ -122,13 +122,16 @@ function ULT:BuildIntegratedSettingsPage(page,ui)
     local counter=Label(runtime,"AlphaSquadULTIntegratedCurrent","",14,192,half-28,28,"ZoFontGameBold",C.gold)
     ui.RegisterRefresher(function()
         for key,row in pairs(nativeRows) do
-            local bar=ULT:GetLiveBar(key);local label=bar and bar.label=="ACTIVE BAR" and "ACTIVE BAR" or (key=="primary" and "FRONT" or "BACK")
+            local bar=ULT:GetLiveBar(key);local label=bar and bar.label=="ACTIVE BAR" and "ACTIVE BAR" or (key=="primary" and "FRONT BAR" or "BACK BAR")
             local unavailable=key=="backup" and ULT:HasSpecialActiveBar()
             local state=bar and bar.state or "empty"
             if state=="off" then state="inactive" end
             row.icon:SetHidden(unavailable or not bar or bar.abilityId<=0 or bar.icon=="")
             if bar and bar.icon~="" then row.icon:SetTexture(bar.icon) end
-            row.text:SetText(unavailable and L("BACK BAR\nUnavailable on the current action bar") or (L(label).." • "..(bar and bar.name~="" and bar.name or L("No Ultimate")).."\n"..L(string.upper(state))))
+            local name=bar and bar.name~="" and bar.name or L("No Ultimate")
+            local localization=AlphaSquadUI.Localization
+            if bar and localization and localization.GetNativeName then name=localization.GetNativeName("ability",bar.abilityId,name) end
+            row.text:SetText(unavailable and L("BACK BAR\nUnavailable on the current action bar") or (L(label).." • "..name.."\n"..L(string.upper(state))))
         end
         counter:SetText(L("ULTIMATE: %d",tonumber(ULT.currentUltimate) or 0))
     end)

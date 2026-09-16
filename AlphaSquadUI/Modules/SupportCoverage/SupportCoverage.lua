@@ -326,6 +326,38 @@ end
 function SC:ResetSharingState(reason)
     if self.ResetBuildDetailState then self:ResetBuildDetailState() end
     self.peerData = {}
+    -- Roster views and pooled controls retain separate references to decoded
+    -- peer builds. A disabled/combat refresh cannot rebuild them immediately,
+    -- so revoke those references at the same boundary as the transport cache.
+    -- The local snapshot and optional native-library receipts stay untouched.
+    self.roster, self.byKey, self.coverage = {}, {}, {}
+    self.inspectorPlayerKey, self.inspectorRequestKey, self.inspectorRequestError = nil, nil, nil
+    self.contributorEffectKey = nil
+    local function ClearRows(rows)
+        for _, row in pairs(rows or {}) do
+            row.data, row.player, row.playerKey, row.characterName = nil, nil, nil, nil
+            if row.SetHidden then row:SetHidden(true) end
+            for _, field in ipairs({"label", "detail"}) do
+                local control = row[field]
+                if control and control.SetText then control:SetText("") end
+            end
+        end
+    end
+    for _, entry in ipairs({{"inspectorWindow", "CloseInspector"}, {"matrixWindow", "CloseMatrix"},
+        {"contributorWindow", "CloseContributorPicker"}}) do
+        local window = self[entry[1]]
+        if window then
+            if self[entry[2]] then self[entry[2]](self)
+            elseif window.SetHidden then window:SetHidden(true) end
+            ClearRows(window.rows)
+            ClearRows(window.list and window.list.rows)
+            ClearRows(window.playerList and window.playerList.rows)
+            if window.subtitle and window.subtitle.SetText then window.subtitle:SetText("") end
+            if window.buildSheet and self.BuildView and self.BuildView.Clear then self.BuildView.Clear(window.buildSheet) end
+        end
+    end
+    ClearRows(self.window and self.window.list and self.window.list.rows)
+    if self.UI and self.UI.ClearTooltip then self.UI.ClearTooltip() end
     self.buildSharePending = false
     if self.share then
         self.share.lastSendAt = -60000

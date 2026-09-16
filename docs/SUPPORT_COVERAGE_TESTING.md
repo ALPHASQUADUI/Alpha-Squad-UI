@@ -1,6 +1,6 @@
 # ESO acceptance checklist
 
-Version **3.5.0** / **30500**. This checklist is not a record of completed in-game tests. Record current results in the [client acceptance matrix](CLIENT_ACCEPTANCE.md).
+Version **3.6.0** / **30600**. This checklist is not a record of completed in-game tests. Record current results in the [client acceptance matrix](CLIENT_ACCEPTANCE.md).
 
 ## Native Add-Ons menu
 
@@ -24,13 +24,13 @@ The validator runs every regression suite under Lua 5.1 and Lua 5.4, checks synt
 
 Use the [installation instructions](../releases/README.md). Record the commit, ESO API version, addon/library versions and relevant screenshots for each finding. Close ESO and back up existing addon folders and SavedVariables before updating. Keep private chats, unrelated accounts and raw group snapshots out of reports.
 
-Check a fresh installation separately from migrated preferences. Fresh supported sharing starts OFF and requires an explicit choice; saved ON/OFF choices must survive installation, reload, character changes and travel. A pre-existing native OFF must not be silently enabled. Verify actual native library switches as well as the Alpha Squad display.
+Check a fresh installation separately from migrated preferences. Fresh build, Ultimate and set sharing starts OFF and requires an explicit choice; saved ON/OFF choices must survive installation, reload, character changes and travel. A pre-existing native OFF must not be silently enabled. Verify actual native library switches as well as the Alpha Squad display.
 
 ## Settings, sharing and placement
 
 | Check | Required outcome |
 | --- | --- |
-| Fresh settings | All tracking modules start enabled; supported sharing categories stay OFF until explicitly enabled, including when dependencies are installed later |
+| Fresh settings | All tracking modules start enabled; build, Ultimate and set sharing categories stay OFF until explicitly enabled, including when dependencies are installed later |
 | Existing preferences | Saved module, sharing, layout and visibility choices remain intact; an explicit OFF is never reset by routine activation |
 | Libraries truth | ON/OFF matches the real native setting; missing/incompatible controls show unavailable, not a guessed ON |
 | Sharing switches | Toggle each category in Alpha Squad without navigating away; verify only its matching native settings change |
@@ -55,7 +55,7 @@ Check a fresh installation separately from migrated preferences. Fresh supported
 | Dashboard dropdown ownership | Reload with both theme and language selectors present, alternate their menus and selections, then reopen settings; no duplicate BG/Scroll errors, crossed menu entries or changes to unrelated native menus |
 | Resize corners | Drag every corner proportionally with icons/text intact; release, Escape, combat and loading remove temporary resize callbacks |
 | Resize edges | Edge drags reshape personal/group/Support HUD contents without stretching icons; minimum/maximum bounds and screen fitting remain correct |
-| Placement toolbar | Selected-panel scale/background opacity/reset/fit affect only that panel; icons/text stay opaque and all changes persist |
+| Placement toolbar | Selected-panel scale/supported background opacity/reset/fit affect only that panel; transparent HUDs hide background controls; icons/text stay opaque and all changes persist |
 | Branding | Ą and Ş render fully in the static orange gradient; UI stays white; @SeRuM1 uses the blue gradient |
 | External links | Website, ESOUI, Minion and Discord confirmations appear above addon windows and can be accepted or cancelled normally; About's JOIN DISCORD opens the direct verified invitation, without an intermediate page or build data |
 | Viewport | At 720p, 1080p and ultrawide UI scales, Libraries remains usable, the main Close action returns to gameplay, Workspace labels remain readable, and long detail text remains available on hover |
@@ -113,7 +113,7 @@ Check a fresh installation separately from migrated preferences. Fresh supported
 | Group ULT controls | The parent Group tracking switch controls the teammate HUD; no group self/HUD-visibility/ready-sound switches or sound behavior remain; saved filters/layout survive and a formerly hidden group HUD migrates to OFF |
 | Group ULT values | Filters, readiness sorting, dead/offline players, rejoin and missing-library states remain correct; the local account never appears, repeated same-ID Ultimates use the lower valid cost, changed IDs discard stale cost and percentages stay below 100 until ready |
 | Personal transformation ULT | Test Vampire and Werewolf forms and other special native hotbars: show the active native Ultimate/morph/icon/cost, use available native effect duration for ACTIVE, then restore ordinary front/back state after the form ends |
-| Group transformation ULT | Accept the actual transformation Ultimate reported by LibGroupCombatStats without a fixed whitelist; do not infer transformed-bar slots or another player's active form from a front/back report |
+| Group Ultimate families | Match only curated verified support families/morphs; do not infer transformed-bar slots, another player's active form or an Ultimate from class/gear alone |
 | Overload | All morphs, optional behavior OFF, Warning starts, reserve/reminder behavior and PvP suppression remain functional in the shared personal tracker; no effect-cancellation action or cutoff setting remains, and hidden/loading/placement states play no alerts |
 | Resize bursts | Repeated screen-size notifications coalesce into one deferred Support refresh using current dimensions; no repeated follow-up refreshes remain after the burst ends |
 | Performance/coexistence | Compare frame time/memory and traffic ON/OFF in four- and twelve-player groups alongside the group's existing addons |
@@ -122,7 +122,7 @@ Check a fresh installation separately from migrated preferences. Fresh supported
 
 Source availability is not live application or guaranteed recipient coverage. A valid shared snapshot is still a report from its sender; it is not proof against a modified client. Automated checks cannot certify native rendering, measured FPS or network coexistence. The 3.1.0 recording documents the reported failures; it is not an after-change acceptance test. See the [3.2.0 video review](VIDEO_REVIEW_3.2.0.md).
 
-The active build protocols **507/510** remain provisional; legacy **508/509** are retired. Formal reservation and coexistence validation remain required before public full-build-sharing release. Completing this checklist does not itself authorize a pull request, merge, tag or release; maintainer approval remains required.
+Build protocols **507/510** and settings-only raid protocol **511** remain provisional; legacy **508/509** are retired. Formal reservation and coexistence validation remain required before public release. Completing this checklist does not itself authorize a pull request, merge, tag or release; maintainer approval remains required.
 
 Primary API and implementation references:
 
@@ -141,7 +141,7 @@ These references describe contracts and resources, not completed in-game accepta
 The maintainer reported duplicate native `BG` / `Scroll` initialization errors in 3.4.0. The 3.4.1 dropdown fix awaits native retesting; the failed 3.4.0 run does not establish any of the outcomes below.
 
 - Install the current candidate containing the 3.4.1 correction, reload and open Dashboard with both theme and language selectors present. Open each menu repeatedly, alternate selections, close/reopen settings and reload again. No duplicate-control errors, crossed menu entries or stale translations; popup fills remain opaque and unrelated native menus retain their appearance.
-- Start a fresh English client and French client: Automatic selects the matching addon language. Other client locales fall back to English. Switch EN/FR/Automatic without reload on every page and already-open window; reconnect and change character to verify persistence. Native names/tooltips remain in ESO's client language.
+- On the current build, start fresh English and French clients: the matching explicit language is selected, with English fallback for other locales. Switch EN/FR without reload on every page and already-open window; reconnect, change character and change client locale to verify the saved choice persists. Unmapped names and complete native tooltips retain ESO's client language.
 - Test 720p, 1080p and the actual custom UI scale. Inspect long French buttons, dropdowns, tooltips, contributor details and narrow Builds/Coverage layouts. No overlapped actions or clipped essential status.
 - Personal ULT: verify both slots in both orientations, left-side green marker through rapid weapon swaps, dimmed inactive slot, distinct costs, empty slot, unknown cost, transformation/temporary hotbar and recovery. No stale READY after spending.
 - Overload: verify gold active, green ready pulse and red reserve warning; check toggling behavior, combat, hiding and editor previews. The addon must never activate/cancel a skill.
@@ -153,7 +153,7 @@ These checks remain unrecorded until performed in ESO against the exact developm
 
 ## 3.5.0 personal Ultimate acceptance
 
-Run the exact 3.5.0 development commit in ESO. The selected mockup is a design decision, not native test evidence. Keep the 3.4.0 initialization failure and unreported 3.4.1 retest visible in the acceptance record.
+Historical route for 3.5.0 only. Its native-slot replacement and Automatic language option are retired in 3.6.0; do not use those historical expectations to accept the current candidate. The selected mockup is a design decision, not native test evidence. Keep the 3.4.0 failure visible in the acceptance record.
 
 - Open both Dashboard selectors repeatedly, then test English, French and Automatic on the matching game clients. Personal HUD states and settings must refresh without duplicate controls, stale text, overflow or a placement reset.
 - Compare horizontal and vertical design 2 with distinct native costs, raw points below/at/above cost, rapid weapon swaps, spending, an empty slot and unavailable cost. A full bar cannot imply readiness before the actual cost; unknown costs stay unknown.
@@ -167,3 +167,17 @@ Run the exact 3.5.0 development commit in ESO. The selected mockup is a design d
 - Check old saved sizes, new compact defaults, minimum sizes, viewport fitting, reload and Cross-sync changes. Existing placement survives; native visibility follows the current profile and personal visibility option.
 
 Record measured frame time and memory separately from functional acceptance. Successful automated checks do not establish in-game rendering, zero overhead or compatibility with every action-bar addon.
+
+## 3.6.0 interface and raid coordination acceptance
+
+- Verify the delivered commit and version before recording results. Retain the historical dropdown failure and distinguish the supplied recording from an after-change test.
+- Toggle personal tracking and visibility, enter menus/loading/placement and switch keyboard/gamepad modes. Native Ultimate alpha, visibility, mouse handling and other-addon presentation must remain untouched. Verify the larger green marker and both compact orientations.
+- Drag the Group Ultimate panel over its name, icon, food marker and blank body. Test overlapping panels, all resize handles, release outside the frame, Escape, combat and loading. Transparent HUDs must not display an ineffective background control.
+- Start clean EN/FR/unsupported-language clients; migrate an old automatic preference. Only English/French appear, the initial choice is correct, and later client-locale changes preserve the saved choice. Check weapon BACK versus navigation BACK and charging states on every affected window.
+- Compare verified catalog names in both selected languages while keeping exact item links unchanged. Unknown mappings keep native fallback text; complete ESO tooltips remain in the client language. Test long French text at narrow and enlarged UI scales.
+- Test each curated support family, its supported morphs, native rank variants and excluded siblings. Check actual Cryptcanon ability `195031` and native reported cost. Shifting Standard and a debuff effect ID must not qualify as the Dragonknight Standard group damage bonus.
+- With several compatible clients, assign a raid leader from the crown account, toggle families from the delegate and attempt unauthorized edits. All receivers must agree on accepted settings; rejected edits explain why. Reclaim leadership from the crown and repeat.
+- Repeat late join, reload, crown change, delegate departure, reconnect and disband/rejoin. Delayed packets from a previous context or older revision must not restore old authority. Solo preferences and per-player panel geometry remain local.
+- Turn native protocol 511 OFF, remove/invalidate its dependency, and simulate lost/out-of-order updates. Status must expose unavailable, waiting or failed synchronization. Build/Ultimate/set consent and unrelated protocols must remain unchanged. No automatic settings sends or edits during combat/loading.
+- Feed active, verified absent, missing, expired, revoked and identity-mismatched food evidence. The marker must distinguish +, − and ?; expired data becomes unknown. Repeated buff reads and detailed responses cannot extend the original observation age.
+- Measure frame time, memory and traffic separately in solo, four-player and twelve-player use with existing addons. Confirm bounded synchronization retries and no body-drag frame poll or food-specific scanner. Record actual coexistence results before public release.

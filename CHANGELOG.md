@@ -1,5 +1,15 @@
 # Changelog
 
+## 3.6.0 — Raid Ultimate coordination and interface corrections
+
+Removed native Ultimate-button suppression entirely. Personal tracking now leaves ESO and other action-bar addons in control of that button. The active-bar marker uses one larger native arrow texture instead of pixel scanlines; hidden HUD refreshes stop rewriting unchanged progress geometry. MOVE HUD captures dragging across the selected panel body, including group rows, and hides background controls for transparent panels.
+
+Dashboard offers English and French only. A supported game language seeds the saved choice once, with English fallback. Corrected contextual weapon-bar/status translations and added verified ID-based names for supported catalog entries; unknown names and full native tooltips keep ESO's client text.
+
+Group Ultimate configuration uses curated support families with verified morph matching, including Cryptcanon's dedicated Ultimate. A compact food indicator distinguishes verified active, verified absent and unknown evidence. The crowned group leader assigns the raid leader; that player's filters synchronize through a separate bounded, settings-only LibGroupBroadcast protocol. Native OFF remains respected and build/Ultimate sharing choices stay independent. Food expiry and build-detail timestamps retain their original evidence age.
+
+This remains a `dev` candidate with no PR or public release authorized. Native multiplayer acceptance, protocol reservation and measured performance remain pending. See the [audit](docs/AUDIT_3.6.0.md) and [development notes](releases/3.6.0.md).
+
 ## 3.5.0 — Personal Ultimate design 2
 
 Implemented the selected transparent personal HUD with native icons, current Ultimate/native-cost counters, thin progress bars and compact localized states in horizontal and vertical layouts. Raw points remain accurate above the native cost; unknown costs and special bars remain conservative. Overload uses remaining points and a reserve marker, with neutral inactive, gold active, green ready and red stop states. The reminder threshold is not displayed as a skill cost.

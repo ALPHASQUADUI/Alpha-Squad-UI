@@ -201,6 +201,8 @@ function View.SetRows(equipment,external)
         local physical=not external and set.physicalCountKnown==true and Number(set.physicalCount) or nil
         local effective=(front or back) and math.max(front or 0,back or 0) or nil
         local name=Text(set.name,"Set name unavailable")
+        local localization=AlphaSquadUI.Localization
+        if localization and localization.GetNativeName then name=localization.GetNativeName("set",set.id or set.setId,name) end
         local count=effective and ((front and back and "" or "≥")..tostring(effective).."× ") or ""
         local tooltip=name.."\n\n"..L("Front bar: %s set pieces\nBack bar: %s set pieces",front and tostring(front) or L("unknown"),back and tostring(back) or L("unknown"))
             .."\n\n"..L("The headline shows the highest known bar total. Body and jewelry count on both bars; only the weapons on that bar count. A two-handed weapon contributes two set pieces. A proc is not guaranteed active.")
@@ -257,7 +259,7 @@ function View.Create(parent)
     canvas.sets=Panel(canvas,"AlphaSquadBuildSets",278,0,552,124,"SETS")
     canvas.sets.title:SetWidth(374)
     canvas.sets.front=Label(canvas.sets,"AlphaSquadBuildSetFront","FRONT",398,5,60,22,nil,C.muted)
-    canvas.sets.back=Label(canvas.sets,"AlphaSquadBuildSetBack","BACK",478,5,60,22,nil,C.muted)
+    canvas.sets.back=Label(canvas.sets,"AlphaSquadBuildSetBack","BACK WEAPON BAR",478,5,60,22,nil,C.muted)
     canvas.sets.rows={}
     for i=1,14 do
         local row=WINDOW_MANAGER:CreateControl("AlphaSquadBuildSetRow"..i,canvas.sets,CT_CONTROL)
@@ -282,7 +284,7 @@ function View.Create(parent)
     end
     canvas.skills=Panel(canvas,"AlphaSquadBuildSkills",278,136,552,150,"SKILL BARS")
     canvas.skills.bars={}
-    for row,bar in ipairs({{"primary","FRONT"},{"backup","BACK"},{"werewolf","WEREWOLF"}}) do
+    for row,bar in ipairs({{"primary","FRONT"},{"backup","BACK WEAPON BAR"},{"werewolf","WEREWOLF"}}) do
         local group=WINDOW_MANAGER:CreateControl("AlphaSquadBuildBar"..row,canvas.skills,CT_CONTROL)
         At(group,canvas.skills,12,30+(row-1)*62,526,60)
         group.title=Label(group,"AlphaSquadBuildBarTitle"..row,bar[2],0,0,92,44,nil,C.muted)
@@ -488,7 +490,8 @@ function View.Bind(canvas,player,details,status)
     canvas.masteries.empty:SetText(L(masteries.known and (masteries.eligible==false and "Inactive • class requirements" or "No selected masteries") or "Masteries unavailable"))
     for i,tile in ipairs(canvas.masteries.icons) do
         local mastery=selected[i];tile:SetHidden(not mastery)
-        if mastery then Bind(tile,"skill",mastery,Text(mastery.name),"?",masteries.eligible==true and C.gold or C.muted) end
+        if mastery then Bind(tile,"skill",mastery,Text(mastery.name),"?",masteries.eligible==true and C.gold or C.muted)
+        else tile.data=nil end
     end
     local passiveLines={L("Committed class passives")}
     for _,passive in ipairs(masteries.passives or {}) do passiveLines[#passiveLines+1]=Text(passive.name).." • "..Text(passive.lineName,"Class passive")..(Number(passive.rank) and " • "..L("rank %d",passive.rank) or "") end
@@ -520,4 +523,12 @@ function View.Bind(canvas,player,details,status)
     curseTile.value:SetText(curseText);UI.Color(curseTile.value,curse.transformed and C.gold or C.white)
     curseTile.tooltip=L("Vampirism & lycanthropy").."\n\n"..curseText..(curse.kind=="WEREWOLF" and "\n"..L("The werewolf bar is displayed separately; front and back weapon skill bars are preserved.") or "")
     canvas.player=player;canvas.snapshot=details;canvas.playerEvidenceKey=playerEvidenceKey
+end
+
+-- Release pooled item/skill references when sharing is revoked. Rebinding an
+-- empty sheet clears the displayed facts without inspecting or requesting data.
+function View.Clear(canvas)
+    if not canvas then return end
+    View.Bind(canvas,nil,nil)
+    canvas:SetHidden(true)
 end

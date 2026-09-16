@@ -234,4 +234,31 @@ check(setups==1 and frames==1 and nativeTile.icon.texture=='native-combat-backgr
 check(not nativeTile.star.hidden and #nativeTile.starVisuals.interpolators==0 and not nativeTile.star.handlers.OnUpdate,'Native star remains visible without an animation loop')
 V.Bind(canvas,nil,nil)
 check(nativeTile.star.hidden,'Selecting an unknown build clears the previous native star')
+check(canvas.masteries.icons[1].data==nil,'A hidden retired mastery releases its previous inspected skill')
+V.Bind(canvas,player,details)
+canvas.equipment.slots.HEAD.handlers.OnMouseEnter()
+V.Clear(canvas)
+check(canvas.hidden and not canvas.snapshot and not canvas.player and hovered==nil,
+    'Sharing revocation closes the sheet and releases its snapshot, player and tooltip references')
+for _,tile in pairs(canvas.equipment.slots) do
+    check(not tile.data or tile.data.value==nil,'Revoked equipment tiles retain no item-link evidence')
+end
+for _,bar in pairs(canvas.skills.bars) do
+    for _,tile in ipairs(bar.icons) do check(not tile.data or tile.data.value==nil,'Revoked skill tiles retain no shared ability records') end
+end
+for _,tile in ipairs(canvas.masteries.icons) do check(tile.data==nil,'Revoked hidden masteries retain no build records') end
+for _,row in ipairs(canvas.sets.rows) do check(not row.item and not row.tooltip,'Revoked set rows release item records and descriptions') end
+
+-- The selected interface locale controls verified set names without changing
+-- the underlying native item identity or the stored source name.
+AlphaSquadUI.Preferences={sv={},Initialize=function()end}
+dofile('AlphaSquadUI/Core/Localization.lua')
+dofile('AlphaSquadUI/Localization/NativeNames.lua')
+local namedSet={id=768,name='Lucent Echoes',mainCount=5,backCount=5}
+AlphaSquadUI.Localization.SetLanguage('fr')
+check(V.SetRows({complete=true,setList={namedSet}})[1].name=='5× Les Échos lumineux',
+    'French selection uses the verified French native set name on the build sheet')
+AlphaSquadUI.Localization.SetLanguage('en')
+check(V.SetRows({complete=true,setList={namedSet}})[1].name=='5× Lucent Echoes' and namedSet.name=='Lucent Echoes',
+    'English selection restores the same set name without mutating its cached source identity')
 print(string.format('Build visual sheet: %d assertions passed',checks))

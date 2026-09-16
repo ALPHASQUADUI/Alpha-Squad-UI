@@ -201,13 +201,34 @@ function Layout.EndResize()
     Layout.drag=nil
     if drag.handle then drag.handle:SetHandler("OnUpdate",nil) end
     if EVENT_MANAGER and EVENT_GLOBAL_MOUSE_UP then EVENT_MANAGER:UnregisterForEvent("AlphaSquadUI_Layout_Resize",EVENT_GLOBAL_MOUSE_UP) end
+    if drag.move then
+        drag.changed=drag.module.window:GetLeft()~=drag.left or drag.module.window:GetTop()~=drag.top
+    end
     if drag.module.window.StopMovingOrResizing then drag.module.window:StopMovingOrResizing() end
     if drag.changed and drag.module.SavePosition then drag.module:SavePosition() end
     Layout.RefreshToolbar()
 end
+local function RegisterPointerRelease()
+    if EVENT_MANAGER and EVENT_GLOBAL_MOUSE_UP then
+        EVENT_MANAGER:RegisterForEvent("AlphaSquadUI_Layout_Resize",EVENT_GLOBAL_MOUSE_UP,function(_,button)
+            if button==MOUSE_BUTTON_INDEX_LEFT then Layout.EndResize() end
+        end)
+    end
+end
+function Layout.BeginMove(module,surface)
+    if not Layout.IsMoving(module) or not surface or not module.window.StartMoving then return false end
+    Layout.EndResize();Layout.Select(module)
+    if ASUI.Tooltips then ASUI.Tooltips.Hide() end
+    local win=module.window
+    Layout.drag={module=module,handle=surface,move=true,left=win:GetLeft(),top=win:GetTop()}
+    -- ESO owns translation at every UI scale. Only resize needs pointer samples;
+    -- release anywhere and the normal editor cancellation paths stop both kinds.
+    win:StartMoving();RegisterPointerRelease();return true
+end
 function Layout.UpdateResize(mouseX,mouseY)
     local drag=Layout.drag;if not drag then return end
     if not Layout.IsMoving(drag.module) then Layout.EndResize();return end
+    if drag.move then return end
     local x,y=Finite(mouseX),Finite(mouseY)
     if not x or not y then return end
     local dx,dy=x-drag.mouseX,y-drag.mouseY
@@ -272,11 +293,7 @@ function Layout.BeginResize(module,horizontal,vertical,handle)
     handle:SetHandler("OnUpdate",function()
         local currentX,currentY=GetUIMousePosition();Layout.UpdateResize(currentX,currentY)
     end)
-    if EVENT_MANAGER and EVENT_GLOBAL_MOUSE_UP then
-        EVENT_MANAGER:RegisterForEvent("AlphaSquadUI_Layout_Resize",EVENT_GLOBAL_MOUSE_UP,function(_,button)
-            if button==MOUSE_BUTTON_INDEX_LEFT then Layout.EndResize() end
-        end)
-    end
+    RegisterPointerRelease()
     return true
 end
 local handleSpecs={
@@ -309,13 +326,23 @@ function Layout.Attach(module)
         handle:SetHandler("OnMouseExit",function() if ASUI.Tooltips then ASUI.Tooltips.Hide() end end)
         handle:SetHidden(not Layout.IsMoving(module));handles[#handles+1]=handle
     end
-    local surface=win.dragSurface or win.drag or win
-    if surface.GetHandler then
-        local previous=surface:GetHandler("OnMouseDown")
-        surface:SetHandler("OnMouseDown",function(control,...)
-            Layout.Select(module);if previous then return previous(control,...) end
-        end)
+    -- Transparent group rows have mouse-enabled tooltips and no visible header.
+    -- An editor-only hit surface lets every row move the panel, without replacing
+    -- gameplay handlers or putting content above the resize/orientation controls.
+    local surface=WINDOW_MANAGER:CreateControl(nil,win,CT_CONTROL)
+    surface:SetAnchorFill(win);surface:SetMouseEnabled(true)
+    if surface.SetDrawLayer and DL_OVERLAY then surface:SetDrawLayer(DL_OVERLAY) end
+    if surface.SetDrawLevel then surface:SetDrawLevel(180) end
+    surface:SetHandler("OnMouseDown",function(_,button)
+        if button==MOUSE_BUTTON_INDEX_LEFT then Layout.BeginMove(module,surface) end
+    end)
+    local function EndMove()
+        if Layout.drag and Layout.drag.handle==surface then Layout.EndResize() end
     end
+    surface:SetHandler("OnMouseUp",function(_,button) if button==MOUSE_BUTTON_INDEX_LEFT then EndMove() end end)
+    surface:SetHandler("OnHide",EndMove)
+    surface:SetHandler("OnEffectivelyHidden",EndMove)
+    surface:SetHidden(not Layout.IsMoving(module));handles.moveSurface=surface
     if module.SetLayoutOrientation then
         local button=WINDOW_MANAGER:CreateControl(nil,win,CT_CONTROL)
         button:SetDimensions(28,28);button:SetMouseEnabled(true)
@@ -368,6 +395,7 @@ function Layout.Refresh()
         RefreshModule(module)
         local handles=Layout.IsMoving(module) and Layout.Attach(module) or Layout.attachments[module]
         for _,handle in ipairs(handles or {}) do handle:SetHidden(not Layout.IsMoving(module)) end
+        if handles and handles.moveSurface then handles.moveSurface:SetHidden(not Layout.IsMoving(module)) end
         Layout.RefreshOrientation(module)
     end
     Layout.RefreshToolbar()
@@ -388,14 +416,17 @@ function Layout.RefreshToolbar()
     local backgroundEnabled=module and module.layoutBackground~=false
     if toolbar.opacity.SetEnabled then toolbar.opacity:SetEnabled(backgroundEnabled==true) end
     if toolbar.opacityPlus.SetEnabled then toolbar.opacityPlus:SetEnabled(backgroundEnabled==true) end
+    toolbar.opacity:SetHidden(backgroundEnabled~=true)
+    toolbar.opacityPlus:SetHidden(backgroundEnabled~=true)
     for _,participant in ipairs(Modules()) do Layout.RefreshOrientation(participant) end
     local preview=ASUI.Preview;local mode=preview and preview.GetMode and preview.GetMode() or "mixed"
     local names={mixed="EXAMPLES: MIXED",ready="EXAMPLES: READY",missing="EXAMPLES: MISSING",overload="EXAMPLES: OVERLOAD",live="LIVE DATA"}
     Text(toolbar.preview,L(names[mode] or names.mixed))
     local rootW,rootH=RootSize()
     local format=rootW>=644 and "wide" or rootW>=624 and "compact" or "narrow"
-    if toolbar.layoutFormat~=format then
+    if toolbar.layoutFormat~=format or toolbar.layoutBackground~=backgroundEnabled then
         toolbar.layoutFormat=format
+        toolbar.layoutBackground=backgroundEnabled
         local function PlaceControl(control,x,y,width)
             if not control then return end
             control:ClearAnchors();control:SetAnchor(TOPLEFT,toolbar,TOPLEFT,x,y);control:SetWidth(width)
@@ -405,6 +436,7 @@ function Layout.RefreshToolbar()
             toolbar.layoutWidth,toolbar.layoutHeight=TOOLBAR_WIDTH,TOOLBAR_HEIGHT
             positions={selection={14,10,188},preview={210,10,260},done={478,10,128},
                 size={14,48,128},sizePlus={146,48,30},opacity={184,48,184},opacityPlus={372,48,30},reset={410,48,112},fit={530,48,76}}
+            if not backgroundEnabled then positions.reset={184,48,112};positions.fit={304,48,76} end
         elseif format=="compact" then
             toolbar.layoutWidth,toolbar.layoutHeight=600,158
             positions={selection={14,10,396},done={424,10,162},preview={14,48,218},
@@ -468,6 +500,8 @@ function Layout.Finish(skipRefresh,restoreOrigin)
         if module.SavePosition then module:SavePosition() end
         if module.sv then module.sv.locked=true end
         for _,handle in ipairs(Layout.attachments[module] or {}) do handle:SetHidden(true) end
+        local handles=Layout.attachments[module]
+        if handles and handles.moveSurface then handles.moveSurface:SetHidden(true) end
         Layout.RefreshOrientation(module)
     end
     if ASUI.Tooltips then ASUI.Tooltips.Hide() end

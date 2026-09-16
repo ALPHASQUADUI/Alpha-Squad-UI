@@ -32,6 +32,10 @@ check(has(117805,'major_breach'),'Unnerving morph grants its separate Major Brea
 check(not has(115252,'major_breach'),'Base Boneyard does not inherit morph-exclusive Breach')
 check(has(17874,'group_shield'),'Magma Shell is a group-shield source')
 check(not has(17878,'group_shield','Magma Shell'),'Corrosive Armor cannot inherit Magma Shell shield')
+check(has(28988,'dragonknight_standard') and has(32947,'dragonknight_standard'),
+    'Base Standard and Standard of Might supply their actual U49 group bonus')
+check(not has(32958,'dragonknight_standard','Shifting Standard'),
+    'Shifting Standard retains damage and Defile without inheriting the group bonus')
 check(has(26858,'resource_synergy'),'Luminous Shards has its correct ID')
 local blazing=C:FindSkillSources(26869,'Luminous Shards')
 check(#blazing==1 and blazing[1].label=='Blazing Spear','Native Blazing Spear is labelled accurately rather than another morph')

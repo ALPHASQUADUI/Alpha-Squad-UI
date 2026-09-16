@@ -2,16 +2,16 @@
 
 A modular **The Elder Scrolls Online** addon by **@SeRuM1** for group preparation, visual build inspection and Ultimate tracking.
 
-Version **3.5.0** is a development candidate implementing the selected personal Ultimate design: native icons, point counters, thin progress bars and reversible replacement of the native Ultimate slot. Native ESO retesting and formal reservation/coexistence validation of the build transport remain outstanding; development pushes do not publish a release.
+Version **3.6.0** is a development candidate improving HUD placement, language selection and raid Ultimate coordination. Personal tracking leaves ESO's action bar untouched. Native ESO acceptance and formal transport reservation/coexistence validation remain outstanding; development pushes do not publish a release.
 
-[Website](https://alphasquadeso.com/) · [Releases](https://github.com/ALPHASQUADUI/Alpha-Squad-UI/releases) · [Changelog](CHANGELOG.md) · [Downloads and installation](releases/README.md) · [Security](SECURITY.md) · [Current development audit](docs/AUDIT_3.4.0.md)
+[Website](https://alphasquadeso.com/) · [Releases](https://github.com/ALPHASQUADUI/Alpha-Squad-UI/releases) · [Changelog](CHANGELOG.md) · [Downloads and installation](releases/README.md) · [Security](SECURITY.md) · [Current development audit](docs/AUDIT_3.6.0.md)
 
 ## Get started
 
 1. Install the `AlphaSquadUI` folder in ESO's `live/AddOns` directory and enable it in the Add-Ons menu.
 2. Open **Settings → Ąlpha Şquad UI** in keyboard or gamepad mode, or use `/asui`.
-3. In **Dashboard**, choose **ULT Tracker** and **Support Coverage**, then pick a **Language** and **Interface Style**. Automatic language follows ESO English/French; other game languages use English. Tracking starts enabled; you can switch either module off.
-4. Open **Libraries** to check dependencies and sharing. New installations start sharing **OFF**. Enable only the categories you want to share with your current group; existing saved choices are preserved.
+3. In **Dashboard**, choose **ULT Tracker** and **Support Coverage**, then pick a **Language** and **Interface Style**. The initial language matches an English/French client; other client languages default to English. Tracking starts enabled; you can switch either module off.
+4. Open **Libraries** to check dependencies and sharing. New installations start build, Ultimate and set sharing **OFF**. Enable only the categories you want to share with your current group; existing saved choices are preserved.
 5. Use **MOVE HUD** to arrange your panels. Drag to move, drag a corner to resize, then choose **DONE**. Horizontal/vertical layouts and example states help you place panels while solo.
 6. Open **Support Coverage → Builds** or **Coverage** to prepare your group.
 
@@ -27,13 +27,13 @@ Settings adapt their cards and navigation to the available screen width while pr
 
 ## Language and personal Ultimate HUD
 
-Dashboard offers **Automatic**, **English** and **French**. Automatic follows the game language; the explicit choice is saved account-wide and updates addon windows without reloading. Game-supplied names and native tooltip descriptions stay in the client language; the selector does not change ESO itself or translate player names.
+Dashboard offers **English** and **French**. The first supported game language seeds this saved account-wide choice; unsupported client languages default to English. There is no separate Automatic or Game language option. Changing the selection updates addon windows without reloading. Verified name mappings cover supported game catalog entries; unresolved names and full native tooltips remain supplied by ESO in its client language. The selector does not change ESO itself, item links or player names.
 
-The selected personal HUD shows both normal weapon-bar Ultimates as compact rows, placed side by side or stacked. Each native icon has a current-points/native-cost counter, a thin progress bar and a short localized state. Raw points remain visible above the cost; the bar stops at full. Unknown costs show **?**, and empty slots never claim readiness. A green chevron immediately left of the active slot identifies the current weapon bar; the other slot is dimmed. The HUD has no background, Ultimate names or repeated headers, and no AUTO/FRONT/BACK/BOTH selector. Special bars show their actual native Ultimate without falsely marking a normal weapon bar active.
+The selected personal HUD shows both normal weapon-bar Ultimates as compact rows, placed side by side or stacked. Each native icon has a current-points/native-cost counter, a thin progress bar and a short localized state. Raw points remain visible above the cost; the bar stops at full. Unknown costs show **?**, and empty slots never claim readiness. A smooth green arrow immediately left of the active slot identifies the current weapon bar; the other slot is dimmed. The HUD has no background, Ultimate names or repeated headers, and no AUTO/FRONT/BACK/BOTH selector. Special bars show their actual native Ultimate without falsely marking a normal weapon bar active.
 
 Optional Overload shows actual remaining Ultimate points and a reserve marker. Its ready reminder is not an activation cost. **INACTIVE** is neutral, **ACTIVE** gold, **READY** pulses green and **STOP** pulses red; the addon never activates or cancels a skill for you. The French states are **INACTIF**, **ACTIF**, **PRÊT** and **STOP**.
 
-While the enabled personal HUD is visible in gameplay, its display replaces the native Ultimate button visually. Turn **Show personal HUD** OFF, hide the personal tracker or disable ULT Tracker to restore the game's slot. Group tracking can remain enabled when personal visibility is OFF. Menus, loading and MOVE HUD also release the replacement. The Ultimate keybind still casts normally; other action buttons and sharing preferences are unchanged.
+The personal HUD never hides, restyles or disables ESO's Ultimate button. Its opacity, mouse handling and presentation remain owned by ESO and any installed action-bar addons. Group tracking can remain enabled when personal visibility is OFF. Ultimate casting and sharing preferences remain independent.
 
 ## Choose your style
 
@@ -51,12 +51,12 @@ Styles change immediately without a reload. Readiness colors, item quality and C
 
 Click **MOVE HUD** in the settings sidebar or a movable module page, or enter `/asmove` outside combat. It opens over the normal game view, including the action bar. Select the panel you want to arrange, then:
 
-- Drag the panel to move it.
+- Drag anywhere inside the selected panel to move it, including over its rows and icons.
 - Drag a **corner** to scale the whole panel proportionally.
 - Drag an **edge** to change its shape; the contents rearrange and icons stay square.
 - Use the orientation icon beside a personal or Group Ultimate panel to switch **HORIZONTAL / VERTICAL**. Resizing preserves this choice; it never switches layout unexpectedly at a width threshold.
 - Keep the example states while arranging panels, or choose **Live** to see your current group. Group examples contain twelve fictional accounts; they never affect tracking or sharing.
-- **Size** changes the whole panel. **Background** adjusts supported panel surfaces without fading icons or text; transparent Ultimate HUDs have no background to adjust. **Reset panel** and **Fit** recover a misplaced panel.
+- **Size** changes the whole panel. **Background** is shown only for supported panel surfaces and does not fade icons or text. **Reset panel** and **Fit** recover a misplaced panel.
 
 **DONE** or Back/Escape saves and locks the panels, then returns to the native game Settings with Alpha Squad selected. Combat, loading or another game menu ends placement without reopening settings. The normal HUD/cursor-mode transition keeps placement active.
 
@@ -142,11 +142,13 @@ The personal Ultimate HUD handles normal Ultimates and optional Overload behavio
 - A green marker identifies the verified active bar; the inactive slot is dimmed.
 - Normal slots show actual Ultimate points, their verified native cost and a clamped progress bar.
 - Overload shows remaining points and a reserve marker in the same compact view.
-- The native Ultimate slot returns whenever the personal replacement is disabled or hidden.
+- ESO's native Ultimate slot stays under native/other-addon control in every tracking state.
 
 The former AUTO/FRONT/BACK/BOTH selectors are retired. **ULT Tracker → OVERLOAD SETTINGS** controls reserve warnings, the ready reminder and the PvP preference. Turn **Use Overload behavior** OFF to retain standard Ultimate tracking. **Warning starts** sets the low-reserve alert threshold. Alerts do not stop Overload: activation and stopping stay under your control through your Ultimate binding. Automatic cancellation and its obsolete settings have been removed.
 
-Use the single **Group tracking** switch in **ULT Tracker → Group Ultimates** to enable or disable the group view. **CONFIGURE** selects which shared Ultimates to follow. The group view shows teammates, sorts ready players first and dims recent spends; your own Ultimate remains in the personal HUD. Repeated copies of the same Ultimate use the lowest verified reported cost; rounded percentages never display 100% before readiness. There are no separate group HUD visibility, self-tracking or group ready-sound switches. Group tracking and library sharing remain independent of the personal display mode.
+Use **Group tracking** in **ULT Tracker → Group Ultimates** to enable or disable the teammate view. **CONFIGURE** offers a curated catalog of raid support Ultimate families rather than every reported offensive Ultimate; verified morphs match their family while the row keeps the reported skill icon and cost. Cryptcanon's dedicated Ultimate is included. Ready players sort first and recent spends are dimmed; your own Ultimate stays in the personal HUD. Rounded percentages never reach 100% before the verified cost. A small food status before each account distinguishes known active, known absent and unknown information.
+
+The crowned group leader selects the **Raid leader** from current group accounts. The designated raid leader controls the shared Ultimate filters; other grouped players see the authoritative selection and an explanation if they try to change it. Settings synchronization requires compatible participating clients and LibGroupBroadcast. It uses a separate settings-only protocol and respects its native OFF setting; it does not enable build or Ultimate sharing. See the [ULT Tracker guide](AlphaSquadUI/Modules/ULTTracker/README.md) for unavailable-data and synchronization limits.
 
 While a transformation or another special action bar is active, the personal HUD uses that native bar's actual Ultimate, morph, icon and cost without falsely marking an ordinary weapon bar active. Native remaining-effect time can identify an active timed Ultimate. The ordinary front/back state returns afterward. Group tracking accepts the actual Ultimate identities reported by LibGroupCombatStats, including transformation Ultimates; that library does not independently report a teammate's transformed action bar or active transformation state.
 
@@ -170,6 +172,6 @@ Open **About** for the Alpha Squad website, ESOUI, release notes and the **JOIN 
 
 Shared snapshots are bounded reports from compatible senders, not proof against a modified client. Invalid or contradictory equipment data cannot certify a complete build, and unknown fields remain unknown. The addon never executes received code or automatically equips items, consumes potions or posts group messages.
 
-See the [3.5.0 development notes](releases/3.5.0.md), [architecture](docs/ARCHITECTURE.md), [performance](docs/PERFORMANCE.md), [client acceptance](docs/CLIENT_ACCEPTANCE.md) and [contributing](CONTRIBUTING.md) for technical details. Screenshots and bug reports should omit private chats, unrelated account information and SavedVariables containing group data.
+See the [3.6.0 development notes](releases/3.6.0.md), [architecture](docs/ARCHITECTURE.md), [performance](docs/PERFORMANCE.md), [client acceptance](docs/CLIENT_ACCEPTANCE.md) and [contributing](CONTRIBUTING.md) for technical details. Screenshots and bug reports should omit private chats, unrelated account information and SavedVariables containing group data.
 
 The addon code is available under the [MIT license](LICENSE). ESO artwork and third-party libraries retain their respective ownership and licenses.

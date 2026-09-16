@@ -17,7 +17,7 @@ Dashboard theme and language selectors allocate one uniquely named native dropdo
 
 ## Personal ULT and Overload
 
-Design 2 reuses the existing two slot views for icons, numeric counters, thin progress bars and localized states. Raw points and native costs remain data; only the visual fill clamps to its range. Overload reserve and reminder presentation uses the same resource state, not an extra scanner or HUD. Language changes refresh presentation without a build scan or placement reset. Native Ultimate-button replacement follows the existing personal visibility lifecycle and does not alter the game's casting path. Native keyboard/gamepad coexistence and frame time remain unmeasured until client acceptance.
+Design 2 reuses two slot views for icons, counters, thin progress bars and localized states. Raw points and native costs remain data; only the fill clamps to its range. Overload shares the same resource state rather than another scanner or HUD. Language changes use cached presentation. Version 3.6.0 removes all native Ultimate-button presentation hooks and writes. A single native texture per arrow replaces eighteen scanline child controls across both cards. Hidden refreshes no longer rewrite stopped progress widths. These reductions are deterministic work counts, not measured native frame-time gains.
 
 Native events drive shared personal slot/resource changes and relevant Overload effects. A single 1.5-second fallback refresh runs only while the personal tracker is enabled, visible and unobscured. READY, reserve and reminder animation runs only while visible and needed. Overload uses the same HUD, resource state and lifecycle; it has no separate recovery heartbeat.
 
@@ -32,6 +32,8 @@ LibGroupCombatStats is subscribed for **ULT only**. An incoming player update ch
 The group view excludes the local player and retains no group-ready-sound callback. The HUD reuses up to twelve player rows, including the twelve-player placement sample. Horizontal and vertical presentations reuse the same pool. READY animation stops when no visible row requires it, and placement samples do not start gameplay alerts.
 
 Group row geometry is cached separately from charge/readiness painting. The configured row size does not stretch when fewer players match; the live frame contracts while retaining the requested full-roster dimensions for placement. Sorting and resource changes reuse existing geometry when its signature is unchanged.
+
+The support-family catalog is bounded to nineteen families. Food markers reuse existing identity-checked readiness evidence; they add no scans, network messages or heartbeat. Missing, expired or older-than-75-second evidence renders unknown. Raid settings use a separate compact protocol with bounded context/revision checks and coalesced sends. It pauses during combat/loading, respects native OFF, and never transports builds or starts Ultimate sharing. Actual multiplayer latency and coexistence require native measurement.
 
 ## Support Coverage
 
@@ -68,11 +70,11 @@ LibSetDetection receipts belong to an uninterrupted group session rather than th
 
 The Coverage grid creates its controls once and reanchors them for filtering or viewport changes. A fixed single page replaces tall repeated provider rows; contributor descriptions are assembled on hover. Dense rows fit native icons inside their own hit area. Set-bonus thresholds use a bounded cache of 256 successful native lookups. Successful native effect and set previews are cached; unavailable artwork uses an identified category symbol, without treating a missing lookup as verified identity.
 
-Global MOVE HUD is a short-lived placement state without an idle heartbeat. Its entry waits on the existing scene lifecycle callback; repeated clicks cannot queue multiple editors. Normal HUD/cursor-mode changes retain the editor, while combat/loading and unrelated menus cancel it. Only Dashboard-enabled modules participate. A mouse-position callback exists only during an active drag and stops on release or cancellation. Unchanged pointer positions do no layout work. Corners change only the native parent scale; edge changes reflow the logical dimensions. Both paths keep the opposite edge fixed and avoid applying scale twice. Cached logical canvas sizes also prevent repeated scaled inspector refreshes from shrinking the build sheet.
+Global MOVE HUD is a short-lived placement state without an idle heartbeat. Its entry waits on the existing scene lifecycle callback; repeated clicks cannot queue multiple editors. Normal HUD/cursor-mode changes retain the editor, while combat/loading and unrelated menus cancel it. Only Dashboard-enabled modules participate. A foreground body surface uses native move handling so child rows/icons cannot intercept panel dragging; body movement adds no frame poll. Active resize handling stops on release or cancellation, and unchanged pointer positions do no layout work. Corners change native parent scale; edge changes reflow logical dimensions. Both preserve the opposite edge without applying scale twice. Transparent panels omit irrelevant background controls.
 
 `Core/Preview.lua` stores only the selected presentation mode. Personal, group and Support renderers cache their sample tables by mode and consume them only during placement. Switching samples performs no scan, build request or send, and sample rows never enter live evidence. Placement previews suspend normal alert animation work and preserve normal visibility settings; closing saves and locks the panels. Personal ULT and Overload share one HUD, with cached slot state choosing the display and no extra skill scan.
 
-New sharing categories start OFF until explicitly enabled, and actual native library states remain authoritative afterward. Missing libraries and unsupported controls do not trigger polling or repeated navigation. Sharing controls do not create a second library-settings window.
+New build, Ultimate and set sharing categories start OFF until explicitly enabled, and actual native library states remain authoritative afterward. Missing libraries and unsupported controls do not trigger polling or repeated navigation. Sharing controls do not create a second library-settings window.
 
 ## Input ownership
 

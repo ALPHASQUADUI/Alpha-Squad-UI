@@ -306,9 +306,13 @@ local function OnChunk(sc,tag,data)
     snapshot.scannedAt=sc.NowMs();snapshot.connected=sc:IsOnline(tag);snapshot.dead=IsUnitDead and IsUnitDead(tag) or false
     peer.fullBuild=snapshot;peer.fullBuildAt=sc.NowMs();peer.fullBuildFingerprint=fingerprint
     -- Keep the latest summary identity; never overwrite a newer advertisement.
-    peer.asui=true;peer.buildVerified=true;peer.scannedAt=sc.NowMs()
+    -- Detail completion is not a new food/readiness heartbeat. Preserve the
+    -- summary timestamp and its latest food fact; a slow build transfer must
+    -- not extend the lifetime of that separate observation.
+    peer.asui=true;peer.buildVerified=true
     peer.capabilities=snapshot.capabilities;peer.equipment=snapshot.equipment;peer.skills=snapshot.skills
-    peer.masteries=snapshot.masteries;peer.curse=snapshot.curse;peer.food=snapshot.food;peer.potion=snapshot.potion
+    peer.masteries=snapshot.masteries;peer.curse=snapshot.curse
+    peer.food=peer.summaryFood or snapshot.food;peer.potion=snapshot.potion
     peer.dataQuality="SHARED BUILD";sc.peerData[pending.key]=peer
     sc.share.buildStatus="Shared build — captured before combat"
     sc:ScheduleRefresh("received complete build",100)

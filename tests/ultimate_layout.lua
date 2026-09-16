@@ -7,7 +7,7 @@ local function Control(name,parent)
  function c:SetDimensions(w,h) self.geometryWrites=(self.geometryWrites or 0)+1;self.width=w;self.height=h end
  function c:GetWidth() return self.width*self.scale end
  function c:GetHeight() return self.height*self.scale end
- function c:SetWidth(w) self.width=w end
+ function c:SetWidth(w) self.widthWrites=(self.widthWrites or 0)+1;self.width=w end
  function c:SetHeight(h) self.height=h end
  function c:SetScale(value) self.scale=value end
  function c:GetScale() return self.scale end
@@ -65,7 +65,16 @@ assert(loadfile("AlphaSquadUI/Modules/ULTTracker/ULTTracker.lua"))()
 assert(loadfile("AlphaSquadUI/Modules/ULTTracker/ULTOverload.lua"))()
 assert(loadfile("AlphaSquadUI/Modules/ULTTracker/ULTTrackerUI.lua"))()
 local ULT=AlphaSquadUI.Modules.ULTTracker
+local nativeAccesses=0
+local function NativeAccess()
+ nativeAccesses=nativeAccesses+1;error("Personal HUD initialization must not access native action-bar controls")
+end
+ZO_ActionBar1={}
+ActionButton8=setmetatable({},{__index=NativeAccess})
+ActionBarTimer8=setmetatable({},{__index=NativeAccess})
+SecurePostHook=NativeAccess
 ULT:Initialize();ULT.uiObscured=false;ULT:Refresh("initial")
+check(nativeAccesses==0,"Initialization and first render leave native action-bar presentation fully independent")
 check(windows==1 and attached==1,"ULT and specialized Overload create and attach exactly one personal HUD")
 check(not ULT.window.cards.primary:IsHidden() and not ULT.window.cards.backup:IsHidden(),"Both native weapon ultimates remain visible even with Overload on the other bar")
 check(ULT.window.width==316 and ULT.window.height==48,"Design 2 starts with two compact horizontal minirows")
@@ -88,6 +97,14 @@ check(ULT.window.width==316 and first.valueLabel.width>=86 and first.statusLabel
 ULT.sv.hudWidth=nil;ULT.sv.hudHeight=nil;ULT:RefreshHUD()
 check(not ULT.window.bg and not ULT.window.brand and not ULT.window.cards.primary.nameLabel,"The gameplay HUD has no panel background, branding or skill names")
 check(not ULT.window.cards.primary.activeArrow.hidden and ULT.window.cards.backup.activeArrow.hidden,"The green arrow identifies the active native weapon bar")
+check(first.activeArrow.texture=="EsoUI/Art/Buttons/rightArrow_up.dds"
+    and first.activeArrow.width==16 and first.activeArrow.height==24,
+    "The active bar uses one larger native arrow texture instead of pixel scanlines")
+check(not controls.AlphaSquadULTTracker_primary_Arrow0 and not controls.AlphaSquadULTTracker_backup_Arrow0,
+    "The smoother marker avoids eighteen extra line controls")
+check(first.iconBorder.x-first.activeArrow.width-4>=0
+    and first.valueLabel.x>=first.iconBorder.x+first.iconBorder.width,
+    "The larger marker fits inside the row without overlapping the icon or value")
 check(ULT.window.cards.primary.alpha==1 and ULT.window.cards.backup.alpha==0.52,"The inactive weapon icon is visibly dimmed")
 activeCategory=HOTBAR_CATEGORY_BACKUP;ULT:Refresh("bar swap")
 check(ULT.window.cards.primary.activeArrow.hidden and not ULT.window.cards.backup.activeArrow.hidden and ULT.window.cards.backup.alpha==1,"Swapping bars moves the arrow and full opacity together")
@@ -192,9 +209,12 @@ local renderCard=ULT.RefreshCard
 ULT.RefreshCard=function(self,...) cardUpdates=cardUpdates+1;return renderCard(self,...) end
 ULT:SetVisible(false)
 cardUpdates=0
+local hiddenProgressWrites=(ULT.window.cards.primary.progress.widthWrites or 0)+(ULT.window.cards.backup.progress.widthWrites or 0)
 ULT:Refresh("power",173)
 check(cardUpdates==0 and ULT.currentUltimate==173 and ULT.hudDirty,
     "A hidden personal HUD keeps current resources without updating its cards")
+check((ULT.window.cards.primary.progress.widthWrites or 0)+(ULT.window.cards.backup.progress.widthWrites or 0)==hiddenProgressWrites,
+    "Repeated hidden refreshes do not rewrite already stopped progress geometry")
 ULT:SetVisible(true)
 check(cardUpdates>0 and not ULT.hudDirty and not ULT.window:IsHidden(),
     "Showing the personal HUD flushes its deferred presentation")

@@ -45,15 +45,10 @@ local function CreateCard(parent,key)
     card.readyGlow:SetTexture("EsoUI/Art/ActionBar/abilityFrame64_up.dds")
     card.readyGlow:SetDrawLayer(DL_OVERLAY)
     card.readyGlow:SetColor(0,0,0,0)
-    card.activeArrow=WINDOW_MANAGER:CreateControl(prefix.."_ActiveArrow",card,CT_CONTROL)
-    card.activeArrow:SetDimensions(12,18)
-    -- Small chevron built from nine static scanlines: no external texture,
-    -- uncertain asset path, rotation support or recurring animation required.
-    for row=0,8 do
-        local inset=4-math.abs(row-4)
-        local line=Texture(prefix.."_Arrow"..row,card.activeArrow,5,2,COLORS.green)
-        line:SetAnchor(TOPLEFT,card.activeArrow,TOPLEFT,inset*1.75,row*2)
-    end
+    -- ESO's native navigation arrow has smooth edges and needs only one control.
+    -- Its wider, taller silhouette remains legible at the compact HUD size.
+    card.activeArrow=Texture(prefix.."_ActiveArrow",card,16,24,COLORS.green)
+    card.activeArrow:SetTexture("EsoUI/Art/Buttons/rightArrow_up.dds")
     card.progressBG=Texture(prefix.."_ProgressBG",card,52,3,{0.06,0.07,0.08,0.65})
     card.progress=Texture(prefix.."_Progress",card,0,3,COLORS.cyan)
     card.progress:SetAnchor(LEFT,card.progressBG,LEFT,0,0)
@@ -164,7 +159,7 @@ function ULT:ApplyLayout()
                 local top=math.max(0,(cardH-icon-2)/2)
                 local detailLeft=icon+26
                 local detailWidth=cardW-detailLeft
-                card.iconBorder:ClearAnchors();card.iconBorder:SetAnchor(TOPLEFT,card,TOPLEFT,16,top)
+                card.iconBorder:ClearAnchors();card.iconBorder:SetAnchor(TOPLEFT,card,TOPLEFT,20,top)
                 card.iconBorder:SetDimensions(icon+2,icon+2)
                 card.icon:SetDimensions(icon,icon);card.readyGlow:SetDimensions(icon+4,icon+4)
                 card.activeArrow:ClearAnchors();card.activeArrow:SetAnchor(RIGHT,card.iconBorder,LEFT,-4,0)
@@ -190,12 +185,13 @@ end
 -- A bounded 180 ms interpolation only runs when a visible charging bar increases.
 -- Spending, missing costs, slot changes and readiness transitions snap immediately.
 function ULT:StopProgressAnimation()
-    if self.window and self.progressRunning then self.window:SetHandler("OnUpdate",nil) end
+    if not self.progressRunning then return end
+    if self.window then self.window:SetHandler("OnUpdate",nil) end
     self.progressRunning=false
     if self.window and self.window.cards then
         for _,card in pairs(self.window.cards) do
-            card.progressStarted=nil
-            if card.progressTarget then
+            if card.progressStarted and card.progressTarget then
+                card.progressStarted=nil
                 card.progressValue=card.progressTarget
                 card.progress:SetWidth((card.progressWidth or 0)*card.progressValue)
             end
@@ -296,10 +292,7 @@ function ULT:UpdateLockState()
 end
 
 function ULT:ApplyVisibility()
-    if not self.window or not self.sv then
-        if self.NativeUI then self.NativeUI:Restore() end
-        return
-    end
+    if not self.window or not self.sv then return end
 
     local settingsVisible = self.settingsWindow and not self.settingsWindow:IsHidden() or false
     local sharedSettings = AlphaSquadUI and AlphaSquadUI.Settings and AlphaSquadUI.Settings.mainWindow
@@ -326,8 +319,6 @@ function ULT:ApplyVisibility()
     else
         self:SetFlashUpdate(self:NeedsPulse() and not moving)
     end
-    if self.NativeUI then self.NativeUI:Refresh() end
-
     if self.Group and self.Group.ApplyVisibility then
         self.Group:ApplyVisibility()
     end

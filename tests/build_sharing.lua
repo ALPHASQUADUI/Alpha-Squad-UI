@@ -431,6 +431,47 @@ for _,reason in ipairs({"sharing","experimental","disband","combat"}) do
     check(alice.SC.peerData["@Bob"]==before,"Blocked states reject incoming summaries: "..reason)
 end
 
+-- Revocation cannot depend on a future repaint: both combat and a disabled
+-- tracking module can keep cached roster/control wrappers alive indefinitely.
+for _,state in ipairs({"combat","disabled"}) do
+    ResetWorld();alice,bob=NewClient("@Alice"),NewClient("@Bob")
+    PrimeSummary(alice,bob)
+    local sc=alice.SC
+    local ownSnapshot,nativeReceipts=sc.localSnapshot,{marker="native receipt"}
+    sc.externalSetReceipts=nativeReceipts
+    local remote=sc.peerData["@Bob"]
+    sc.roster={remote};sc.byKey={["@Bob"]=remote};sc.coverage={entries={{owners={remote}}}}
+    local function CachedRow()
+        return {data={owners={remote}},player=remote,playerKey="@Bob",characterName=remote.characterName,
+            SetHidden=function(self,value) self.hidden=value end}
+    end
+    local inspectorRow,matrixRow,contributorRow,hudRow=CachedRow(),CachedRow(),CachedRow(),CachedRow()
+    sc.inspectorWindow={playerList={rows={inspectorRow}},buildSheet={snapshot=remote,player=remote}}
+    sc.matrixWindow={list={rows={matrixRow}}};sc.contributorWindow={rows={contributorRow}}
+    sc.window={list={rows={hudRow}}}
+    function sc:CloseInspector() self.inspectorWindow.hidden=true end
+    function sc:CloseMatrix() self.matrixWindow.hidden=true end
+    function sc:CloseContributorPicker() self.contributorWindow.hidden=true end
+    sc.BuildView={Clear=function(canvas) canvas.snapshot=nil;canvas.player=nil;canvas.hidden=true end}
+    sc.inspectorPlayerKey="@Bob";sc.inspectorRequestKey="@Bob";sc.inspectorRequestError="private status"
+    sc.contributorEffectKey="major_courage"
+    if state=="combat" then sc.inCombat=true else sc.sv.enabled=false end
+    sc:SetShareData(false)
+    check(next(sc.peerData)==nil and next(sc.roster)==nil and next(sc.byKey)==nil and next(sc.coverage)==nil,
+        "Sharing OFF immediately drops peer-derived view caches while "..state)
+    for _,row in ipairs({inspectorRow,matrixRow,contributorRow,hudRow}) do
+        check(row.hidden and not row.data and not row.player and not row.playerKey and not row.characterName,
+            "Pooled rows cannot keep revoked build references while "..state)
+    end
+    check(sc.inspectorWindow.hidden and sc.matrixWindow.hidden and sc.contributorWindow.hidden
+        and not sc.inspectorWindow.buildSheet.snapshot and not sc.inspectorWindow.buildSheet.player,
+        "Remote inspectors close and discard their retained sheet while "..state)
+    check(not sc.inspectorPlayerKey and not sc.inspectorRequestKey and not sc.inspectorRequestError and not sc.contributorEffectKey,
+        "Revocation clears selections and pending inspection messages while "..state)
+    check(sc.localSnapshot==ownSnapshot and sc.externalSetReceipts==nativeReceipts and sc.sv.experimentalSharing==true,
+        "Revocation preserves local data, native receipts and other explicit options while "..state)
+end
+
 -- Lost traffic fails closed; a request timeout never exposes a partially decoded build.
 ResetWorld();alice,bob=NewClient("@Alice"),NewClient("@Bob")
 assert(alice.SC:RequestPlayerBuild("@Bob"));frames={};Advance(20050)
@@ -602,6 +643,26 @@ alice.SC:OnPeerShareData("group2",recovered)
 check(alice.SC.peerData["@Bob"].supportScore==25,"A rate-limited peer recovers on the next bounded window")
 members={"@Alice","@Carol"};alice.SC:PrunePeerSharingData()
 check(alice.SC.share.receiveBudgets["@Bob"]==nil,"Departed identities cannot accumulate receive budget entries")
+
+-- Receiving an older detailed capture must not refresh independent summary facts.
+ResetWorld();alice,bob=NewClient("@Alice"),NewClient("@Bob")
+PrimeSummary(alice,bob)
+local foodSummary=alice.SC.peerData["@Bob"].summaryFood
+local observedAt=alice.SC.peerData["@Bob"].scannedAt
+assert(alice.SC:RequestPlayerBuild("@Bob"))
+local delayedRevision=alice.SC.share.incomingBuild.revision
+local delayedBody=assert(bob.SC.BuildCodec.Encode(bob.SC.localSnapshot))
+Advance(10000)
+ReceiveBody(alice,bob,delayedBody,delayedRevision)
+local delayedPeer=alice.SC.peerData["@Bob"]
+check(delayedPeer.fullBuild~=nil and delayedPeer.fullBuildAt==now,
+    "The delayed capture retains its separate detail completion time")
+check(delayedPeer.scannedAt==observedAt and delayedPeer.food==foodSummary,
+    "Detail completion neither dates an old food observation anew nor replaces the latest summary fact")
+Advance(65001)
+local delayedBuild,delayedStatus=alice.SC:GetPlayerBuildDetails("@Bob")
+check(not delayedBuild and delayedStatus=="Waiting for a fresh build summary from this player.",
+    "Summary freshness expires from the last actual heartbeat even after a detailed transfer")
 
 -- Validation still precedes all response traffic, even with prepared bodies.
 for _,nativeOff in ipairs({510,507}) do

@@ -800,7 +800,9 @@ AddSkill({26807}, "Radiant Aura", {"minor_intellect","minor_endurance","minor_fo
 AddSkill({26858}, "Luminous Shards", {"resource_synergy"}, "The intended ally must activate the Shards synergy.")
 AddSkill({26869}, "Blazing Spear", {"resource_synergy"}, "The intended ally must activate Blessed Shards to restore the appropriate resource.")
 AddSkill({42038}, "Energy Orb", {"resource_synergy"}, "An ally must activate the resource synergy.")
-AddSkill({28988,32958,32947}, "Dragonknight Standard", {"dragonknight_standard"}, "Allies must remain inside the standard's area.")
+-- U49 preserved Shifting Standard's damage/Defile behavior; it does not grant
+-- the base/Standard of Might group damage bonus and reduction.
+AddSkill({28988,32947}, "Dragonknight Standard", {"dragonknight_standard"}, "Allies must remain inside the standard's area.")
 AddSkill({17874}, "Magma Shell", {"group_shield"}, "Cast near the intended allies; the wearer's damage cap is personal.")
 AddSkill({29071,29224,32673}, "Obsidian Shield", {"group_shield"}, "The shield affects nearby allies; Major Mending is for the caster.")
 AddSkill({38571,40232,40234}, "Purge", {"group_cleanse"}, "Removes eligible negative effects from nearby group members.")

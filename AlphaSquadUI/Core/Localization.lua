@@ -1,16 +1,35 @@
--- Addon-owned text only. Native ability/item names and player data stay untouched.
+-- Addon presentation and verified game names only; source data stays untouched.
 local ASUI = AlphaSquadUI
 local Localization = { dictionaries = {}, bindings = setmetatable({}, { __mode = "k" }), callbacks = {} }
 ASUI.Localization = Localization
 local unpack = unpack or table.unpack
-local valid = { auto = true, en = true, fr = true }
+local valid = { en = true, fr = true }
+local nativeNames = {}
+
+-- Curated game-name records use stable IDs; they never rewrite links, player
+-- names, descriptions or wire data. Uncatalogued names remain native text.
+function Localization.RegisterNativeNames(kind, entries)
+    if (kind ~= "ability" and kind ~= "set") or type(entries) ~= "table" then return false end
+    local target = nativeNames[kind] or {}
+    nativeNames[kind] = target
+    for id, names in pairs(entries) do
+        if type(id) == "number" and id > 0 and id <= 2147483647 and id % 1 == 0
+            and type(names) == "table" and type(names.en) == "string" and names.en ~= ""
+            and type(names.fr) == "string" and names.fr ~= "" then
+            target[id] = { en = names.en, fr = names.fr }
+        end
+    end
+    return true
+end
+function Localization.GetNativeName(kind, id, fallback)
+    local entries = nativeNames[kind]
+    local names = entries and type(id) == "number" and entries[id]
+    return names and names[Localization.GetLanguage()] or (type(fallback) == "string" and fallback or "")
+end
 
 local function GameLanguage()
     local language = type(GetCVar) == "function" and GetCVar("language.2") or "en"
     return type(language) == "string" and language:lower() == "fr" and "fr" or "en"
-end
-local function Resolve(preference)
-    return preference == "auto" and GameLanguage() or preference
 end
 local function Signature(text)
     local result = {}
@@ -38,6 +57,8 @@ function Localization.GetLanguage()
     if not Localization.language then Localization.language = GameLanguage() end
     return Localization.language
 end
+-- Contextual headings must not reuse navigation's "BACK" (French: "Retour").
+Localization.Register("en", { ["BACK WEAPON BAR"] = "BACK" })
 function ASUI.L(source, ...)
     if source == nil then return "" end
     source = tostring(source)
@@ -98,21 +119,23 @@ function Localization.Initialize()
     if not preferences.sv then return end
     Localization.sv = preferences.sv
     local preference = Localization.sv.language
-    if not valid[preference] then preference = "auto"; Localization.sv.language = preference end
-    local language = Resolve(preference)
+    -- Seed once from the supported client language. Legacy automatic and invalid
+    -- values migrate to an explicit choice so later client changes do not undo it.
+    if not valid[preference] then preference = GameLanguage(); Localization.sv.language = preference end
+    local language = preference
     local changed = Localization.language and Localization.language ~= language
     Localization.language = language
     if changed then Localization.Refresh() end
 end
 function Localization.GetPreference()
     Localization.Initialize()
-    return Localization.sv and Localization.sv.language or "auto"
+    return Localization.sv and Localization.sv.language or Localization.GetLanguage()
 end
 function Localization.SetLanguage(preference)
     if not valid[preference] or Localization.refreshing then return false end
     Localization.Initialize()
     if not Localization.sv then return false end
-    local language = Resolve(preference)
+    local language = preference
     local changed = Localization.sv.language ~= preference or Localization.GetLanguage() ~= language
     Localization.sv.language = preference
     Localization.language = language

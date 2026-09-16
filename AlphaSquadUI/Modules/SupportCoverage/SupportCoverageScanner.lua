@@ -492,6 +492,14 @@ function SC:ScanFood(unitTag)
         end
         abilityId = Integer(abilityId, 1, MAX_INTEGER_ID)
         if abilityId then
+            local now = FiniteNumber(SafeCall(GetGameTimeMilliseconds))
+            local ending = FiniteNumber(timeEnds)
+            -- A recognized ID is not evidence that its expired buff is still
+            -- active. A missing/invalid expiry or clock stays unknown, never
+            -- a confirmed absence (especially for a remote unit).
+            if not now or not ending or ending <= now / 1000 then
+                return {active=false, verified=false, source="LibFoodDrinkBuff"}
+            end
             return {
                 active = true,
                 verified = true,
@@ -500,7 +508,7 @@ function SC:ScanFood(unitTag)
                 name = tostring(buffName or ""),
                 isDrink = isDrink == true,
                 timeStarted = FiniteNumber(timeStarted) or 0,
-                timeEnds = FiniteNumber(timeEnds) or 0,
+                timeEnds = ending,
                 icon = tostring(icon or ""),
             }
         end

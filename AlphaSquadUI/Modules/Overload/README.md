@@ -11,17 +11,17 @@ Open **ULT Tracker → OVERLOAD SETTINGS**, or `/asoverload settings`.
 - **Reserve warnings**, enabled by default, highlights active Overload when Ultimate reaches **Warning starts**. Warning sounds can be disabled independently.
 - Ready-reminder options control the reminder threshold and sound while Overload is off.
 
-Overload and normal Ultimates share one panel, position, scale and background opacity. In AUTO, FRONT or BACK mode, an applicable Overload morph can take priority even on the other weapon bar. **BOTH** retains both cards. All display modes preserve the actual ability icons and morphs.
+Overload and normal Ultimates share one transparent panel, position and scale. Both normal weapon slots remain visible horizontally or vertically, with a smooth green marker beside the actual active bar and a dimmed inactive slot. The old AUTO/FRONT/BACK/BOTH selectors are retired. ESO's native Ultimate button is never hidden or modified by this HUD.
 
 Use your normal Ultimate binding to switch Overload off. The addon only reports its state and resource reserve; automatic stopping and clickable cancellation are removed. Placement previews do not play alerts.
 
 ## Migration and runtime
 
-Existing supported Overload options migrate into the personal ULT settings. An applicable previously enabled Overload HUD can provide the shared panel's previous position and scale. Existing ULT display modes, including BOTH, are preserved; new installations use AUTO. Old SavedVariables are retained for migration. An existing warning OFF choice and its warning threshold survive the removal of the old cutoff setting. A native transformation/temporary hotbar temporarily replaces the weapon display and suppresses unrelated Overload alerts.
+Existing supported Overload options migrate into the personal ULT settings. An applicable previously enabled Overload HUD can provide the shared panel's previous position and scale. Retired display-mode settings do not hide either normal weapon slot. Old SavedVariables are retained for migration. An existing warning OFF choice and its warning threshold survive the removal of the old cutoff setting. A native transformation/temporary hotbar temporarily replaces the weapon display and suppresses unrelated Overload alerts.
 
 The implementation is `../ULTTracker/ULTOverload.lua`. It uses the personal Ultimate tracker's events, resource state, safety update and animation lifecycle. There is no separate Overload HUD or standalone recovery timer. Disabling ULT Tracker stops its specialized Overload work too; changing library sharing remains independent.
 
-Use **MOVE HUD** or `/asmove` to move and resize the shared panel. Corners scale it proportionally, edges rearrange its contents, and the toolbar controls background opacity and reset. The three Dashboard interface styles apply to this same HUD.
+Use **MOVE HUD** or `/asmove` to move and resize the shared panel. Drag its body, use corners for proportional scale and edges to rearrange its contents. The toolbar offers fit and reset; transparent panels have no background opacity control. Dashboard styles affect settings while gameplay state colors retain their meaning.
 
 ## Commands
 
