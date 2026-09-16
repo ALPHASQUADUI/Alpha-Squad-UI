@@ -13,6 +13,8 @@ local MASK_MAX = 16777215 -- 2^24 - 1
 local BUILD_VERSION = 3
 -- Keep the existing highest set2 bit for glyph-scan completeness.
 local GLYPHS_VERIFIED_BIT = 23
+local SUMMARY_FIELDS={"version","role","classId","food","foodVerified","foodId","potion","missingGlyphs",
+    "prism","mag","stam","health","supportScore","cap1","cap2","cap3","cap4","set1","set2"}
 
 local function IsInteger(value, minimum, maximum)
     return type(value)=="number" and value%1==0 and value>=minimum and value<=maximum
@@ -183,10 +185,29 @@ function SC:OnPeerShareData(unitTag, data)
         if not IsInteger(data[field],0,maximum) then return end
     end
     if type(data.food)~="boolean" or type(data.foodVerified)~="boolean" then return end
-    self:PrunePeerSharingData()
+    local pruned=self:PrunePeerSharingData()
     local key = self:GetPlayerKey(unitTag)
     if type(key)~="string" or #key<2 or #key>60 or not key:match("^@[^%c|]+$") then return end
     local previous = self.peerData[key]
+    local characterName=GetUnitName and GetUnitName(unitTag) or ""
+    local same=previous and previous.characterName==characterName and previous.summaryWire
+    if same then
+        for _,field in ipairs(SUMMARY_FIELDS) do
+            if previous.summaryWire[field]~=data[field] then same=false;break end
+        end
+    end
+    if same then
+        -- Identical heartbeats refresh presence without rebuilding the roster.
+        local wasStale=self.NowMs()-(previous.scannedAt or 0)>75000
+        if self.NowMs()-(previous.scannedAt or 0)>=1000 then previous.scannedAt=self.NowMs() end
+        local connected=self.IsOnline and self:IsOnline(unitTag)
+        local dead=IsUnitDead and IsUnitDead(unitTag) or false
+        local changed=previous.connected~=connected or previous.dead~=dead
+        previous.connected,previous.dead,previous.unitTag=connected,dead,unitTag
+        if changed or wasStale or pruned then self:ScheduleRefresh("peer availability",100) end
+        return true
+    end
+    if not self:AcceptBuildPacket(key,"summary") then return end
 
     local foodId = tonumber(data.foodId) or 0
     local foodName = ""
@@ -196,7 +217,7 @@ function SC:OnPeerShareData(unitTag, data)
         protocolVersion = tonumber(data.version) or 0,
         catalogPatch = self.catalogPatch,
         displayName = key,
-        characterName = GetUnitName and GetUnitName(unitTag) or "",
+        characterName = characterName,
         classId = tonumber(data.classId) or 0,
         className = GetUnitClass and GetUnitClass(unitTag) or "",
         role = ID_TO_ROLE[tonumber(data.role) or 0] or "UNKNOWN",
@@ -235,6 +256,8 @@ function SC:OnPeerShareData(unitTag, data)
     }
 
     local peer = self.peerData[key]
+    peer.summaryWire={}
+    for _,field in ipairs(SUMMARY_FIELDS) do peer.summaryWire[field]=data[field] end
     -- Retain bounded summary facts independently so detail expiry can remove
     -- exact items/skills immediately without losing a still-fresh summary.
     peer.summaryCapabilities,peer.summaryEquipment=peer.capabilities,peer.equipment
@@ -247,6 +270,13 @@ function SC:OnPeerShareData(unitTag, data)
         peer.capabilities = previous.fullBuild.capabilities
         peer.equipment, peer.skills, peer.masteries = previous.fullBuild.equipment, previous.fullBuild.skills, previous.fullBuild.masteries
         peer.curse = previous.fullBuild.curse
+    end
+    if previous and previous.characterName==peer.characterName and previous.buildDetailFingerprint==peer.buildDetailFingerprint then
+        peer.capabilityWire,peer.capabilityRevision=previous.capabilityWire,previous.capabilityRevision
+        if previous.capabilityWire then
+            peer.summaryCapabilities=previous.summaryCapabilities
+            if not peer.fullBuild then peer.capabilities=peer.summaryCapabilities end
+        end
     end
     self:ScheduleRefresh("peer data", 100)
     return true
@@ -272,6 +302,7 @@ end
 -- Keep transient peer state bounded even when Dashboard tracking is OFF.
 function SC:PrunePeerSharingData()
     local current={}
+    local changed=false
     local size=self:IsGrouped() and BoundedInteger(Call(GetGroupSize),0,12) or 0
     for index=1,size do
         local tag=Call(GetGroupUnitTagByIndex,index) or ("group"..index)
@@ -279,8 +310,9 @@ function SC:PrunePeerSharingData()
         if key and key~="" then current[key]=true end
     end
     for key,peer in pairs(self.peerData or {}) do
-        if not current[key] or self.NowMs()-(peer.scannedAt or 0)>120000 then self.peerData[key]=nil
+        if not current[key] or self.NowMs()-(peer.scannedAt or 0)>120000 then self.peerData[key]=nil;changed=true
         elseif peer.fullBuild and self.NowMs()-(peer.fullBuildAt or 0)>(self.Details and self.Details.CACHE_MS or 120000) then
+            changed=true
             peer.fullBuild,peer.fullBuildAt,peer.fullBuildFingerprint=nil,nil,nil
             peer.capabilities,peer.equipment=peer.summaryCapabilities or {},peer.summaryEquipment
             peer.skills,peer.masteries,peer.curse,peer.poisons,peer.mundus=nil,nil,nil,nil,nil
@@ -290,16 +322,66 @@ function SC:PrunePeerSharingData()
     end
     local share=self.share
     if share then
-        if share.outgoingBuild and not current[share.outgoingBuild.requester] then share.outgoingBuild=nil end
+        for key in pairs(share.receiveBudgets or {}) do if not current[key] then share.receiveBudgets[key]=nil end end
+        if share.outgoingBuild and not current[share.outgoingBuild.requester] then
+            share.outgoingBuild.body=nil;share.outgoingBuild=nil
+        end
         if share.incomingBuild and not current[share.incomingBuild.key] then
+            share.incomingBuild.parts={}
             share.incomingBuild=nil;share.buildStatus="Player left the group."
         end
         if share.requestedKey and not current[share.requestedKey] then share.requestedKey=nil end
     end
+    return changed
+end
+
+-- Fixed-size budgets follow current membership, never arbitrary packet keys.
+-- Normal senders advertise at most once per 1.5 seconds; a small burst also
+-- permits a requested snapshot and its companion capability mask.
+function SC:AcceptBuildPacket(key,kind)
+    self.share.receiveBudgets=self.share.receiveBudgets or {}
+    local peer=self.share.receiveBudgets[key]
+    if not peer then peer={};self.share.receiveBudgets[key]=peer end
+    local now=self.NowMs()
+    local budget=peer[kind]
+    if not budget or now-budget.at>=1000 then budget={at=now,count=0};peer[kind]=budget end
+    if budget.count>=8 then return false end
+    budget.count=budget.count+1
+    return true
+end
+
+-- Only our two protocols are replaced. LGB's relevance flag prioritizes combat
+-- traffic; it is not a guarantee that already queued build bytes stay unsent.
+function SC:PauseBuildSharing(reason)
+    if not self.share then return true end
+    self.share.transportPaused=true
+    if self.CancelBuildDetailTransfer then self:CancelBuildDetailTransfer(reason) end
+    local cleared=true
+    if self.share.mayHaveQueuedBuildData or self.share.queueRevokeFailed then cleared=self:ClearQueuedBuildMessages() end
+    if not cleared then
+        local sharing=AlphaSquadUI.Sharing
+        if sharing and sharing.SuspendBuildTransport then sharing.SuspendBuildTransport() end
+        self.share.pauseError="Queued build data could not be cleared. Re-enable sharing after joining a group, or reload the UI."
+    end
+    return cleared
+end
+
+function SC:ResumeBuildSharing()
+    if not self.share or self.inCombat or self.loading or not self:IsGrouped() then return false end
+    local wasPaused=self.share.transportPaused
+    if self.share.queueRevokeFailed and not self:ClearQueuedBuildMessages() then return false end
+    self.share.transportPaused=nil
+    local sharing=AlphaSquadUI.Sharing
+    if sharing and sharing.RestoreBuildTransport and sharing.RestoreBuildTransport()==false then return false end
+    if self.share.transportResumeRequired then return false end
+    if wasPaused then self.share.lastSendAt=-60000 end
+    self.share.pauseError=nil
+    return true
 end
 
 function SC:MayReceiveBuild(tag)
     return self.sv and self.sv.shareData and self.sv.experimentalSharing
+        and not (self.share and (self.share.transportPaused or self.share.transportResumeRequired))
         and not self.loading and not self.inCombat and self:IsCurrentGroupMember(tag) and not self:IsSelf(tag)
 end
 
@@ -309,11 +391,9 @@ end
 
 function SC:InitializeSharing()
     self.share=self.share or {}
-    if not self.sv or not self.sv.experimentalSharing or not self.sv.shareData then
-        self.share.available=false
-        self.share.error="Build sharing is off. Enable sharing on each participating client."
-        return
-    end
+    -- Registration exposes native OFF controls; it never sends a snapshot.
+    -- Consent remains enforced at every sending/receiving boundary.
+    if not self.sv then return end
     local LGB=rawget(_G,"LibGroupBroadcast")
     if not LGB or type(LGB.RegisterHandler)~="function" then
         self.share.available=false;self.share.error="LibGroupBroadcast is not installed";return
@@ -357,6 +437,7 @@ end
 
 function SC:ShareLocalSnapshot(reason)
     if not self.sv or not self.sv.experimentalSharing or not self.sv.shareData or self.inCombat or self.loading then return false end
+    if self.share and (self.share.transportPaused or self.share.transportResumeRequired) then return false end
     if self.share and self.share.queueRevokeNeedsGroup and self:IsGrouped() and AlphaSquadUI.Sharing then
         -- A solo opt-out cannot call LGB's grouped-only Send API. Keep native
         -- protocols OFF until replacement is possible in the new group.
@@ -419,6 +500,7 @@ end
 
 function SC:GetSharingStatus()
     if not self.sv or not self.sv.experimentalSharing or not self.sv.shareData then return "LOCAL","Build sharing is off" end
+    if self.share and self.share.transportPaused then return "LOCAL",self.share.pauseError or "Build sharing is paused during a transition" end
     if AlphaSquadUI.Sharing and type(AlphaSquadUI.Sharing.GetStatus)=="function" then
         local enabled,reason,available=AlphaSquadUI.Sharing.GetStatus("builds")
         if not available or not enabled then return "LOCAL",reason or "Build sharing is disabled in LibGroupBroadcast" end

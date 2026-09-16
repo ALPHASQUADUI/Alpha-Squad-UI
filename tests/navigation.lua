@@ -58,10 +58,15 @@ check(not S.CloseExclusiveWindow("builds") and not S.AnyExclusiveWindowVisible()
 S.ShowExclusiveWindow("builds");combat=true;S.CloseExclusiveWindow("builds")
 check(not S.AnyExclusiveWindowVisible(),"A combat transition between click and close suppresses return navigation")
 check(not S.RestoreReturnTarget(token),"A captured placement token cannot reopen panels in combat")
+check(not S.OpenPage("dashboard") and not S.ShowExclusiveWindow("builds") and not S.AnyExclusiveWindowVisible(),
+    "Direct settings and secondary entrypoints cannot open a window in combat")
 combat=false;AlphaSquadUI.Input.loading=true
 check(not S.RestoreReturnTarget(token),"Loading suppresses deferred panel restoration")
+check(not S.OpenPage("dashboard") and not S.ShowExclusiveWindow("builds") and not S.AnyExclusiveWindowVisible(),
+    "Direct entrypoints refuse new windows while the player is loading")
 AlphaSquadUI.Input.loading=false;AlphaSquadUI.Modules.SupportCoverage={loading=true}
 check(not S.RestoreReturnTarget(token),"Module loading state also blocks restoration before input initializes")
+check(not S.OpenPage("dashboard"),"Settings opening also respects a module's loading state")
 AlphaSquadUI.Modules.SupportCoverage.loading=false
 check(S.RestoreReturnTarget({id="removed",page="dashboard"}) and Only(main),"An unavailable return destination falls back to the root settings")
 inputWindows[main].close()

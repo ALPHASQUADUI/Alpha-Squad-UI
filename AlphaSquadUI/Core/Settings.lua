@@ -43,6 +43,10 @@ local function NavigationBlocked()
     return false
 end
 
+function Settings.CanOpenWindow()
+    return not NavigationBlocked()
+end
+
 local function RestoreCursor()
     -- Every deliberate open needs mouse access, including the first keybind
     -- from gameplay. Native menus and dialogs keep their own cursor lifecycle.
@@ -103,7 +107,7 @@ end
 
 function Settings.ShowExclusiveWindow(id)
     local target = Settings.exclusiveWindows[id]
-    if not target then return false end
+    if not target or not Settings.CanOpenWindow() then return false end
     local visible = VisibleWindow()
     if id == "settings" then
         Settings.windowHistory = {}
@@ -277,7 +281,7 @@ function Settings.RefreshMain()
 end
 
 function Settings.OpenPage(id)
-    if not Settings.mainWindow then return false end
+    if not Settings.mainWindow or not Settings.CanOpenWindow() then return false end
     Settings.currentPage = id or "dashboard"
     if Settings.showPageCallback then
         Settings.showPageCallback(id)
@@ -451,8 +455,8 @@ Settings.RegisterPage("libraries",function(page,ui)
         if data.kind then
             local switch=ui.AddToggleRow(card,"AlphaSquadLibraryShare"..index,data.toggle,36,function() return ASUI.Sharing and ASUI.Sharing.IsEnabled(data.kind) or false end,
                 function(value) if ASUI.Sharing then ASUI.Sharing.SetEnabled(data.kind,value) end end,
-                data.kind=="builds" and "Share supported equipment, traits, glyphs, skill bars, CP and readiness in your current group. Both clients need compatible software. Build transport registration is pending; use in coordinated groups. Enabled at installation; your later OFF choice is saved. Module switches do not change sharing."
-                or "Changes this library's matching group protocols and saved settings here, without opening another panel. Other addons using the same protocols follow this setting. Enabled at installation; your later OFF choice is saved. Module switches do not change sharing.")
+                data.kind=="builds" and "Turn ON to share supported equipment, traits, glyphs, skill bars, CP and readiness in your current group. Both clients need compatible software. Build transport registration is pending; use in coordinated groups. Starts OFF on a new installation; existing choices are preserved. Module switches do not change sharing."
+                or "Turn ON to share this data in your current group. Changes this library's matching group protocols and saved settings here. Other addons using the same protocols follow this setting. Starts OFF on a new installation; existing choices are preserved. Module switches do not change sharing.")
             record.switch=switch
             local baseHelp=switch.help.."\n\n"..data.text
             ui.RegisterRefresher(function()

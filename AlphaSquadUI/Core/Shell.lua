@@ -1,6 +1,6 @@
 -- Shared settings shell: available independently of gameplay modules.
 local ASUI=AlphaSquadUI
-local Shell={settingsRefreshers={},settingsPages={},settingsNavButtons={},activeSettingsPage="dashboard"}
+local Shell={settingsRefreshers={},settingsPageRefreshers={},settingsPages={},settingsNavButtons={},activeSettingsPage="dashboard"}
 ASUI.Shell=Shell
 local COLORS=ASUI.Theme.colors
 local SETTINGS_MENU_NAME=ASUI.Theme.Brand()
@@ -78,13 +78,35 @@ local function CreateButton(parent, name, text, x, y, width, height, onClick)
     return button
 end
 
+function Shell:RegisterSettingsRefresher(callback)
+    local page = self.buildingSettingsPage
+    local refreshers = self.settingsRefreshers
+    if page then
+        self.settingsPageRefreshers[page] = self.settingsPageRefreshers[page] or {}
+        refreshers = self.settingsPageRefreshers[page]
+    end
+    refreshers[#refreshers + 1] = callback
+end
+
+function Shell:RefreshPageValues()
+    if not self.settingsWindow or self.settingsWindow:IsHidden() then return end
+    for _, refresher in ipairs(self.settingsRefreshers) do refresher() end
+    for _, refresher in ipairs(self.settingsPageRefreshers[self.activeSettingsPage] or {}) do refresher() end
+end
+
+local function RefreshSettingsContents(shell)
+    shell:ApplySettingsGeometry()
+    shell:RefreshNavigation()
+    shell:RefreshPageValues()
+end
+
 function Shell:RefreshSettingsWindow()
     if not self.settingsWindow or self.settingsWindow:IsHidden() then return end
-    self:ApplySettingsGeometry()
-    self:RefreshNavigation()
-    for _, refresher in ipairs(self.settingsRefreshers) do
-        refresher()
-    end
+    if self.refreshingSettings then return end
+    self.refreshingSettings = true
+    local ok, message = pcall(RefreshSettingsContents, self)
+    self.refreshingSettings = false
+    if not ok then error(message, 0) end
 end
 
 function Shell:ApplySettingsGeometry()
@@ -182,6 +204,7 @@ function Shell:ShowSettingsPage(pageId)
             button.label:SetColor(color[1], color[2], color[3], 1)
         end
     end
+    if not self.refreshingSettings then self:RefreshPageValues() end
 end
 
 function Shell:RefreshNavigation()
@@ -220,6 +243,7 @@ function Shell:CreateSettingsWindow()
     -- One lightweight Ąlpha Şquad shell with internal module pages. Future modules
     -- only need a new sidebar entry + page; no extra ESO Settings panel is required.
     self.settingsRefreshers = {}
+    self.settingsPageRefreshers = {}
     self.settingsPages = {}
     self.settingsNavButtons = {}
 
@@ -458,7 +482,7 @@ function Shell:CreateSettingsWindow()
         label:SetHandler("OnMouseUp", function(_, mouseButton, upInside)
             if mouseButton == MOUSE_BUTTON_INDEX_LEFT and upInside ~= false then Toggle() end
         end)
-        table.insert(self.settingsRefreshers, function()
+        self:RegisterSettingsRefresher(function()
             local enabled = getter()
             button.label:SetText(enabled and "ON" or "OFF")
             local c = enabled and COLORS.green or COLORS.muted
@@ -509,7 +533,7 @@ function Shell:CreateSettingsWindow()
         label:SetHandler("OnMouseExit", function()
             if AlphaSquadUI.Tooltips then AlphaSquadUI.Tooltips.Hide() end
         end)
-        table.insert(self.settingsRefreshers, function()
+        self:RegisterSettingsRefresher(function()
             local current = getter()
             value:SetText(tostring(current) .. (suffix or ""))
             minus.enabled, plus.enabled = current > minimum, current < maximum
@@ -522,15 +546,17 @@ function Shell:CreateSettingsWindow()
     local pageUI = {
         CreateLabel=CreateLabel, CreateCard=CreateCard, AddToggleRow=AddToggleRow,
         AddStepperRow=AddStepperRow, CreateButton=CreateButton, colors=COLORS,
-        RegisterRefresher=function(fn) table.insert(self.settingsRefreshers,fn) end,
+        RegisterRefresher=function(fn) self:RegisterSettingsRefresher(fn) end,
         RegisterLayout=function(page,callback) page.ApplyLayout=callback end,
     }
     self.pageUI=pageUI
     for _,id in ipairs({"dashboard","ulttracker","ultoverload","supportcoverage","libraries","community"}) do
         local page=CreatePage(id)
         local builder=AlphaSquadUI.Settings.GetPageBuilder(id)
+        self.buildingSettingsPage=id
         if builder then builder(page,pageUI) end
     end
+    self.buildingSettingsPage=nil
 
     self:ShowSettingsPage(self.activeSettingsPage or "dashboard")
     self:RefreshSettingsWindow()
@@ -553,6 +579,7 @@ function Shell:RegisterDirectSettingsPanel()
 
     panelData.callback = function(_, anchorFunction)
         local settings = AlphaSquadUI.Settings
+        if settings.CanOpenWindow and not settings.CanOpenWindow() then return end
         if settings and settings.ShowExclusiveWindow then settings.ShowExclusiveWindow("settings") end
         Shell.settingsOpenedFromGameMenu = true
         Shell.settingsWindow:SetMovable(false)
@@ -619,6 +646,7 @@ function Shell:ToggleSettingsWindow()
         else self:CloseSettingsWindow() end
         return
     end
+    if ASUI.Settings.CanOpenWindow and not ASUI.Settings.CanOpenWindow() then return false end
     if self.settingsOpenedFromGameMenu and self.settingsFragment then
         SCENE_MANAGER:RemoveFragment(self.settingsFragment)
         self.settingsOpenedFromGameMenu = false

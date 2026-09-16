@@ -18,5 +18,10 @@ build/
 dist/
 *.bak
 *.old
+.env
+.env.*
+*.private.json
+*.pem
+*.key
 
 # Keep intentional release archives tracked only when explicitly added

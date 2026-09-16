@@ -73,8 +73,8 @@ function SC:GetDefaults()
         locked = true,
         hideInMenus = true,
         problemsOnly = true,
-        shareData = true,
-        experimentalSharing = true,
+        shareData = false,
+        experimentalSharing = false,
         scale = 100,
         opacity = 94,
         width = 410,
@@ -201,37 +201,50 @@ function SC:MarkScanDirty(reason)
     self:ScheduleRefresh(reason or "dirty", 80)
 end
 
-function SC:ScheduleRefresh(reason, delay)
+function SC:ScheduleRefresh(reason, delay, readinessOnly)
     if not self.initialized then return end
     self:UpdateRuntime()
     if not self:NeedsBuildData() then
         if self.CheckGroupSession then self:CheckGroupSession() end
         return
     end
-    if self.refreshPending then return end
+    if self.refreshPending then
+        -- A build or roster event upgrades an already queued lightweight check.
+        self.refreshReadinessOnly = self.refreshReadinessOnly and readinessOnly == true
+        return
+    end
     self.refreshPending = true
+    self.refreshReadinessOnly = readinessOnly == true
     zo_callLater(function()
         if not SC then return end
+        local onlyReadiness = SC.refreshReadinessOnly == true
         SC.refreshPending = false
-        SC:Refresh(reason or "scheduled")
+        SC.refreshReadinessOnly = nil
+        SC:Refresh(reason or "scheduled", onlyReadiness)
     end, tonumber(delay) or 50)
 end
 
-function SC:Refresh(reason)
+function SC:Refresh(reason, readinessOnly)
     if not self.initialized or not self.sv then return end
     if self.CheckGroupSession then self:CheckGroupSession() end
     if not self:NeedsBuildData() then return end
     -- Preparation is frozen during combat; dirty build changes are coalesced and
     -- scanned exactly once after combat. No combat event stream is collected.
     if self.inCombat then return end
-    local shareReason
+    if self.resumeSharingPending then
+        self.resumeSharingPending = nil
+        if self.ResumeBuildSharing then self:ResumeBuildSharing() end
+    end
+    local shareReason, didScan
     if self.scanDirty and self.ScanLocalPlayer then
         self.localSnapshot = self:ScanLocalPlayer()
         self.scanDirty = false
         shareReason = "scan"
+        didScan = true
     end
 
-    local readinessChanged = self.RefreshReadinessFacts and self:RefreshReadinessFacts()
+    local readinessChanged, presentationChanged
+    if self.RefreshReadinessFacts then readinessChanged, presentationChanged = self:RefreshReadinessFacts(didScan == true) end
     if readinessChanged then shareReason = shareReason or "readiness changed" end
     if shareReason and self.inCombat then
         self.buildSharePending = true
@@ -245,12 +258,15 @@ function SC:Refresh(reason)
         end
         self.buildSharePending=retryable==true and sent~=true
     end
+    if not self.inCombat and self.share then
+        if self.NowMs()-(self.share.lastSendAt or 0)>60000 then self:ShareLocalSnapshot("heartbeat") end
+    end
+    -- Unrelated local effects do not invalidate every teammate's build. The
+    -- normal safety refresh still evaluates expiration thresholds and peers.
+    if readinessOnly and not didScan and not readinessChanged and not presentationChanged then return end
     if self.sv.enabled then
         if self.BuildRoster then self:BuildRoster() end
         if self.EvaluateCoverage then self:EvaluateCoverage(reason) end
-    end
-    if not self.inCombat and self.share then
-        if self.NowMs()-(self.share.lastSendAt or 0)>60000 then self:ShareLocalSnapshot("heartbeat") end
     end
     if self.sv.enabled then
         if self.RefreshHUD then self:RefreshHUD() end
@@ -372,12 +388,14 @@ function SC:OnCombatState(inCombat)
     local wasInCombat = self.inCombat
     self.inCombat = inCombat == true
     if self.inCombat then
+        if not wasInCombat and self.PauseBuildSharing then self:PauseBuildSharing("Combat started") end
         if self.CloseInspector then self:CloseInspector() end
         if self.CloseMatrix then self:CloseMatrix() end
         if self.CloseContributorPicker then self:CloseContributorPicker() end
         if self.HideReadyBanner then self:HideReadyBanner() end
         if self.CancelBuildDetailTransfer then self:CancelBuildDetailTransfer() end
     elseif wasInCombat then
+        if self.ResumeBuildSharing then self:ResumeBuildSharing() end
         self:ScheduleRefresh("combat ended", 150)
     end
     if self.ApplyVisibility then self:ApplyVisibility() end
@@ -425,6 +443,7 @@ function SC:RegisterEvents()
                     SC:CheckGroupSession()
                     if SC.PruneExternalSources then SC:PruneExternalSources() end
                     SC:RefreshUIObscured()
+                    if SC.ResumeBuildSharing then SC:ResumeBuildSharing() end
                     SC:MarkScanDirty("activated")
                     if SC.Try(IsUnitInCombat, "player") == true then SC:OnCombatState(true) end
                 end
@@ -435,6 +454,7 @@ function SC:RegisterEvents()
     if EVENT_PLAYER_DEACTIVATED then
         EM:RegisterForEvent(prefix.."_Deactivated",EVENT_PLAYER_DEACTIVATED,function()
             SC.loading=true;SC.scanDirty=true
+            if SC.PauseBuildSharing then SC:PauseBuildSharing("Player deactivated") end
             SC:UpdateRuntime()
             if SC.CloseInspector then SC:CloseInspector() end
             if SC.CloseMatrix then SC:CloseMatrix() end
@@ -443,6 +463,7 @@ function SC:RegisterEvents()
     end
     if EVENT_GROUP_MEMBER_JOINED then
         EM:RegisterForEvent(prefix .. "_Joined", EVENT_GROUP_MEMBER_JOINED, function()
+            SC.resumeSharingPending = true
             if SC.sv.shareData and SC.sv.experimentalSharing then
                 -- A new peer has not seen the otherwise deduplicated summary or
                 -- signature frame. Queue one pair after the roster has settled.
@@ -453,11 +474,15 @@ function SC:RegisterEvents()
     end
     if EVENT_GROUP_MEMBER_LEFT then
         EM:RegisterForEvent(prefix .. "_Left", EVENT_GROUP_MEMBER_LEFT, function()
+            if SC.PauseBuildSharing then SC:PauseBuildSharing("Group membership changed") end
+            SC:ResetSharingState("Group membership changed")
+            SC.resumeSharingPending = true
             SC:ScheduleRefresh("group left", 100)
         end)
     end
     if EVENT_GROUP_UPDATE then
         EM:RegisterForEvent(prefix .. "_Group", EVENT_GROUP_UPDATE, function()
+            SC.resumeSharingPending = true
             SC:ScheduleRefresh("group update", 100)
         end)
     end
@@ -479,7 +504,7 @@ function SC:RegisterEvents()
     if EVENT_EFFECT_CHANGED then
         local effectEvent = prefix .. "_LocalEffects"
         EM:RegisterForEvent(effectEvent, EVENT_EFFECT_CHANGED, function(_, _, _, _, unitTag)
-            if unitTag == "player" and SC:NeedsBuildData() and not SC.inCombat then SC:ScheduleRefresh("consumable or boon", 500) end
+            if unitTag == "player" and SC:NeedsBuildData() and not SC.inCombat then SC:ScheduleRefresh("consumable or boon", 500, true) end
         end)
         if REGISTER_FILTER_UNIT_TAG then EM:AddFilterForEvent(effectEvent, EVENT_EFFECT_CHANGED, REGISTER_FILTER_UNIT_TAG, "player") end
     end
@@ -500,7 +525,7 @@ function SC:RegisterEvents()
     end
     if EVENT_ACTIVE_QUICKSLOT_CHANGED then
         EM:RegisterForEvent(prefix .. "_Quickslot", EVENT_ACTIVE_QUICKSLOT_CHANGED, function()
-            if SC:NeedsBuildData() then SC:ScheduleRefresh("quickslot changed", 80) end
+            if SC:NeedsBuildData() then SC:ScheduleRefresh("quickslot changed", 80, true) end
         end)
     end
 

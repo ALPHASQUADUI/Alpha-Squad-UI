@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.3.1 — Development validation
+
+Sharing starts OFF for new installations while preserving existing choices. Tightened build-transfer cleanup, native source consistency and package privacy checks. Corrected settings input transitions, readiness warnings and partial-build transfer feedback. Hidden views defer presentation work, and unchanged readiness events avoid full coverage evaluation. Public releases require a separately authorized main-based manual operation and completed transport/client gates. See [development notes](releases/3.3.1.md).
+
 ## 3.3.0 — 2026-09-15
 
 Corrected companion sharing controls and actual status, retained valid same-session set reports across tracking changes, and improved native source recognition and Scribing coverage. Settings reflow on narrow screens, Group Ultimate rows retain their height, and Move HUD uses a simpler toolbar. Initial opening restores mouse access; Builds tooltips survive unchanged refreshes and duplicate contributors can be chosen directly. Distribution now validates the exact shipped archives with checksums and provenance, pinned CI dependencies and redacted security checks. Added an MIT license, security reporting policy and client acceptance matrix. See [complete release notes](releases/3.3.0.md).

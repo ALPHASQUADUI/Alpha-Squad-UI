@@ -11,7 +11,7 @@ import tempfile
 import xml.etree.ElementTree as ET
 
 from build_companion import build as build_companion
-from package_utils import inspect_archive, sha256, version_numbers, write_archive
+from package_utils import collect_package, inspect_archive, sha256, version_numbers, write_archive
 from security_scan import event_range
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -68,6 +68,26 @@ def whitespace_check(base, head):
         assert result.returncode == 0, 'Whitespace errors in proposed changes (git diff --check)'
 
 
+def clean_source(root=ROOT):
+    """Do not trust status alone: ignored/assume-unchanged input may be modified."""
+    def git(*arguments):
+        return subprocess.run(['git', *arguments], cwd=root, check=True,
+                              stdout=subprocess.PIPE, stderr=subprocess.PIPE).stdout
+    if git('status', '--porcelain', '--untracked-files=all'):
+        return False
+    for name in filter(None, git('ls-files', '-z').decode().split('\0')):
+        path = root / name
+        if path.is_symlink() or not path.is_file():
+            return False
+        try:
+            committed = git('show', 'HEAD:' + name)
+        except subprocess.CalledProcessError:
+            return False
+        if path.read_bytes() != committed:
+            return False
+    return True
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output-dir', type=Path, default=ROOT / 'dist')
@@ -89,13 +109,7 @@ def main():
     output.mkdir(parents=True, exist_ok=True)
     full = output / f'AlphaSquadUI-{version}.zip'
     companion = output / f'AlphaSquadBuildShare-{version}.zip'
-    members = {}
-    for path in sorted(source_root.rglob('*')):
-        assert not path.is_symlink(), 'Symlinks are not packageable'
-        if path.is_file() and path.name != '.gitkeep':
-            members[path.relative_to(ROOT).as_posix()] = path.read_bytes()
-    if (ROOT / 'LICENSE').is_file():
-        members['AlphaSquadUI/LICENSE'] = (ROOT / 'LICENSE').read_bytes()
+    members = collect_package(source_root, 'AlphaSquadUI', ROOT / 'LICENSE')
     write_archive(full, members)
     build_companion(companion)
     # Compile and run source regressions against the exact extracted shipped
@@ -124,7 +138,7 @@ def main():
                 subprocess.run([runtime, str(test)], cwd=folder, check=True)
             subprocess.run([runtime, str(ROOT / 'tests/companion_package.lua'), str(folder / 'AlphaSquadBuildShare')], cwd=folder, check=True)
     commit = run('git', 'rev-parse', 'HEAD', capture_output=True, text=True).stdout.strip()
-    dirty = bool(run('git', 'status', '--porcelain', capture_output=True, text=True).stdout)
+    dirty = not clean_source()
     notes = output / 'RELEASE_NOTES.md'
     notes.write_bytes((ROOT / 'releases' / f'{version}.md').read_bytes())
     provenance = {'version': version, 'addon_version': version_numbers(version), 'commit': commit,

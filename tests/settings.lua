@@ -154,15 +154,19 @@ check(not Shell.settingsNavButtons.overload and not Shell.settingsNavButtons.dis
 check(Shell.settingsNavButtons.community.label.text=="About" and Shell.settingsNavButtons.supportcoverage.label.width>=160,
     "About has a short label and the sidebar reserves space for the complete Support Coverage name")
 local choice=controls.AlphaSquadThemeChoice.combo
+Settings.OpenPage("dashboard")
 check(#choice.entries==3 and choice.selected.id=="obsidian" and not choice.sorted,"The native global theme picker defaults to Obsidian and retains curated order")
 choice.entries[1].callback()
 check(AlphaSquadUI.Theme.GetPresetId()=="ember" and choice.selected.id=="ember","Selecting a native theme applies and refreshes the picker immediately")
 check(Shell.settingsPages.dashboard.contentHeight<=594 and Shell.settingsPages.community.contentHeight<=594,"Dashboard and About fit the available desktop canvas")
+Settings.OpenPage("libraries")
 check(controls.AlphaSquadLibraryStatus1.text=="MISSING","Missing transport is clearly identified")
 check(controls.AlphaSquadLibraryShare1Button.label.text=="N/A","Missing sharing controls cannot be mistaken for a confirmed OFF setting")
 check(controls.AlphaSquadLibraryShare1Button.track:IsHidden() and controls.AlphaSquadLibraryShare1Button.thumb:IsHidden(),
     "Unavailable library controls hide the switch rail and thumb together")
 check(controls.AlphaSquadLibraryNativeSettings==nil,"Sharing never offers a button that navigates to another addon panel")
+check(controls.AlphaSquadLibraryShare1Button.help:find("Starts OFF",1,true) and controls.AlphaSquadLibraryShare2Button.help:find("Starts OFF",1,true),
+    "Each sharing option explains that new installations require an explicit ON choice")
 LibGroupBroadcast={};Settings.RefreshMain()
 check(controls.AlphaSquadLibraryStatus1.text=="INSTALLED","Installed library state refreshes when settings are shown")
 local sharingOn=true
@@ -200,6 +204,36 @@ local refreshCount=0
 Shell.settingsRefreshers[#Shell.settingsRefreshers+1]=function() refreshCount=refreshCount+1 end
 Shell:CloseSettingsWindow();Shell:RefreshSettingsWindow()
 check(refreshCount==0,"Hidden settings skip their page refresh work")
+local pageRefreshes={dashboard=0,libraries=0}
+for _,id in ipairs({"dashboard","libraries"}) do
+    local pageId=id
+    Shell.buildingSettingsPage=pageId
+    Shell:RegisterSettingsRefresher(function()pageRefreshes[pageId]=pageRefreshes[pageId]+1 end)
+end
+Shell.buildingSettingsPage=nil
+Settings.OpenPage("dashboard")
+local dashboardRefreshes=pageRefreshes.dashboard
+Shell:RefreshSettingsWindow()
+check(pageRefreshes.dashboard>dashboardRefreshes and pageRefreshes.libraries==0,
+    "A live settings update runs only the visible page's refreshers")
+Settings.OpenPage("libraries")
+check(pageRefreshes.libraries>0,"Opening a previously hidden page immediately refreshes its current values")
+dashboardRefreshes=pageRefreshes.dashboard
+Shell:RefreshSettingsWindow()
+check(pageRefreshes.dashboard==dashboardRefreshes,"Library updates do not repaint hidden Dashboard controls")
+local libraryRefreshers=Shell.settingsPageRefreshers.libraries
+libraryRefreshers[#libraryRefreshers+1]=function()error("Synthetic settings refresh failure")end
+check(not pcall(Shell.RefreshSettingsWindow,Shell) and not Shell.refreshingSettings,
+    "A failing page callback preserves its error without permanently blocking later settings refreshes")
+table.remove(libraryRefreshers);Shell:RefreshSettingsWindow()
+local combat=false
+IsUnitInCombat=function()return combat end
+Shell:CloseSettingsWindow();combat=true
+SLASH_COMMANDS["/asui"]()
+check(Shell.settingsWindow:IsHidden(),"The settings slash command uses the same combat opening guard as keybindings")
+combat=false;Shell:ToggleSettingsWindow();combat=true;Shell:ToggleSettingsWindow()
+check(Shell.settingsWindow:IsHidden(),"An already visible root can always be closed after combat starts")
+combat=false
 
 local native={name="Graphics",categoryName="Settings"}
 local otherAddon={name="Another addon",categoryName="Settings",id=105}

@@ -12,7 +12,7 @@ Precombat group preparation and visual build inspection for **Ąlpha Şquad UI**
 
 **Buffs**, **Debuffs**, **Group Sets** and **Group Mythics** remain distinct. Dense categories receive extra columns; the Coverage page has no scrollbar or pagination. Native effect and item icons are used where the client provides them. Long labels remain readable on hover.
 
-Green means covered, red missing, gold unknown or duplicate, and grey optional. A duplicate count includes **×**. Multiple providers can be intentional: target caps and conditions may require more than one source.
+Green means a source is available, red missing, gold unknown, limited or duplicate, and grey optional. A duplicate count includes **×**. Multiple providers can be intentional: target caps and conditions may require more than one source.
 
 ## Read a build
 
@@ -30,7 +30,7 @@ An empty slot and an unavailable slot are different states. Incomplete snapshots
 
 ## Understand coverage
 
-`COVERED` means a qualifying build source is available before combat. A set can qualify on either weapon bar; it need not reach its threshold on both. Casts, range, target caps, synergies and proc conditions still apply. Availability does not prove that an effect is active or reaches every group member.
+`SOURCE` means a qualifying build source is available before combat. A set can qualify on either weapon bar; it need not reach its threshold on both. Casts, range, target caps, synergies and proc conditions still apply. Availability does not prove that an effect is active or reaches every group member.
 
 Class identity alone does not prove purchased passives, selected masteries or slotted skills. A named Major/Minor effect does not stack just because another player supplies it. A selected potion is preparation evidence, not proof of consumption. No role-specific loadout is forced.
 
@@ -38,7 +38,7 @@ There is no pull-report, uptime-history or recorded-build planner workflow. Buil
 
 ## Sharing and dependencies
 
-Open **Libraries** for dependency status, ESOUI links and all sharing switches. New installations configure supported sharing ON once; existing saved OFF choices are preserved. A switch changes the matching native library setting in place, without opening another addon page. Missing or incompatible libraries remain visibly unavailable rather than pretending to share.
+Open **Libraries** for dependency status, ESOUI links and all sharing switches. New installations start with supported sharing OFF until an explicit choice; existing saved ON/OFF choices and native OFF states are preserved. A switch changes the matching native library setting in place, without opening another addon page. Missing or incompatible libraries remain visibly unavailable rather than pretending to share.
 
 | Sender | Available evidence |
 | --- | --- |

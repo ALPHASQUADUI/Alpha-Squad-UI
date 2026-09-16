@@ -122,13 +122,13 @@ function ULT:GetLiveBar(key)
     return self.bars[key]
 end
 
-function ULT:ReadSpecialBar()
+function ULT:ReadSpecialBar(reuseMetadata)
     if not self:HasSpecialActiveBar() then self.specialBar=nil;return end
     local category=self:GetActiveBarCategory()
     if not self.specialBar or self.specialBar.category~=category then
         self.specialBar={key="primary",label="ACTIVE BAR",category=category,ready=false,recentlyUsedUntil=0}
     end
-    self:ReadBar(self.specialBar)
+    self:ReadBar(self.specialBar, reuseMetadata)
 end
 
 function ULT:GetEffectiveAbilityId(boundId, category)
@@ -165,7 +165,7 @@ function ULT:GetUltimateCost(category, effectiveId)
     return math.min(1000000, math.max(0, math.floor(FiniteOr(cost, 0) + 0.5)))
 end
 
-function ULT:ReadBar(bar)
+function ULT:ReadBar(bar, reuseMetadata)
     local category = bar.category
     local boundId = GetSlotBoundId and GetSlotBoundId(ULTIMATE_SLOT, category) or 0
     boundId = FiniteOr(boundId, 0)
@@ -188,22 +188,23 @@ function ULT:ReadBar(bar)
         else boundId=0 end
     end
     local effectiveId = self:GetEffectiveAbilityId(boundId, category)
-    local name = GetSlotName and GetSlotName(ULTIMATE_SLOT, category) or ""
-    local icon = GetSlotTexture and select(1, GetSlotTexture(ULTIMATE_SLOT, category)) or ""
-
-    if (not name or name == "") and GetAbilityName then
-        name = GetAbilityName(effectiveId) or ""
-    end
-    if (not icon or icon == "") and GetAbilityIcon then
-        icon = GetAbilityIcon(effectiveId) or ""
+    -- Resource ticks reuse only presentation metadata. Identity, cost, toggles
+    -- and remaining duration are always native reads; slot/safety refreshes
+    -- also recover a changed skill style without relying on an extra event.
+    if not reuseMetadata or bar.abilityId ~= effectiveId or bar.metadataCategory ~= category then
+        local name = GetSlotName and GetSlotName(ULTIMATE_SLOT, category) or ""
+        local icon = GetSlotTexture and select(1, GetSlotTexture(ULTIMATE_SLOT, category)) or ""
+        if (not name or name == "") and GetAbilityName then name = GetAbilityName(effectiveId) or "" end
+        if (not icon or icon == "") and GetAbilityIcon then icon = GetAbilityIcon(effectiveId) or "" end
+        bar.name = name or ""
+        bar.icon = icon or ""
+        bar.isOverload = self.Overload and self.Overload:IsAbility(effectiveId, name, icon) or false
+        bar.metadataCategory = category
     end
 
     -- Slot replacement must not inherit the previous Ultimate's spent state.
     if bar.abilityId~=effectiveId then bar.recentlyUsedUntil=0;bar.ready=false end
     bar.abilityId = effectiveId
-    bar.name = name or ""
-    bar.icon = icon or ""
-    bar.isOverload = self.Overload and self.Overload:IsAbility(effectiveId, name, icon) or false
     bar.cost = self:GetUltimateCost(category, effectiveId)
     bar.toggled = IsSlotToggled and IsSlotToggled(ULTIMATE_SLOT, category) == true or false
     bar.effectRemaining=GetActionSlotEffectTimeRemaining and math.max(0,FiniteOr(GetActionSlotEffectTimeRemaining(ULTIMATE_SLOT,category),0)) or 0
@@ -314,9 +315,10 @@ function ULT:Refresh(reason, observedUltimate)
     local previousPrimaryId=previousPrimary and previousPrimary.abilityId
     local previousBackupId=previousBackup and previousBackup.abilityId
 
-    self:ReadBar(self.bars.primary)
-    self:ReadBar(self.bars.backup)
-    self:ReadSpecialBar()
+    local reuseMetadata = reason == "power"
+    self:ReadBar(self.bars.primary, reuseMetadata)
+    self:ReadBar(self.bars.backup, reuseMetadata)
+    self:ReadSpecialBar(reuseMetadata)
     if self.Overload then self.Overload:Update(self.currentUltimate, reason) end
     for _,bar in pairs(self.bars) do bar.state=self:ComputeBarState(bar,self.currentUltimate) end
     if self.specialBar then self.specialBar.state=self:ComputeBarState(self.specialBar,self.currentUltimate) end
@@ -394,7 +396,7 @@ end
 function ULT:SetTrackMode(mode)
     if mode ~= "main" and mode ~= "back" and mode ~= "both" and mode ~= "auto" then return end
     self.sv.trackMode = mode
-    if self.ApplyLayout then self:ApplyLayout() end
+    if self.RefreshHUD then self:RefreshHUD() end
     self:Refresh("track mode")
 end
 

@@ -26,7 +26,7 @@ Group tracking uses **LibGroupCombatStats** with its declared dependencies, incl
 
 A compatible sender may be Alpha Squad or another addon publishing the same library data. Installing a library alone does not prove every group member is sharing. Ultimate/active-line reports do not establish complete gear, skill bars, CP, passives or masteries; supported full builds use a separate compatible sender.
 
-Open **Libraries** for dependency status and **Share group Ultimates**. A new installation enables supported sharing once, while existing saved OFF choices are preserved. The switch reads and changes the actual native protocol settings without opening another addon page. Other addons using those same protocols follow that library setting; unrelated protocols remain unchanged.
+Open **Libraries** for dependency status and **Share group Ultimates**. A new installation keeps sharing OFF until an explicit choice; existing saved choices and native OFF states are preserved. The switch reads and changes the actual native protocol settings without opening another addon page. Other addons using those same protocols follow that library setting; unrelated protocols remain unchanged.
 
 ## Placement and saved settings
 

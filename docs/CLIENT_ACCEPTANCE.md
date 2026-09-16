@@ -2,6 +2,12 @@
 
 This checklist records behavior that automated Lua and packaging checks cannot establish. No row is passed until someone runs it in ESO on the stated versions. Never substitute a mock result for a native result.
 
+## Maintainer acceptance for 3.3.1
+
+On 2026-09-16, following delivery of development commit `6c07ce9da879474f4a8fe93b66c55f7957649e4d`, the maintainer reported that the version was stable and authorized promotion to `main` and release preparation. This records maintainer-reported acceptance; it is not an automated or independently observed native result.
+
+The report did not include an ESO build, library versions, per-scenario results or performance measurements. The detailed rows below therefore remain unrecorded. Formal protocol reservation, coexistence evidence and release-environment administration are separate publication prerequisites.
+
 ## Record the environment
 
 Record the Alpha Squad UI and companion versions, ESO API/build, library versions, operating system, display resolution, native UI scale and input device. Use synthetic account labels in any published evidence; keep private chats and SavedVariables out of screenshots.
@@ -27,6 +33,17 @@ Record the Alpha Squad UI and companion versions, ESO API/build, library version
 | Run a 12-player group with multiple sharing addons | Record latency, retries and frame-time comparison; packet loss remains bounded | Not recorded |
 
 ## Performance comparison
+
+For 3.3.1 also exercise these corrected boundaries; no outcome is recorded until a native run is performed:
+
+- Fresh full-suite and companion installs remain OFF until an explicit sharing choice; an upgrade keeps stored ON/OFF and does not silently replace a native OFF.
+- Open settings, enter combat, open another native menu, then leave combat. The addon must not reacquire input over that menu. Repeat across loading and via slash commands.
+- Begin a build transfer, then enter combat or leave the group. Check actual transport output, not only local UI cancellation, and verify unrelated library traffic remains intact.
+- Interrupt a transfer after its first fragment, close Builds and wait beyond its inactivity deadline. Requesting again must not inherit abandoned state.
+- Keep partial shared sets visible while requesting unavailable build details. Progress or the reason for failure must remain visible.
+- Supply all selected effect sources while one player has no verified food. The HUD must still identify preparation issues; unknown data must not be labelled missing.
+- Verify a limited source in a twelve-player group. Source availability must not imply all twelve players receive the effect.
+- Inspect a learned passive from another class with known and unavailable native skill-line resolution. Unknown definitions must not use the viewer's learned skills.
 
 Compare the same scene and group with tracking ON and OFF while leaving sharing unchanged. Record frame-time distribution rather than a single FPS value, addon memory before/after repeated openings, and whether callbacks stop when their feature is hidden. Repeat after a loading transition. Do not publish a claim of zero resource cost.
 

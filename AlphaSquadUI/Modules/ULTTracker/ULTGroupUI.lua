@@ -445,6 +445,7 @@ function Group:ApplyVisibility()
         end
         self:SetReadyPulseActive(anyReady and not moving)
     end
+    if not hidden and self.hudDirty and not self.renderingHUD then self:RefreshHUD() end
 end
 
 function Group:RefreshRow(row, entry)
@@ -577,6 +578,15 @@ end
 
 function Group:RefreshHUD()
     if not self.window or not self.sv then return end
+    if self.renderingHUD then return end
+    self.renderingHUD = true
+    self:ApplyVisibility()
+    if self.window:IsHidden() then
+        self.hudDirty = true
+        self.renderingHUD = false
+        return
+    end
+    self.hudDirty = false
 
     local entries=self:GetHUDEntries()
     local count=math.min(12,#entries)
@@ -618,6 +628,7 @@ function Group:RefreshHUD()
     end
     self:UpdateLockState()
     self:ApplyVisibility()
+    self.renderingHUD = false
 end
 
 function Group:ApplyLayout() self:RefreshHUD() end

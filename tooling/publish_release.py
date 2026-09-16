@@ -24,6 +24,29 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
         raise RuntimeError('Unexpected redirect; authorization was not forwarded')
 
 
+def publication_request(policy, environment):
+    """Fail closed before requesting credentials or writing any remote state."""
+    if (policy.get('publish') is not True
+            or policy.get('source_branch') != 'main'
+            or environment.get('GITHUB_REPOSITORY') != policy.get('repository')
+            or environment.get('GITHUB_REF') != 'refs/heads/main'
+            or environment.get('GITHUB_EVENT_NAME') != 'workflow_dispatch'
+            or environment.get('ASUI_RELEASE_REQUESTED') != 'true'
+            or environment.get('ASUI_RELEASE_VERSION') != policy.get('version')):
+        raise ValueError('Publication is not authorized for this repository/event/ref/version')
+    for gate in ('environment_review_configured', 'protocol_ids_reserved',
+                 'protocol_coexistence_validated', 'native_acceptance_complete'):
+        if policy.get(gate) is not True:
+            raise ValueError('Release prerequisite is incomplete: ' + gate)
+    if policy.get('release_environment') != 'release':
+        raise ValueError('Publication requires the reviewed release environment')
+    commit = environment.get('GITHUB_SHA', '')
+    if not re.fullmatch(r'[a-f0-9]{40}', commit):
+        raise ValueError('An exact committed source is required')
+    version_numbers(policy['version'])
+    return policy['version'], commit
+
+
 def verified_artifacts(folder, version, commit, require_clean=True):
     version_numbers(version)
     data = json.loads((folder / 'release.json').read_text())
@@ -127,16 +150,8 @@ def main():
     parser.add_argument('--dry-run', action='store_true')
     args = parser.parse_args()
     policy = json.loads((ROOT / 'tooling/release-policy.json').read_text())
-    repository = os.environ.get('GITHUB_REPOSITORY')
-    ref = os.environ.get('GITHUB_REF')
-    if (not policy['publish'] or repository != policy['repository']
-            or ref != 'refs/heads/' + policy['source_branch']
-            or os.environ.get('GITHUB_EVENT_NAME') != 'push'):
-        raise ValueError('Publication is not authorized for this repository/event/ref')
-    version = policy['version']
-    commit = os.environ.get('GITHUB_SHA', '')
-    if not re.fullmatch(r'[a-f0-9]{40}', commit):
-        raise ValueError('An exact committed source is required')
+    version, commit = publication_request(policy, os.environ)
+    repository = os.environ['GITHUB_REPOSITORY']
     paths = verified_artifacts(args.artifacts, version, commit, require_clean=True)
     if args.dry_run:
         print(f'Publication inputs verified: v{version}, {commit[:12]}, {len(paths)} assets. No network writes.')

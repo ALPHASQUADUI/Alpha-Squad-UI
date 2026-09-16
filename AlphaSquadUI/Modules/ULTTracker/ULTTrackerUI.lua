@@ -354,6 +354,7 @@ function ULT:ApplyVisibility()
     if self.Group and self.Group.ApplyVisibility then
         self.Group:ApplyVisibility()
     end
+    if not hidden and self.hudDirty and not self.renderingHUD then self:RefreshHUD() end
 end
 
 function ULT:GetEffectiveScale()
@@ -451,7 +452,17 @@ end
 
 function ULT:RefreshHUD()
     if not self.window or not self.sv then return end
+    if self.renderingHUD then return end
+    self.renderingHUD = true
+    self:ApplyVisibility()
+    if self.window:IsHidden() then
+        self.hudDirty = true
+        self.renderingHUD = false
+        return
+    end
+    self.hudDirty = false
     self:ApplyLayout()
+    self.renderingHUD = false
 end
 
 function ULT:UpdateReadyPulse()

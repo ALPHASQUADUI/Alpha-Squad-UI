@@ -226,10 +226,24 @@ function UI.EffectTooltip(key)
     return text
 end
 function UI.Status(row)
+    if row.readiness then
+        local status=row.severity=="unknown" and "UNKNOWN" or "CHECK"
+        return status.." "..tostring(row.count or 1),row.severity=="error" and C.red or C.gold
+    end
     if row.status=="off" or row.optional then return "TRACKING OFF",C.muted end
-    if row.status=="covered" then return "COVERED",C.green end
+    if row.status=="covered" then
+        if row.partialRecipients then return "LIMITED",C.gold end
+        return "SOURCE",C.green
+    end
     if row.unverified or row.status=="unknown" then return "UNKNOWN",C.gold end
     return "MISSING",C.red
+end
+function UI.RecipientNotice(row)
+    if not row or not row.partialRecipients then return nil end
+    local limit,players=tonumber(row.recipientLimit),tonumber(row.groupSize)
+    local text=limit and players and string.format("Some sources reach at most %d recipients per application; this group has %d players.",limit,players)
+        or "Some sources have fewer recipients than the group has players."
+    return text.." Source availability does not prove that every player receives the effect. Multiple providers are not assumed to reach different players."
 end
 
 SC.layoutName="Support Coverage"
@@ -343,9 +357,10 @@ end
 function SC:GetHUDIssues(coverage)
     local rows={}
     coverage=coverage or self.coverage
+    for _,row in ipairs(coverage and coverage.readinessIssues or {}) do rows[#rows+1]=row end
     for _,row in ipairs(coverage and coverage.entries or {}) do
         local duplicate=#(row.duplicatePlayers or {})>1
-        if coverage.preview or not self.sv.problemsOnly or row.status~="covered" or duplicate then rows[#rows+1]=row end
+        if coverage.preview or not self.sv.problemsOnly or row.status~="covered" or duplicate or row.partialRecipients then rows[#rows+1]=row end
     end
     return rows
 end
@@ -357,8 +372,8 @@ function SC:RefreshHUD()
     local rows=self:GetHUDIssues(coverage); local rowHeight=self.Clamp(self.sv.rowHeight or 30,24,48)
     local width,height=self:GetHUDDimensions()
     win:SetDimensions(width,height)
-    win.status:SetText(string.format("%d / %d covered",coverage.coveredCount or 0,coverage.requiredCount or 0))
-    UI.Color(win.status,coverage.ready and C.green or C.gold)
+    win.status:SetText(string.format("%d / %d sources",coverage.coveredCount or 0,coverage.requiredCount or 0))
+    UI.Color(win.status,coverage.ready and #(coverage.readinessIssues or {})==0 and (coverage.limitedSourceCount or 0)==0 and C.green or C.gold)
     win.summary:SetText((coverage.profileLabel or "Group preparation") .. "  •  " .. tostring(players) .. " players")
     win.note:SetText(coverage.preview and "Preview only • sample players and states" or #rows==0 and "No preparation issues to display." or #rows*rowHeight>height-158 and "Scroll for more • Coverage has every source" or "Hover for details • open Coverage for sources")
     for index,data in ipairs(rows) do
@@ -378,13 +393,19 @@ function SC:RefreshHUD()
             UI.Hover(row,function()
                 if not row.data then return nil end
                 local effect=row.data.effect or {}
+                if row.data.readiness then
+                    return effect.label.."\n\n"..table.concat(row.data.details or {},"\n")
+                        .."\n\nUnknown means unverified, not missing. Open Builds to inspect the reported details."
+                end
                 local names={}; for _,player in ipairs(row.data.owners or {}) do names[#names+1]=player.displayName or "Unknown player" end
                 local text=(effect.label or "Support coverage").."\n\n"..(effect.description or "Available build source")
                 local visual=SC.Catalog and SC.Catalog.GetEffectVisual and SC.Catalog:GetEffectVisual(row.data.key)
                 if visual and visual.isFallback then text=text.."\n\nIcon: native category symbol; exact artwork is unavailable."
                 elseif visual and visual.iconKind=="source" and visual.sourceName then text=text.."\n\nSource icon: "..visual.sourceName end
+                local recipients=UI.RecipientNotice(row.data)
                 return (row.data.preview and "Layout preview • sample data only\n\n" or "")..text
                     .."\n\nSource carriers: "..(#names>0 and table.concat(names,", ") or "Not verified")
+                    ..(recipients and "\n\n"..recipients or "")
                     .."\n\nOpen Coverage for tracking switches, all possible sources and each player's details."
             end)
             win.list.rows[index]=row
@@ -396,7 +417,7 @@ function SC:RefreshHUD()
         local iconSize=math.min(22,rowHeight-6)
         row.icon:ClearAnchors();row.icon:SetAnchor(TOPLEFT,row,TOPLEFT,6,2);row.icon:SetDimensions(iconSize,iconSize)
         row.divider:ClearAnchors();row.divider:SetAnchor(BOTTOMLEFT,row,BOTTOMLEFT,0,0);row.divider:SetWidth(width-42)
-        local visual=self.Catalog and self.Catalog.GetEffectVisual and self.Catalog:GetEffectVisual(data.key)
+        local visual=not data.readiness and self.Catalog and self.Catalog.GetEffectVisual and self.Catalog:GetEffectVisual(data.key)
         local icon=visual and visual.icon
         row.icon:SetTexture(icon or "");row.icon:SetHidden(type(icon)~="string" or icon=="")
         row.name:SetText(UI.Text(data.effect.label))

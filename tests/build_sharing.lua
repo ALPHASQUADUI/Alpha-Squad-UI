@@ -120,6 +120,11 @@ local function NewClient(key,options)
             function protocol:IsEnabled() return self.enabled end
             function protocol:Send(payload,config)
                 if self.rejectSend then return false end
+                if config and config.replaceQueuedMessages then
+                    for index=#frames,1,-1 do
+                        if frames[index].sender==key and frames[index].id==id then table.remove(frames,index) end
+                    end
+                end
                 frames[#frames+1]={sender=key,id=id,data=copy(payload),at=now,config=copy(config)}
                 return true
             end
@@ -424,7 +429,9 @@ ResetWorld();alice,bob=NewClient("@Alice"),NewClient("@Bob")
 assert(alice.SC:RequestPlayerBuild("@Bob"));frames={};Advance(20050)
 check(not alice.SC.share.incomingBuild and alice.SC.share.buildStatus:find("No response",1,true),
     "An unanswered request expires with an actionable status")
-check(#frames==0,"A timeout does not start an unsolicited retransmission loop")
+check(#frames==1 and frames[1].data.kind==0,"One bounded request retry is the only traffic before an unanswered request expires")
+frames={};Advance(60000)
+check(#frames==0,"An expired request never starts a retransmission loop")
 alice.protocols[507].rejectSend=true
 check(alice.SC:RequestPlayerBuild("@Bob")==false and not alice.SC.share.incomingBuild,
     "A rejected request is not presented as an active transfer")
@@ -485,4 +492,107 @@ check(alice.SC:RequestPlayerBuild("@Bob")==false and #frames==0,
 alice.protocols[510].IsEnabled=function()error("Library setting unavailable")end
 check(alice.SC:ShareLocalSnapshot("unavailable setting")==false and #frames==0,
     "An incompatible native summary setting fails closed without a Lua error")
+
+-- Watchdogs expire private partial data independently of inspector visibility.
+ResetWorld();alice,bob=NewClient("@Alice"),NewClient("@Bob")
+PrimeSummary(alice,bob);frames={};assert(alice.SC:RequestPlayerBuild("@Bob"));frames={}
+local abandoned=alice.SC.share.incomingBuild
+local abandonedBody=assert(bob.SC.BuildCodec.Encode(bob.SC.localSnapshot))
+Advance(10000)
+alice.SC:OnDetailData("group2",WireChunk(alice,bob,abandonedBody,abandoned.revision,1,math.ceil(#abandonedBody/56)))
+Advance(20001)
+check(not alice.SC.share.incomingBuild and next(abandoned.parts)==nil,
+    "A partial transfer expires twenty seconds after progress without another packet or an open inspector")
+frames={};Advance(300000)
+check(#frames==0,"An expired partial transfer retains no retry loop")
+
+-- Continuous progress cannot monopolize the transfer slot indefinitely.
+ResetWorld();alice,bob=NewClient("@Alice"),NewClient("@Bob")
+PrimeSummary(alice,bob);assert(alice.SC:RequestPlayerBuild("@Bob"));frames={}
+local slow=alice.SC.share.incomingBuild
+local slowBody=string.rep("x",56*20)
+for index=1,9 do
+    Advance(19000)
+    alice.SC:OnDetailData("group2",WireChunk(alice,bob,slowBody,slow.revision,index,20))
+    check(alice.SC.share.incomingBuild==slow,"Recent progress remains valid before the total transfer deadline")
+end
+Advance(9001)
+check(not alice.SC.share.incomingBuild and next(slow.parts)==nil,
+    "A progressing transfer still expires at the three-minute hard lifetime")
+
+-- A lost first response gets one compatible replay, without another capture.
+ResetWorld();alice,bob=NewClient("@Alice"),NewClient("@Bob")
+local captures=0
+function bob.SC:ScanLocalPlayer() captures=captures+1;return copy(self.localSnapshot) end
+assert(alice.SC:RequestPlayerBuild("@Bob"));Deliver(assert(Take("@Alice",507,0)),bob)
+Take("@Bob",507,1);Take("@Bob",510);Take("@Bob",507,2)
+Advance(6000)
+local retriedRequest=assert(Take("@Alice",507,0))
+Deliver(retriedRequest,bob)
+check(Take("@Bob",507,1)~=nil and captures==1,"A retry replays the first bounded response without recapturing the build")
+Deliver(retriedRequest,bob)
+check(Take("@Bob",507,1)==nil and captures==1,"Repeated request retries cannot replay or recapture indefinitely")
+Advance(20001)
+check(not bob.SC.share.outgoingBuild,"An abandoned outgoing transfer also expires without a heartbeat")
+
+-- Relevance flags are not queue cancellation. Exercise replacement at drain.
+for _,transition in ipairs({"Combat started","Loading","Group changed"}) do
+    ResetWorld();alice,bob=NewClient("@Alice"),NewClient("@Bob")
+    assert(alice.SC:RequestPlayerBuild("@Bob"));Deliver(assert(Take("@Alice",507,0)),bob)
+    frames[#frames+1]={sender="@Bob",id=20,data={unrelated=true}}
+    check(bob.SC:PauseBuildSharing(transition),"A transition can revoke only its own queued protocols")
+    local other=0
+    for _,frame in ipairs(frames) do
+        if frame.sender=="@Bob" then
+            if frame.id==20 then other=other+1
+            else check(frame.data.version==0,"Native queue drain sees no build bytes after a pause") end
+        end
+    end
+    check(other==1 and not bob.SC.share.outgoingBuild,"Pausing preserves unrelated traffic and cancels local state")
+    check(not bob.SC:ShareLocalSnapshot("paused"),"A paused transport cannot enqueue a new snapshot")
+    check(bob.SC:ResumeBuildSharing() and bob.SC:ShareLocalSnapshot("resumed"),
+        "Successful queue revocation resumes with existing consent")
+end
+
+ResetWorld();alice,bob=NewClient("@Alice"),NewClient("@Bob")
+assert(alice.SC:ShareLocalSnapshot("queued"))
+local suspensions=0
+alice.env.AlphaSquadUI.Sharing={SuspendBuildTransport=function()
+    suspensions=suspensions+1;alice.protocols[507].enabled=false;alice.protocols[510].enabled=false
+    alice.SC.share.transportResumeRequired=true
+end,RestoreBuildTransport=function()return not alice.SC.share.transportResumeRequired end}
+alice.protocols[507].rejectSend=true
+check(not alice.SC:PauseBuildSharing("Combat started") and suspensions==1,
+    "A failed queue revoke invokes the owned-protocol fail-closed bridge")
+alice.protocols[507].rejectSend=false
+check(not alice.SC:ResumeBuildSharing() and not alice.SC:ShareLocalSnapshot("blocked"),
+    "Clearing the old queue cannot silently restore a native OFF after a revoke failure")
+
+-- Duplicate summaries retain freshness without reconstructing peer records.
+ResetWorld();alice,bob=NewClient("@Alice"),NewClient("@Bob")
+PrimeSummary(alice,bob)
+local duplicatePeer=alice.SC.peerData["@Bob"]
+local duplicatePayload=bob.SC:BuildSharePayload()
+Advance(1500);alice.SC:OnPeerShareData("group2",duplicatePayload)
+check(alice.SC.peerData["@Bob"]==duplicatePeer and duplicatePeer.scannedAt==now,
+    "An unchanged heartbeat refreshes freshness while reusing the peer record")
+duplicatePeer.scannedAt=now-75001;alice.SC.lastRefreshReason=nil
+alice.SC:OnPeerShareData("group2",duplicatePayload)
+check(alice.SC.lastRefreshReason=="peer availability" and duplicatePeer.scannedAt==now,
+    "An identical heartbeat schedules immediate recovery when the displayed summary was stale")
+duplicatePeer.fullBuild={};duplicatePeer.fullBuildAt=now-120001;alice.SC.lastRefreshReason=nil
+alice.SC:OnPeerShareData("group2",duplicatePayload)
+check(alice.SC.lastRefreshReason=="peer availability" and not duplicatePeer.fullBuild,
+    "Deduplication still refreshes views when pruning removed expired private details")
+for index=1,20 do
+    local burst=copy(duplicatePayload);burst.supportScore=index
+    alice.SC:OnPeerShareData("group2",burst)
+end
+check(alice.SC.peerData["@Bob"].supportScore<=8,"A malformed-rate summary burst has a fixed per-peer processing budget")
+Advance(1000)
+local recovered=copy(duplicatePayload);recovered.supportScore=25
+alice.SC:OnPeerShareData("group2",recovered)
+check(alice.SC.peerData["@Bob"].supportScore==25,"A rate-limited peer recovers on the next bounded window")
+members={"@Alice","@Carol"};alice.SC:PrunePeerSharingData()
+check(alice.SC.share.receiveBudgets["@Bob"]==nil,"Departed identities cannot accumulate receive budget entries")
 print("Build sharing: "..assertions.." assertions passed")

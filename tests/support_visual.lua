@@ -138,6 +138,25 @@ check(created==pool and requests==0 and scans==0,'Theme refresh reuses the build
 inspector:SetHidden(true);Theme.SetPreset('obsidian');inspector:SetHidden(false);SC:RefreshInspector()
 check(ColorKey(inspector.playerList.rows[1].bg.color)==ColorKey(Theme.colors.selected),'Opening a previously hidden build restores selection in the current theme')
 check(requests==0 and scans==0,'Reopening presentation through refresh uses the cached snapshot only')
+local originalBuildDetails=SC.GetPlayerBuildDetails
+local transferStatus='Receiving build: 1 / 4'
+SC.GetPlayerBuildDetails=function()return nil,transferStatus end
+SC.roster[1].externalSets={fresh=true,sessionValid=true,updatedAt=99000,
+    setList={{name='Shared set',mainCount=5,frontKnown=true}}}
+SC:RefreshInspector()
+check(not inspector.buildSheet.sets.rows[1].hidden and inspector.buildSheet.state.hidden,
+    'Partial external set rows remain visible during a build transfer')
+check(inspector.subtitle.text:find(transferStatus,1,true),
+    'Build progress remains visible in the header when external sets hide the empty-state label')
+transferStatus='No response. Check sharing settings.';SC:RefreshInspector()
+check(inspector.subtitle.text:find(transferStatus,1,true),
+    'A failed build request displays its actionable reason alongside existing partial data')
+SC.GetPlayerBuildDetails=originalBuildDetails;SC.roster[1].externalSets=nil;SC:RefreshInspector()
+SC.inspectorRequestKey=SC.inspectorPlayerKey;SC.inspectorRequestError='Please wait briefly before requesting another build.'
+SC:RefreshInspector()
+check(inspector.subtitle.text:find(SC.inspectorRequestError,1,true) and inspector.buildSheet.snapshot==details,
+    'A rejected refresh explains its reason while preserving the previously verified snapshot')
+SC.inspectorRequestError=nil;SC:RefreshInspector()
 -- Repeated refreshes at non-unit native scale never feed rendered child height back into layout.
 local setList={}
 for i=1,14 do setList[i]={name='Fragmented set '..i,mainCount=1,backCount=1}end
@@ -166,7 +185,7 @@ SC.Catalog.GetAllEffectKeys=function()return demoKeys end
 SC.sv.problemsOnly=true
 SC:RefreshHUD()
 check(#SC.window.list.rows>=12 and not SC.window.list.rows[12].hidden,'Placement fills the support preview even with issues-only enabled')
-check(SC.window.list.rows[1].value.text=='COVERED' and SC.window.list.rows[2].value.text=='MISSING' and SC.window.list.rows[3].value.text=='UNKNOWN','Preview includes distinct known ready, missing and unknown states')
+check(SC.window.list.rows[1].value.text=='SOURCE' and SC.window.list.rows[2].value.text=='MISSING' and SC.window.list.rows[3].value.text=='UNKNOWN','Preview distinguishes an available source from missing and unknown states')
 check(SC.window.list.rows[4].value.text=='DUPLICATE 3' and SC.window.list.rows[5].value.text=='TRACKING OFF','Preview shows duplicate and optional tracking states')
 check(SC.window.summary.text:find('12 players',1,true) and SC.window.note.text:find('Preview only',1,true),'Sample population is clearly identified')
 SC.sv.problemsOnly=false

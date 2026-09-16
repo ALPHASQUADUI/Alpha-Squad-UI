@@ -2,7 +2,8 @@
 -- Stop-and-wait flow control queues only one detail response per active transfer.
 local SC=AlphaSquadUI.Modules.SupportCoverage
 local Details={ID=507,VERSION=3,MAX_BYTES=64,CHUNK_BYTES=56,MAX_CHUNKS=64,MAX_HASH=16777214,
-    FINGERPRINT_MODULUS=32767,CACHE_MS=120000,TIMEOUT_MS=20000,MIN_SEND_MS=1200}
+    FINGERPRINT_MODULUS=32767,CACHE_MS=120000,TIMEOUT_MS=20000,MAX_TRANSFER_MS=180000,
+    REQUEST_RETRY_MS=6000,MIN_SEND_MS=1200}
 SC.Details=Details
 Details.Hash=SC.BuildCodec.Hash
 Details.Checksum=Details.Hash
@@ -12,7 +13,9 @@ local function Integer(value,minimum,maximum)
 end
 local function Enabled(sc)
     return sc.sv and sc.sv.experimentalSharing and sc.sv.shareData
-        and not sc.inCombat and not sc.loading and sc:IsGrouped() and sc.share and not sc.share.controlError and sc.share.detailProtocol
+        and not sc.inCombat and not sc.loading and sc:IsGrouped() and sc.share
+        and not sc.share.transportPaused and not sc.share.transportResumeRequired
+        and not sc.share.controlError and sc.share.detailProtocol
 end
 local function ValidKey(key)
     return type(key)=="string" and #key>1 and #key<=60 and key:match("^@[^%c|]+$")
@@ -44,24 +47,67 @@ local function UnpackHash(body)
     local a,b,c=body:byte(1,3)
     return a and b and c and a*65536+b*256+c or nil
 end
+local effectCatalog,effectKeys,effectHash
 local function EffectKeys()
-    local keys={}
-    for key in pairs(SC.Catalog.effects or {}) do keys[#keys+1]=key end
-    table.sort(keys)
-    return keys
+    local catalog=SC.Catalog.effects
+    if effectCatalog~=catalog or not effectKeys then
+        effectCatalog=catalog;effectKeys={}
+        for key in pairs(catalog or {}) do effectKeys[#effectKeys+1]=key end
+        table.sort(effectKeys)
+        effectHash=Details.Hash(table.concat(effectKeys,"|"))
+    end
+    return effectKeys,effectHash
+end
+local function Expired(sc,transfer)
+    local now=sc.NowMs()
+    return now-(transfer.updatedAt or 0)>=Details.TIMEOUT_MS
+        or now-(transfer.startedAt or transfer.updatedAt or 0)>=Details.MAX_TRANSFER_MS
+end
+-- One live watchdog per transfer. Progress moves its deadline without leaving
+-- an unbounded timer per fragment or depending on the inspector being visible.
+local function WatchTransfer(sc,field,transfer)
+    local function Check()
+        if not sc.share or sc.share[field]~=transfer then return end
+        if Expired(sc,transfer) then
+            sc.share[field]=nil
+            transfer.body=nil
+            if field=="incomingBuild" then
+                transfer.parts={}
+                sc.share.buildStatus="No response or transfer timed out. The sender may be busy or unavailable; request again."
+                sc:ScheduleRefresh("build transfer timeout",100)
+            end
+            return
+        end
+        local now=sc.NowMs()
+        -- One compatible retry recovers a lost request or first response. It
+        -- never repeats scans or creates an unlimited retransmission loop.
+        if field=="incomingBuild" and transfer.received==0 and not transfer.requestRetried
+            and now-transfer.startedAt>=Details.REQUEST_RETRY_MS then
+            transfer.requestRetried=true
+            Frame(sc,0,transfer.revision,Details.Hash(transfer.key),transfer.key)
+        end
+        local delay=math.min(Details.TIMEOUT_MS-(now-transfer.updatedAt),
+            Details.MAX_TRANSFER_MS-(now-transfer.startedAt))
+        if field=="incomingBuild" and transfer.received==0 and not transfer.requestRetried then
+            delay=math.min(delay,Details.REQUEST_RETRY_MS-(now-transfer.startedAt))
+        end
+        zo_callLater(Check,math.max(1,delay))
+    end
+    zo_callLater(Check,field=="incomingBuild" and Details.REQUEST_RETRY_MS or Details.TIMEOUT_MS)
 end
 
 -- Expanded static catalog mask supplements the immutable legacy build masks.
 -- A schema mismatch is ignored rather than interpreting another client's indices.
 function SC:ShareCapabilitySummary()
     if not Enabled(self) or not self.localSnapshot then return false end
-    if self.share.outgoingBuild and self.NowMs()-self.share.outgoingBuild.updatedAt>Details.TIMEOUT_MS then
+    if self.share.outgoingBuild and Expired(self,self.share.outgoingBuild) then
         self.share.outgoingBuild=nil
     end
     if self.share.outgoingBuild then return false end
-    local keys,bytes=EffectKeys(),{}
+    local keys,schema=EffectKeys()
+    local bytes={}
     if #keys>256 then return false end
-    bytes[1]=PackHash(Details.Hash(table.concat(keys,"|")))
+    bytes[1]=PackHash(schema)
     for offset=1,#keys,8 do
         local mask=0
         for bit=0,7 do if self.localSnapshot.capabilities[keys[offset+bit]] then mask=mask+2^bit end end
@@ -74,8 +120,12 @@ end
 function SC:CancelBuildDetailTransfer(reason)
     if not self.share then return end
     self.share.transferGeneration=(self.share.transferGeneration or 0)+1
+    if self.share.outgoingBuild then self.share.outgoingBuild.body=nil end
     self.share.outgoingBuild=nil
-    if self.share.incomingBuild then self.share.buildStatus=reason or "Build request interrupted; request again out of combat." end
+    if self.share.incomingBuild then
+        self.share.incomingBuild.parts={}
+        self.share.buildStatus=reason or "Build request interrupted; request again out of combat."
+    end
     self.share.incomingBuild=nil
 end
 
@@ -104,7 +154,8 @@ function SC:GetPlayerBuildDetails(key)
     if peer.characterName and character~="" and peer.characterName~=character then return nil,"Player changed character. Request a fresh build." end
     local pending=self.share and self.share.incomingBuild
     if pending and pending.key==key then
-        if self.NowMs()-pending.updatedAt>Details.TIMEOUT_MS then
+        if Expired(self,pending) then
+            pending.parts={}
             self.share.incomingBuild=nil
             self.share.buildStatus="No response. Check that the player enabled compatible build sharing, then request again."
         else return nil,string.format("Receiving build: %d / %d",pending.received or 0,pending.total or 0) end
@@ -130,36 +181,37 @@ function SC:RequestPlayerBuild(key)
     local revision=self.share.requestRevision
     if not Frame(self,0,revision,Details.Hash(key),key) then return false,"Build request could not be queued." end
     self.share.lastRequestAt=now
-    self.share.incomingBuild={key=key,revision=revision,updatedAt=now,received=0,parts={}}
+    if self.share.incomingBuild then self.share.incomingBuild.parts={} end
+    self.share.incomingBuild={key=key,revision=revision,startedAt=now,updatedAt=now,received=0,parts={}}
     self.share.requestedKey=key
-    self.share.buildStatus="Waiting for the selected player's compatible sender."
-    local pending=self.share.incomingBuild
-    zo_callLater(function()
-        if SC.share and SC.share.incomingBuild==pending and SC.NowMs()-pending.updatedAt>=Details.TIMEOUT_MS then
-            SC.share.incomingBuild=nil;SC.share.buildStatus="No response. Check the player's sharing settings and request again."
-            SC:ScheduleRefresh("build request timeout",100)
-        end
-    end,Details.TIMEOUT_MS+50)
+    self.share.buildStatus="Waiting for the selected player. The sender may be serving another request."
+    WatchTransfer(self,"incomingBuild",self.share.incomingBuild)
     return true,self.share.buildStatus
 end
 
 local function SendChunk(sc,stream,index)
     if not Enabled(sc) or sc.share.outgoingBuild~=stream or not TagForKey(sc,stream.requester)
-        or sc.NowMs()-stream.updatedAt>Details.TIMEOUT_MS then return end
+        or Expired(sc,stream) then return end
     local start=(index-1)*Details.CHUNK_BYTES+1
     local fragment=stream.body:sub(start,start+Details.CHUNK_BYTES-1)
     local body=PackHash(stream.targetHash)..string.char(index,stream.total)..fragment
     if Frame(sc,1,stream.revision,stream.checksum,body) then
         stream.sent=index;stream.sentAt=sc.NowMs();stream.updatedAt=stream.sentAt
-        if index==stream.total then sc.share.outgoingBuild=nil end
-    else sc.share.outgoingBuild=nil end
+        if index==stream.total then sc.share.outgoingBuild=nil;stream.body=nil end
+    else sc.share.outgoingBuild=nil;stream.body=nil end
 end
 
 local function OnRequest(sc,tag,data)
     if not ValidKey(data.body) or data.body~=sc:GetPlayerKey("player") or data.checksum~=Details.Hash(data.body) then return end
     local now=sc.NowMs()
     local old=sc.share.outgoingBuild
-    if old and now-old.updatedAt<=Details.TIMEOUT_MS then return end
+    if old and not Expired(sc,old) then
+        if old.requester==sc:GetPlayerKey(tag) and old.revision==data.revision and old.sent==1
+            and not old.requestRetried and now-(old.sentAt or 0)>=Details.REQUEST_RETRY_MS then
+            old.requestRetried=true;SendChunk(sc,old,1)
+        end
+        return
+    end
     if now-(sc.share.lastResponseAt or -60000)<20000 then return end
     if not sc.ScanLocalPlayer then return end
     -- Rate-limit attempts too: unreadable native state must not permit a peer
@@ -181,15 +233,16 @@ local function OnRequest(sc,tag,data)
     if not sc:ShareLocalSnapshot("requested build") then return end
     local requester=sc:GetPlayerKey(tag)
     local stream={body=body,total=math.ceil(#body/Details.CHUNK_BYTES),checksum=Details.Hash(body),revision=data.revision,
-        requester=requester,targetHash=Details.Hash(requester),updatedAt=now,sent=0}
+        requester=requester,targetHash=Details.Hash(requester),startedAt=now,updatedAt=now,sent=0}
     sc.share.outgoingBuild=stream
     SendChunk(sc,stream,1)
+    WatchTransfer(sc,"outgoingBuild",stream)
 end
 
 local function OnAcknowledgment(sc,tag,data)
     local stream=sc.share.outgoingBuild
-    if stream and sc.NowMs()-stream.updatedAt>Details.TIMEOUT_MS then
-        sc.share.outgoingBuild=nil;return
+    if stream and Expired(sc,stream) then
+        stream.body=nil;sc.share.outgoingBuild=nil;return
     end
     if not stream or stream.requester~=sc:GetPlayerKey(tag) or stream.revision~=data.revision
         or data.checksum~=Details.Hash(data.body) or #data.body<2 then return end
@@ -206,7 +259,8 @@ end
 local function OnChunk(sc,tag,data)
     local pending=sc.share.incomingBuild
     if not pending or pending.key~=sc:GetPlayerKey(tag) or pending.revision~=data.revision or #data.body<6 then return end
-    if sc.NowMs()-pending.updatedAt>Details.TIMEOUT_MS then
+    if Expired(sc,pending) then
+        pending.parts={}
         sc.share.incomingBuild=nil;sc.share.buildStatus="Build transfer timed out; request again."
         sc:ScheduleRefresh("build transfer timeout",100)
         return
@@ -229,6 +283,7 @@ local function OnChunk(sc,tag,data)
     end
     sc.share.incomingBuild=nil
     local body=table.concat(pending.parts)
+    pending.parts={}
     if Details.Hash(body)~=pending.checksum then sc.share.buildStatus="Build verification failed; request again.";return end
     local snapshot=sc.BuildCodec.Decode(body)
     if not snapshot then sc.share.buildStatus="Incompatible or incomplete build; update both senders.";return end
@@ -263,12 +318,14 @@ function SC:OnDetailData(tag,data)
     elseif data.kind==3 then OnAcknowledgment(self,tag,data)
     elseif data.kind==2 then
         if data.checksum~=Details.Hash(data.body) then return end
-        local keys=EffectKeys()
-        if #data.body~=3+math.ceil(#keys/8) or UnpackHash(data.body)~=Details.Hash(table.concat(keys,"|")) then return end
+        local keys,schema=EffectKeys()
+        if #data.body~=3+math.ceil(#keys/8) or UnpackHash(data.body)~=schema then return end
         local key=self:GetPlayerKey(tag)
         local peer=self.peerData[key]
         if not peer then return end
         if peer.buildDetailFingerprint and peer.buildDetailFingerprint~=data.revision then return end
+        if peer.capabilityWire==data.body and peer.capabilityRevision==data.revision then return end
+        if self.AcceptBuildPacket and not self:AcceptBuildPacket(key,"capabilities") then return end
         local capabilities={}
         for index,effect in ipairs(keys) do
             local byte=data.body:byte(4+math.floor((index-1)/8))
@@ -277,6 +334,7 @@ function SC:OnDetailData(tag,data)
             end
         end
         peer.summaryCapabilities=capabilities
+        peer.capabilityWire=data.body;peer.capabilityRevision=data.revision
         if not peer.fullBuild or peer.fullBuildFingerprint~=data.revision then peer.capabilities=capabilities end
         self:ScheduleRefresh("shared capabilities",100)
     end

@@ -5,7 +5,7 @@ from pathlib import Path
 import re
 import zipfile
 
-from package_utils import write_archive
+from package_utils import inspect_archive, validate_payloads, write_archive
 
 ROOT = Path(__file__).resolve().parents[1]
 FILES = [
@@ -41,10 +41,9 @@ def build(destination):
         members[prefix + "Shared/" + name] = content.encode()
     if (ROOT / "LICENSE").is_file():
         members[prefix + "LICENSE"] = (ROOT / "LICENSE").read_bytes()
+    validate_payloads(members, "AlphaSquadBuildShare")
     write_archive(destination, members)
-    with zipfile.ZipFile(destination) as archive:
-        assert archive.testzip() is None
-        assert len(archive.namelist()) == len(members)
+    assert inspect_archive(destination, "AlphaSquadBuildShare") == members
     print(destination)
 
 if __name__ == "__main__":

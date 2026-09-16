@@ -8,12 +8,12 @@ Keep each change focused, explain the user problem and document the resulting be
 
 Update the README, module documentation and changelog when behavior changes. Use English in the addon and public documentation. Keep personal identities, private conversations, credentials and player snapshots out of commits and screenshots.
 
-Use a GitHub-provided `noreply` address for both author and committer metadata. Report historical exposures privately using [SECURITY.md](SECURITY.md); do not repeat sensitive values in a public issue or rewrite history as part of an unrelated change. Contributions to the addon are under its [MIT license](LICENSE); native game resources and external libraries retain their respective licenses.
+Use an approved public identity for both author and committer metadata. Maintainer commits prefer the public project address `info@alphasquadeso.com` with the approved aliases `SeRuM1` or `adi684`; the matching GitHub-provided `noreply` identity is also authorized, including when selected automatically by a connector. A `noreply` address is not mandatory. The project-mailbox approval covers only that exact address, not other addresses on the same domain or private identities. Report historical exposures privately using [SECURITY.md](SECURITY.md); do not repeat sensitive values in a public issue or rewrite history as part of an unrelated change. Contributions to the addon are under its [MIT license](LICENSE); native game resources and external libraries retain their respective licenses.
 
 ## Engineering rules
 
 - Prefer filtered events, coalesced work and bounded caches to frequent polling.
-- Apply fresh-install sharing defaults once, preserve explicit OFF choices, and display the actual native setting. Switches must not open another addon page.
+- Keep fresh-install sharing OFF until an explicit choice, preserve saved choices and native OFF, and display the actual native setting. Switches must not open another addon page.
 - Keep module tracking independent of library sharing. Disabled modules must release their subscriptions and timers; shared library events belong to their library.
 - Keep Cross-sync account and character settings separate, preserve existing namespaces and use deep copies for nested settings.
 - Use real ESO item links, skill/morph IDs, Champion allocation and native visual resources. Do not invent missing remote data or substitute the viewer's equipment for a sender's.
@@ -48,6 +48,6 @@ For client validation, record results in the [acceptance matrix](docs/CLIENT_ACC
 
 Keep manifest/Core versions aligned and increment the numeric AddOnVersion. Build installable full-suite and companion archives, inspect the CI result and publish concise notes describing the user-visible changes. Reserve the active LibGroupBroadcast protocol identifiers before a public full-build-sharing release. Preserve the maintainer's final approval step.
 
-Publication uses an explicit version policy, an authorized source ref and the exact artifacts from the successful validation job. The publish job alone receives repository-content write permission; pull-request validation does not. Existing releases and tags are never overwritten. An interrupted unpublished draft may resume only with matching source and asset digests. A correction after publication receives a new version.
+Publication requires a separate manual operation from reviewed main, an explicit version policy, recorded native acceptance and reserved transport identifiers. It uses the exact artifacts from the successful validation job; an ordinary development push never authorizes publication. The publish job alone receives repository-content write permission; pull-request validation does not. Existing releases and tags are never overwritten. An interrupted unpublished draft may resume only with matching source and asset digests. A correction after publication receives a new version.
 
 See [repository operations](docs/REPOSITORY_OPERATIONS.md) for required-check configuration, About metadata, private reporting and historical privacy. Committed configuration is not proof that administrator-only settings have been enabled.
