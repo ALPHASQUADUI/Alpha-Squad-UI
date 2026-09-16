@@ -92,7 +92,7 @@ check(Only(main) and inUIMode and S.ownsCursor,"Returning from placement restore
 inputWindows[main].close()
 check(not inUIMode and not S.ownsCursor,"Explicit Back from the root releases mouse mode entered by the addon")
 inUIMode=true;S.RestoreReturnTarget({id="settings",page="dashboard"});inputWindows[main].close()
-check(inUIMode,"Closing the addon preserves mouse mode that was already enabled by the player")
+check(not inUIMode,"Explicit root Close resumes gameplay even when the native cursor was already enabled")
 inUIMode=false;S.RestoreReturnTarget({id="settings",page="dashboard"});sceneName="inventory"
 local beforeDismiss=cursorCalls
 inputWindows[main].dismiss()

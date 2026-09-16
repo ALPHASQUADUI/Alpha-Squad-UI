@@ -22,6 +22,11 @@ ULT.savedVarsName = "AlphaSquadULTTrackerSavedVariables"
 local EM = AlphaSquadUI.Events and AlphaSquadUI.Events.NewScope and AlphaSquadUI.Events.NewScope(function(name,event)
     return event==EVENT_ADD_ON_LOADED or event==EVENT_PLAYER_ACTIVATED or event==EVENT_PLAYER_DEACTIVATED or name=="AlphaSquadUI_SettingsResize"
 end) or EVENT_MANAGER
+local BAR_KEYS = {"primary", "backup"}
+local function L(text, ...)
+    if AlphaSquadUI.L then return AlphaSquadUI.L(text, ...) end
+    return select("#", ...) > 0 and string.format(text, ...) or text
+end
 local ULTIMATE_POWER_TYPE = COMBAT_MECHANIC_FLAGS_ULTIMATE or POWERTYPE_ULTIMATE
 local ULTIMATE_SLOT_BASE = ACTION_BAR_ULTIMATE_SLOT_INDEX or 7
 local ULTIMATE_SLOT = ULTIMATE_SLOT_BASE + 1
@@ -110,7 +115,7 @@ function ULT:GetActiveBarCategory()
 end
 
 -- ESO replaces both weapon bars while a transformation or temporary action bar
--- is active. Keep the saved Front/Back choice intact and expose that live bar.
+-- is active. Expose that live bar instead of implying inaccessible weapons are usable.
 function ULT:HasSpecialActiveBar()
     local category=self:GetActiveBarCategory()
     return type(category)=="number" and category==category
@@ -178,6 +183,9 @@ function ULT:ReadBar(bar, reuseMetadata)
         bar.cost = 0
         bar.toggled = false
         bar.ready = false
+        bar.effectRemaining = 0
+        bar.recentlyUsedUntil = 0
+        bar.metadataCategory = nil
         return
     end
 
@@ -188,6 +196,12 @@ function ULT:ReadBar(bar, reuseMetadata)
         else boundId=0 end
     end
     local effectiveId = self:GetEffectiveAbilityId(boundId, category)
+    if effectiveId == 0 then
+        bar.abilityId, bar.cost, bar.effectRemaining, bar.recentlyUsedUntil = 0, 0, 0, 0
+        bar.isOverload, bar.ready, bar.toggled = false, false, false
+        bar.name, bar.icon, bar.metadataCategory = "", "", nil
+        return
+    end
     -- Resource ticks reuse only presentation metadata. Identity, cost, toggles
     -- and remaining duration are always native reads; slot/safety refreshes
     -- also recover a changed skill style without relying on an extra event.
@@ -211,19 +225,15 @@ function ULT:ReadBar(bar, reuseMetadata)
 end
 
 function ULT:ShouldTrackBar(key)
+    if key ~= "primary" and key ~= "backup" then return false end
     local moving=AlphaSquadUI.Layout and AlphaSquadUI.Layout.IsMoving(self)
-    local preview=moving and AlphaSquadUI.Preview and AlphaSquadUI.Preview.GetMode and AlphaSquadUI.Preview.GetMode()~="live"
+    local preview=moving and ((AlphaSquadUI.Preview and AlphaSquadUI.Preview.GetMode
+        and AlphaSquadUI.Preview.GetMode()) or self.layoutPreviewMode or "mixed")~="live"
     if not preview and self:HasSpecialActiveBar() then return key=="primary" end
-    local mode = self.sv and self.sv.trackMode or "auto"
-    if mode == "both" then return true end
-    local priority = self.Overload and self.Overload:GetPriorityBar()
-    if priority then return key == priority end
-    if mode == "main" then return key == "primary" end
-    if mode == "back" then return key == "backup" end
-    return key == (self:GetActiveBarCategory() == HOTBAR_CATEGORY_BACKUP and "backup" or "primary")
+    return true
 end
 function ULT:NeedsPulse()
-    for _,key in ipairs({"primary","backup"}) do
+    for _,key in ipairs(BAR_KEYS) do
         local bar=self:GetLiveBar(key)
         if self:ShouldTrackBar(key) then
             if bar.overload and (bar.overloadState == "warning" or bar.overloadState == "ready") then return true end
@@ -258,7 +268,7 @@ function ULT:ComputeBarState(bar, current)
     end
 
     bar.ready = false
-    return "charging"
+    return bar.cost > 0 and "charging" or "unknown"
 end
 
 function ULT:PlayReadySound()
@@ -357,6 +367,10 @@ function ULT:OnUltimateUsed(slotNum)
         self.specialBar.recentlyUsedUntil=now+1200
     end
 
+    local usedBar = self.specialBar and self.specialBar.category == activeCategory and self.specialBar
+        or (activeCategory == HOTBAR_CATEGORY_PRIMARY and self.bars.primary)
+        or (activeCategory == HOTBAR_CATEGORY_BACKUP and self.bars.backup)
+    if usedBar and not usedBar.overload then usedBar.state = "used" end
     if self.RefreshHUD then self:RefreshHUD() end
 
     zo_callLater(function() if ULT then ULT:Refresh("ultimate used") end end, 50)
@@ -391,13 +405,6 @@ function ULT:SetLocked(locked)
     self.sv.locked = locked
     if self.UpdateLockState then self:UpdateLockState() end
     if self.RefreshSettings then self:RefreshSettings() end
-end
-
-function ULT:SetTrackMode(mode)
-    if mode ~= "main" and mode ~= "back" and mode ~= "both" and mode ~= "auto" then return end
-    self.sv.trackMode = mode
-    if self.RefreshHUD then self:RefreshHUD() end
-    self:Refresh("track mode")
 end
 
 local function SceneVisible(scene)
@@ -598,14 +605,6 @@ function ULT:RegisterSlashCommands()
             ULT:SetEnabled(true)
         elseif lower == "disable" or lower == "off" then
             ULT:SetEnabled(false)
-        elseif lower == "auto" or lower == "mode auto" then
-            ULT:SetTrackMode("auto")
-        elseif lower == "main" or lower == "mode main" then
-            ULT:SetTrackMode("main")
-        elseif lower == "back" or lower == "mode back" then
-            ULT:SetTrackMode("back")
-        elseif lower == "both" or lower == "mode both" then
-            ULT:SetTrackMode("both")
         elseif lower == "reset" then
             if ULT.ResetPosition then ULT:ResetPosition() end
         elseif lower == "group" or lower == "group config" or lower == "group settings" then
@@ -630,12 +629,12 @@ function ULT:RegisterSlashCommands()
             if ULT.Group and ULT.Group.ResetPosition then ULT.Group:ResetPosition() end
         elseif lower == "status" then
             local p, b = ULT.bars.primary, ULT.bars.backup
-            d(string.format("|cE66A19[ĄS ULT]|r ULT %d | MAIN: %s (%d) %s | BACK: %s (%d) %s",
+            d(L("|cE66A19[ĄS ULT]|r ULT %d | MAIN: %s (%d) %s | BACK: %s (%d) %s",
                 ULT.currentUltimate or 0,
-                p.name ~= "" and p.name or "EMPTY", p.cost or 0, p.state or "",
-                b.name ~= "" and b.name or "EMPTY", b.cost or 0, b.state or ""))
+                p.name ~= "" and p.name or L("EMPTY"), p.cost or 0, L(string.upper(p.state or "")),
+                b.name ~= "" and b.name or L("EMPTY"), b.cost or 0, L(string.upper(b.state or ""))))
         else
-            d("|cE66A19[ĄS ULT]|r /asult • main • back • both • group • group show/hide • reset • status • /asmove")
+            d("|cE66A19[ĄS ULT]|r /asult • group • group show/hide • reset • status • /asmove")
         end
     end
 end
@@ -648,7 +647,6 @@ function ULT:Initialize()
         enabled = true,
         visible = true,
         locked = true,
-        trackMode = "auto",
         hudOrientation = "horizontal",
         readySound = true,
         readyFlash = true,
@@ -675,9 +673,9 @@ function ULT:Initialize()
     self.sv.opacity = Clamp(FiniteOr(self.sv.opacity, defaults.opacity), 30, 100)
     self.sv.x = Clamp(FiniteOr(self.sv.x, defaults.x), -100000, 100000)
     self.sv.y = Clamp(FiniteOr(self.sv.y, defaults.y), -100000, 100000)
-    if self.sv.trackMode ~= "main" and self.sv.trackMode ~= "back" and self.sv.trackMode ~= "both" and self.sv.trackMode ~= "auto" then
-        self.sv.trackMode = "auto"
-    end
+    -- Both weapon bars are now mandatory; retire only the obsolete display choice.
+    -- Saved orientation, per-orientation dimensions and placement remain untouched.
+    self.sv.trackMode = nil
 
     self:ReadBar(self.bars.primary);self:ReadBar(self.bars.backup)
     if self.Overload then self.Overload:Migrate(false);self.Overload:RegisterCommands() end

@@ -1,6 +1,10 @@
 -- Scoped keyboard/gamepad navigation. Gameplay bindings are never reassigned.
 -- Uses ESO's action layers, directional input, movement controller and dialogs.
 local ASUI = AlphaSquadUI
+local function L(text, ...)
+    if ASUI.L then return ASUI.L(text, ...) end
+    return select("#", ...)>0 and string.format(text, ...) or text
+end
 local Input = { entries = {}, windows = {}, keys = {}, layoutMode = "move" }
 ASUI.Input = Input
 local LAYER = "AlphaSquadUIInput"
@@ -46,7 +50,7 @@ local function Handler(control, name, ...)
 end
 local function Eligible(entry)
     local control = entry and entry.control
-    if not control or Hidden(control) or Root(control) ~= Input.activeWindow then return false end
+    if not control or Hidden(control) or (entry.window or Root(control)) ~= Input.activeWindow then return false end
     if entry.enabled and not entry.enabled(control) then return false end
     if control.enabled == false then return false end
     if control.IsEnabled and not control:IsEnabled() then return false end
@@ -95,6 +99,8 @@ local function PaintFocus(control)
     }
     for i, spec in ipairs(specs) do
         local border = Input.focusBorders[i]
+        local editing=Input.windows[Input.activeWindow] and Input.windows[Input.activeWindow].layout
+        if editing then border:SetColor(0.72,0.84,0.8,1) else border:SetColor(1,0.65,0.25,1) end
         if border.SetParent then border:SetParent(control) end
         border:ClearAnchors()
         border:SetAnchor(spec[1], control, spec[1], 0, 0)
@@ -164,22 +170,22 @@ function Input.GetHint()
                 KEYBIND_TEXT_OPTIONS_ABBREVIATED_NAME, KEYBIND_TEXTURE_OPTIONS_EMBED_MARKUP, gamepad)
             if type(label) == "string" and label ~= "" then return label end
         end
-        return fallback
+        return L(fallback)
     end
     local selectKey = Binding(gamepad and "ASUI_PAD_ACCEPT" or "ASUI_KEY_ACCEPT", gamepad and "Select" or "Enter")
     local backKey = Binding(gamepad and "ASUI_PAD_BACK" or "ASUI_KEY_BACK", gamepad and "Back" or "Esc")
     local window = Input.windows[Input.activeWindow]
     if window and window.layout then
-        if not gamepad then return "Drag a panel to move it. Drag a corner to resize. Esc saves." end
+        if not gamepad then return L("Drag a panel to move it. Drag a corner to resize. Esc saves.") end
         local mode = Input.layoutMode
         local modeKey = Binding(gamepad and "ASUI_PAD_MODE" or "ASUI_KEY_MODE", gamepad and "Secondary" or "Space")
         local previous = Binding(gamepad and "ASUI_PAD_PANEL_PREVIOUS" or "ASUI_KEY_PANEL_PREVIOUS", gamepad and "Left shoulder" or "PgUp")
         local nextKey = Binding(gamepad and "ASUI_PAD_PANEL_NEXT" or "ASUI_KEY_PANEL_NEXT", gamepad and "Right shoulder" or "PgDn")
-        return string.format("%s  |  %s: adjust  |  %s: mode  |  %s/%s: panel  |  %s: controls  |  %s: done",
-            mode:sub(1, 1):upper() .. mode:sub(2), gamepad and "Stick" or "Arrows", modeKey, previous, nextKey, selectKey, backKey)
+        return L("%s  |  %s: adjust  |  %s: mode  |  %s/%s: panel  |  %s: controls  |  %s: done",
+            L(mode:sub(1, 1):upper() .. mode:sub(2)), L(gamepad and "Stick" or "Arrows"), modeKey, previous, nextKey, selectKey, backKey)
     end
-    return string.format("%s: navigate  |  %s: select  |  Left/right: value  |  %s: back",
-        gamepad and "Stick / D-pad" or "Arrows / Tab", selectKey, backKey)
+    return L("%s: navigate  |  %s: select  |  Left/right: value  |  %s: back",
+        L(gamepad and "Stick / D-pad" or "Arrows / Tab"), selectKey, backKey)
 end
 local function RefreshHint()
     local window = Input.activeWindow
@@ -496,7 +502,15 @@ function Input.Initialize()
     Input.Refresh()
 end
 if ZO_CreateStringId then
-    ZO_CreateStringId("SI_BINDING_NAME_ASUI_OPEN_SETTINGS", "Open Alpha Squad UI")
-    ZO_CreateStringId("SI_BINDING_NAME_ASUI_MOVE_HUD", "Move Alpha Squad UI HUD")
+    ZO_CreateStringId("SI_BINDING_NAME_ASUI_OPEN_SETTINGS", L("Open Alpha Squad UI"))
+    ZO_CreateStringId("SI_BINDING_NAME_ASUI_MOVE_HUD", L("Move Alpha Squad UI HUD"))
     ZO_CreateStringId("SI_ASUI_KEYBIND_CATEGORY", "Ąlpha Şquad UI")
 end
+
+if ASUI.Localization then ASUI.Localization.RegisterCallback("Input",function()
+    RefreshHint()
+    if SafeAddString then
+        SafeAddString(SI_BINDING_NAME_ASUI_OPEN_SETTINGS,L("Open Alpha Squad UI"),1)
+        SafeAddString(SI_BINDING_NAME_ASUI_MOVE_HUD,L("Move Alpha Squad UI HUD"),1)
+    end
+end) end

@@ -1,6 +1,6 @@
 # ESO acceptance checklist
 
-Version **3.3.1** / **30301**. This checklist is not a record of completed in-game tests. Record current results in the [client acceptance matrix](CLIENT_ACCEPTANCE.md).
+Version **3.4.0** / **30400**. This checklist is not a record of completed in-game tests. Record current results in the [client acceptance matrix](CLIENT_ACCEPTANCE.md).
 
 ## Native Add-Ons menu
 
@@ -134,3 +134,14 @@ Primary API and implementation references:
 - [Native texture names](https://github.com/esoui/esoui/blob/live/esoui/publicallingames/globals/sharedtextures.lua) and [effect identities](https://github.com/DakJaniels/LuiExtended/blob/master/LuiData/Effects/BarHighlight/MajorMinor.lua)
 
 These references describe contracts and resources, not completed in-game acceptance results.
+
+## 3.4.0 interface acceptance
+
+- Start a fresh English client and French client: Automatic selects the matching addon language. Other client locales fall back to English. Switch EN/FR/Automatic without reload on every page and already-open window; reconnect and change character to verify persistence. Native names/tooltips remain in ESO's client language.
+- Test 720p, 1080p and the actual custom UI scale. Inspect long French buttons, dropdowns, tooltips, contributor details and narrow Builds/Coverage layouts. No overlapped actions or clipped essential status.
+- Personal ULT: verify both slots in both orientations, left-side green marker through rapid weapon swaps, dimmed inactive slot, distinct costs, empty slot, unknown cost, transformation/temporary hotbar and recovery. No stale READY after spending.
+- Overload: verify gold active, green ready pulse and red reserve warning; check toggling behavior, combat, hiding and editor previews. The addon must never activate/cancel a skill.
+- Each module's Move HUD action opens placement; orientation icon is beside the intended HUD. Done and Escape select Alpha Squad in native Settings. Main Close returns gameplay. Combat/loading/different native menus dismiss without reopening settings.
+- Compare quiet solo, four-player and twelve-player frame time/memory before and after. Hidden/disabled HUDs stop presentation work. Verify no sharing changes when switching language, theme or visibility.
+
+These checks remain unrecorded until performed in ESO against the exact development commit.

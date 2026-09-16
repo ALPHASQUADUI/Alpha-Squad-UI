@@ -161,8 +161,14 @@ sc={sv={enabled=false,shareData=true,experimentalSharing=true},inCombat=false,pe
 AlphaSquadUI={Modules={SupportCoverage=sc}}
 assert(loadfile('AlphaSquadUI/Modules/SupportCoverage/SupportCoverageShare.lua'))()
 assert(loadfile('AlphaSquadUI/Modules/SupportCoverage/SupportCoverageDetails.lua'))()
-sc.share.available=true;sc.share.detailProtocol={IsEnabled=function()return true end}
+local nativeBuildEnabled=false
+sc.share.available=true
+sc.share.protocol={IsEnabled=function()return nativeBuildEnabled end}
+sc.share.detailProtocol={IsEnabled=function()return nativeBuildEnabled end}
 local request={version=3,kind=0,revision=1,checksum=Hash('@Self'),body='@Self'}
+for _=1,20 do sc:OnDetailData('group2',request) end
+check(scans==0 and sc.share.lastResponseAt==nil,'Native OFF requests cannot capture or consume the future ON response budget')
+nativeBuildEnabled=true
 for _=1,20 do sc:OnDetailData('group2',request) end
 check(scans==1,'Repeated requests cannot retrigger a failing native capture inside the rate limit')
 now=now+20001;sc:OnDetailData('group2',request)

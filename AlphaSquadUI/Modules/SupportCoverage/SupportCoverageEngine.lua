@@ -151,6 +151,16 @@ function SC:GetCapabilityOwners(effectKey)
     return owners
 end
 
+-- Preserve canonical evidence text while translating only at presentation time.
+-- The language selector can repaint cached readiness without another scan.
+function SC:FormatReadinessDetail(row, text)
+    local message=row and row.detailTemplates and row.detailTemplates[text]
+    if message and AlphaSquadUI.L then
+        return AlphaSquadUI.L(message.source,(unpack or table.unpack)(message.args))
+    end
+    return AlphaSquadUI.L and AlphaSquadUI.L(text) or text
+end
+
 function SC:EvaluateCoverage(reason)
     local profileKey = self.sv.activeProfile or "trial"
     local requirements = Catalog:GetRequirements(profileKey, self.sv)
@@ -183,17 +193,20 @@ function SC:EvaluateCoverage(reason)
     local readinessByKind={}
     local priorities={error=1,warning=2,unknown=3}
     local labels={players="Player status",food="Food & drink",glyphs="Armor glyphs"}
-    local function ReadinessIssue(kind,severity,message)
+    local function ReadinessIssue(kind,severity,source,...)
+        local args={...}
+        local message=#args>0 and string.format(source,(unpack or table.unpack)(args)) or source
         result.issues[#result.issues+1]={severity=severity,text=message,readinessCategory=kind}
         local row=readinessByKind[kind]
         if not row then
             row={key="readiness_"..kind,readiness=true,effect={label=labels[kind]},
-                severity=severity,status=severity=="unknown" and "unknown" or "missing",details={},count=0}
+                severity=severity,status=severity=="unknown" and "unknown" or "missing",details={},detailTemplates={},count=0}
             readinessByKind[kind]=row
             result.readinessIssues[#result.readinessIssues+1]=row
         end
         row.count=row.count+1
         row.details[#row.details+1]=message
+        row.detailTemplates[message]={source=source,args=args}
         if priorities[severity]<priorities[row.severity] then
             row.severity=severity
             row.status=severity=="unknown" and "unknown" or "missing"
@@ -210,16 +223,16 @@ function SC:EvaluateCoverage(reason)
         end
         if player.connected == false then
             result.ready = false
-            ReadinessIssue("players","error",player.displayName .. " - offline")
+            ReadinessIssue("players","error","%s - offline",player.displayName)
         elseif player.dead == true then
             result.ready = false
-            ReadinessIssue("players","warning",player.displayName .. " - dead")
+            ReadinessIssue("players","warning","%s - dead",player.displayName)
         else
             local food = player.food
             if self.sv.checkFoodPresence then
                 if not food or food.verified ~= true then
                     result.readinessUnknownCount = result.readinessUnknownCount + 1
-                    ReadinessIssue("food","unknown",player.displayName .. " - food unverified")
+                    ReadinessIssue("food","unknown","%s - food unverified",player.displayName)
                 elseif food.active == false then
                     result.foodMissing[#result.foodMissing + 1] = player.displayName
                 elseif tonumber(food.timeEnds) and tonumber(food.timeEnds) > 0 and (self.sv.foodWarningSeconds or 0) > 0 then
@@ -233,7 +246,7 @@ function SC:EvaluateCoverage(reason)
                 local glyphs = player.equipment and player.equipment.glyphs
                 if not glyphs or glyphs.verified ~= true then
                     result.readinessUnknownCount = result.readinessUnknownCount + 1
-                    ReadinessIssue("glyphs","unknown",player.displayName .. " - armor glyphs unverified")
+                    ReadinessIssue("glyphs","unknown","%s - armor glyphs unverified",player.displayName)
                 else
                     local missingGlyphs = tonumber(glyphs.armorMissing) or 0
                     if missingGlyphs > 0 then
@@ -335,18 +348,19 @@ function SC:EvaluateCoverage(reason)
     result.penetration.remaining = math.max(0, result.penetration.target - result.penetration.covered)
 
     for _, name in ipairs(result.foodMissing) do
-        ReadinessIssue("food","warning",name .. " - no food")
+        ReadinessIssue("food","warning","%s - no food",name)
         result.ready = false
     end
 
     for _, glyph in ipairs(result.glyphMissing) do
-        ReadinessIssue("glyphs","warning",string.format("%s - missing %d armor glyph%s", glyph.player, glyph.count, glyph.count == 1 and "" or "s"))
+        ReadinessIssue("glyphs","warning",glyph.count==1 and "%s - missing %d armor glyph" or "%s - missing %d armor glyphs",
+            glyph.player,glyph.count)
         result.ready = false
     end
 
     for _, food in ipairs(result.foodExpiring) do
-        ReadinessIssue("food","warning",string.format("%s - food expires in %d minute%s", food.player,
-            math.max(1, math.ceil(food.seconds/60)), food.seconds > 60 and "s" or ""))
+        ReadinessIssue("food","warning","%s - food expires in %d minute%s", food.player,
+            math.max(1, math.ceil(food.seconds/60)), food.seconds > 60 and "s" or "")
     end
 
     -- UNKNOWN data never becomes a false hard failure; the raidlead sees LIMITED instead.

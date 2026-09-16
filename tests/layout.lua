@@ -19,7 +19,7 @@ local function Control(parent)
     function control:GetScale()return self.scale*(self.parent and self.parent:GetScale() or 1) end
     function control:GetLeft()return self.left end
     function control:GetTop()return self.top end
-    function control:SetAnchor(point,parent,relative,x,y)if point==TOPLEFT then self.left=x or 0;self.top=y or 0 end end
+    function control:SetAnchor(point,parent,relative,x,y)self.anchor={point,parent,relative,x,y};if point==TOPLEFT then self.left=x or 0;self.top=y or 0 end end
     function control:SetText(text)self.text=text end
     for _,method in ipairs({'SetClampedToScreen','SetMouseEnabled','SetDrawTier','SetDrawLevel','SetDrawLayer','SetAnchorFill','SetColor','SetFont','StopMovingOrResizing','ClearAnchors'})do control[method]=function()end end
     controls[#controls+1]=control;return control
@@ -66,8 +66,13 @@ local function Module(enabled,name)
 end
 local overload,ult,group,support=Module(true,'Unused'),Module(true,'Personal Ultimate'),Module(true,'Group Ultimates'),Module(false,'Support Coverage')
 overload.sv.addonEnabled=true;ult.Group=group;ult.sv.visible=false
+function ult:GetLayoutOrientation()return self.sv.layoutOrientation or 'horizontal'end
+function ult:SetLayoutOrientation(value)self.sv.layoutOrientation=value end
 local popup=Control();popup:SetHidden(false);local closes=0
 AlphaSquadUI={Modules={Overload=overload,ULTTracker=ult,SupportCoverage=support},Settings={exclusiveWindows={builds={control=popup,close=function()closes=closes+1;popup:SetHidden(true)end}}}}
+AlphaSquadUI.Preferences={sv={language='auto'},Initialize=function()end}
+assert(loadfile('AlphaSquadUI/Core/Localization.lua'))()
+AlphaSquadUI.Localization.Initialize()
 assert(loadfile('AlphaSquadUI/Core/Layout.lua'))()
 local L=AlphaSquadUI.Layout
 check(L.ShouldHidePersonalULT==nil,'There is one personal Ultimate target and no Overload window arbitration')
@@ -81,6 +86,11 @@ check(L.IsMoving(ult) and L.IsMoving(group) and not L.IsMoving(overload),'Only p
 check(not L.IsMoving(support) and support.sv.locked,'Disabled panels remain inactive')
 check(#L.attachments[ult]==8 and #L.attachments[group]==8,'Each active target has exactly eight reusable resize handles')
 check(L.Start() and shown==1,'Repeated commands do not duplicate windows')
+local selectionText,sizeText,previewText=L.toolbar.selection.text,L.toolbar.size.text,L.toolbar.preview.text
+AlphaSquadUI.Localization.SetLanguage('en')
+check(L.toolbar.selection.text==selectionText and L.toolbar.size.text==sizeText and L.toolbar.preview.text==previewText,
+    'Switching Automatic to equivalent English preserves live toolbar values rather than initial placeholders')
+
 local handles=L.attachments[ult]
 for _,h in ipairs(handles)do check(not h:IsHidden() and not h.handlers.OnUpdate,'Handles are visible without an idle frame callback')end
 mouseX,mouseY=0,0
@@ -218,12 +228,35 @@ function ult:GetLayoutOrientation()return self.sv.layoutOrientation or 'horizont
 function ult:SetLayoutOrientation(value)self.sv.layoutOrientation=value end
 check(L.CycleOrientation(1) and ult.sv.layoutOrientation=='vertical','The shared toolbar changes the selected panel template')
 check(L.CycleOrientation(-1) and ult.sv.layoutOrientation=='horizontal','Template selection cycles in both directions')
+-- Newly registered orientation support owns an adjacent reusable icon, never
+-- a toolbar mode selector. Invisible handles cannot be activated afterward.
+local freshHandles=L.Attach(ult)
+L.RefreshToolbar()
+check(freshHandles.orientation and not L.toolbar.orientation and not freshHandles.orientation:IsHidden(),
+    'Orientation is a local HUD control rather than a toolbar selector')
+local priorLeft,priorTop=ult.window:GetLeft(),ult.window:GetTop()
+ult.window:SetAnchor(TOPLEFT,GuiRoot,TOPLEFT,GuiRoot:GetWidth()-ult.window:GetWidth()-40,priorTop)
+L.RefreshOrientation(ult)
+check(freshHandles.orientation.anchor[1]==TOPRIGHT and freshHandles.orientation.anchor[3]==TOPLEFT,
+    'At 180 percent scale a forty-pixel margin moves the icon to the safe side rather than clipping it')
+ult.window:SetAnchor(TOPLEFT,GuiRoot,TOPLEFT,priorLeft,priorTop)
+L.RefreshOrientation(ult)
+
+freshHandles.orientation.handlers.OnMouseUp(nil,MOUSE_BUTTON_INDEX_LEFT,true)
+check(ult.sv.layoutOrientation=='vertical','Clicking the adjacent icon changes its own HUD orientation')
+ult.layoutBackground=false
+local preservedOpacity=ult.sv.opacity
+L.AdjustSelected('opacity',-5)
+check(ult.sv.opacity==preservedOpacity,'Transparent HUDs do not expose a misleading background opacity mutation')
+ult.layoutBackground=nil
+
 local previewMode='mixed'
 AlphaSquadUI.Preview={GetMode=function()return previewMode end,SetMode=function(value)previewMode=value end}
 check(L.CyclePreview(1) and previewMode=='ready','The toolbar advances presentation-only preview states')
 check(L.CyclePreview(-1) and previewMode=='mixed','Preview navigation reverses without editing tracking settings')
 check(L.CycleSelected(1) and L.selected==ult,'Panel selection excludes disabled panels')
 L.Finish()
+check(freshHandles.orientation:IsHidden(),'Finishing placement hides its adjacent orientation control')
 check(not L.MoveSelected(10,10) and not L.ResizeSelected(10,10) and not L.CyclePreview(1),
     'Controller/editor commands are inert after placement closes')
 local inactiveWidth,inactiveHeight,inactiveScale=ult.sv.hudWidth,ult.sv.hudHeight,ult.sv.scale

@@ -158,7 +158,10 @@ function SC:GetPlayerBuildDetails(key)
             pending.parts={}
             self.share.incomingBuild=nil
             self.share.buildStatus="No response. Check that the player enabled compatible build sharing, then request again."
-        else return nil,string.format("Receiving build: %d / %d",pending.received or 0,pending.total or 0) end
+        else
+            local format=AlphaSquadUI.L or string.format
+            return nil,format("Receiving build: %d / %d",pending.received or 0,pending.total or 0)
+        end
     end
     if peer and peer.fullBuild and self.NowMs()-(peer.fullBuildAt or 0)<=Details.CACHE_MS
         and (not peer.buildDetailFingerprint or peer.fullBuildFingerprint==peer.buildDetailFingerprint) then
@@ -203,6 +206,9 @@ end
 
 local function OnRequest(sc,tag,data)
     if not ValidKey(data.body) or data.body~=sc:GetPlayerKey("player") or data.checksum~=Details.Hash(data.body) then return end
+    -- Saved consent permits receipts, but native OFF/unavailable sending must
+    -- not let an addressed request trigger an expensive capture or encoding.
+    if sc:GetSharingStatus()~="SHARING" then return end
     local now=sc.NowMs()
     local old=sc.share.outgoingBuild
     if old and not Expired(sc,old) then
@@ -230,7 +236,7 @@ local function OnRequest(sc,tag,data)
     sc.share.lastResponseAt=now
     -- Bind the capture to a freshly queued summary before starting its chunks.
     sc.share.lastSendAt=-60000
-    if not sc:ShareLocalSnapshot("requested build") then return end
+    if not sc:ShareLocalSnapshot("requested build",{snapshot=snapshot,body=body}) then return end
     local requester=sc:GetPlayerKey(tag)
     local stream={body=body,total=math.ceil(#body/Details.CHUNK_BYTES),checksum=Details.Hash(body),revision=data.revision,
         requester=requester,targetHash=Details.Hash(requester),startedAt=now,updatedAt=now,sent=0}

@@ -240,7 +240,14 @@ Input.Action("next")
 check(Input.layoutMode == "controls", "Tab reaches toolbar controls from direct manipulation")
 local priorClicks = clicked; Input.Action("primary")
 check(clicked == priorClicks + 100, "Controller/keyboard can activate every registered toolbar control")
+local adjacent=Control(GuiRoot)
+local localRotations=0
+local adjacentEntry=Input.Register(adjacent,{window=layoutWindow,activate=function()localRotations=localRotations+1 end})
+check(Input.Focus(adjacentEntry) and Input.Action("primary") and localRotations==1,
+    "The adjacent HUD orientation button belongs to editor keyboard/controller navigation")
+
 check(Input.Action("back") and layoutWindow:IsHidden() and not listener and not AlphaSquadUI.Layout.active, "Escape/B saves and exits Move HUD without lingering callbacks")
+check(not Input.Focus(adjacentEntry),"A closed editor cannot focus a HUD control through stale explicit ownership")
 check(pushes == removals and activations == deactivations, "Every opened action layer and native directional listener is released")
 scene = {}; customCategories[1].callback()
 check(scene == base and opened == 1, "Native gamepad options closes before addon dashboard opens")

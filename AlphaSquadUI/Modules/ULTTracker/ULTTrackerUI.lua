@@ -1,140 +1,72 @@
--- Ąlpha Şquad UI - ULT Tracker HUD
-
+-- Compact native-skill HUD: both weapon bars, transparent outside skill frames.
 AlphaSquadUI = AlphaSquadUI or {}
 AlphaSquadUI.Modules = AlphaSquadUI.Modules or {}
-local ULT = AlphaSquadUI.Modules.ULTTracker
+local ASUI = AlphaSquadUI
+local ULT = ASUI.Modules.ULTTracker
 if not ULT then return end
-
-local COLORS = (AlphaSquadUI.Theme and AlphaSquadUI.Theme.colors) or {
-    bg = {0.010, 0.016, 0.030, 0.96},
-    panel = {0.020, 0.030, 0.052, 0.98},
-    panelActive = {0.050, 0.035, 0.020, 0.99},
-    white = {0.95, 0.97, 1.00, 1.00},
-    muted = {0.53, 0.62, 0.72, 1.00},
-    orange = {1.00, 0.58, 0.16, 1.00},
-    cyan = {0.20, 0.82, 1.00, 1.00},
-    cyanDim = {0.10, 0.36, 0.49, 1.00},
-    green = {0.34, 0.82, 0.52, 1.00},
-    red = {1.00, 0.30, 0.35, 1.00},
-    gold = {0.97, 0.78, 0.30, 1.00},
+local BAR_KEYS = {"primary", "backup"}
+local COLORS = {
+    white={0.95,0.97,1,1}, muted={0.65,0.68,0.72,1},
+    cyan={0.56,0.74,0.79,1}, green={0.25,0.88,0.38,1},
+    red={1,0.23,0.24,1}, gold={0.93,0.78,0.42,1},
 }
-
-ULT.COLORS = COLORS
-
-local function SetColor(control, c, alpha)
-    if not control or not c then return end
-    control:SetColor(c[1], c[2], c[3], alpha or c[4] or 1)
+-- Settings use the shell theme; gameplay status colors remain semantic.
+local function L(text,...)
+    if ASUI.L then return ASUI.L(text,...) end
+    return select("#",...)>0 and string.format(text,...) or text
 end
-
-local function Solid(parent, name, color)
-    local control = WINDOW_MANAGER:CreateControl(name, parent, CT_TEXTURE)
-    control:SetAnchorFill(parent)
-    SetColor(control, color)
-    if AlphaSquadUI.Theme and AlphaSquadUI.Theme.BindColor then AlphaSquadUI.Theme.BindColor(control,color) end
+local function Now() return GetGameTimeMilliseconds and GetGameTimeMilliseconds() or 0 end
+local function Color(control,c,alpha) control:SetColor(c[1],c[2],c[3],alpha or c[4] or 1) end
+local function Texture(name,parent,width,height,color)
+    local control=WINDOW_MANAGER:CreateControl(name,parent,CT_TEXTURE)
+    control:SetDimensions(width,height)
+    if color then Color(control,color) end
     return control
 end
-
-local function Label(parent, name, font, text, color)
-    local control = WINDOW_MANAGER:CreateControl(name, parent, CT_LABEL)
-    control:SetFont(font)
-    control:SetText(text or "")
-    SetColor(control, color or COLORS.white)
-    if AlphaSquadUI.Theme and AlphaSquadUI.Theme.BindColor then AlphaSquadUI.Theme.BindColor(control,color or COLORS.white) end
-    control:SetVerticalAlignment(TEXT_ALIGN_CENTER)
-    return control
-end
-
-local function CreateCard(parent, key, x)
-    local card = WINDOW_MANAGER:CreateControl("AlphaSquadULTTracker_" .. key .. "_Card", parent, CT_CONTROL)
-    card:SetDimensions(276, 94)
-    card:SetAnchor(TOPLEFT, parent, TOPLEFT, x, 36)
-
-    card.bg = Solid(card, "AlphaSquadULTTracker_" .. key .. "_BG", COLORS.panel)
-    if AlphaSquadUI.Theme and AlphaSquadUI.Theme.RegisterSurface then AlphaSquadUI.Theme.RegisterSurface(card,card.bg,"card") end
-
-    card.activeAccent = WINDOW_MANAGER:CreateControl("AlphaSquadULTTracker_" .. key .. "_ActiveAccent", card, CT_TEXTURE)
-    card.activeAccent:SetAnchor(TOPLEFT, card, TOPLEFT, 0, 0)
-    card.activeAccent:SetDimensions(4, 94)
-    SetColor(card.activeAccent, COLORS.orange)
-
-    card.iconBorder = WINDOW_MANAGER:CreateControl("AlphaSquadULTTracker_" .. key .. "_IconBorder", card, CT_TEXTURE)
-    card.iconBorder:SetDimensions(60, 60)
-    card.iconBorder:SetAnchor(LEFT, card, LEFT, 13, 1)
-    SetColor(card.iconBorder, COLORS.cyanDim)
-
-    card.iconBG = WINDOW_MANAGER:CreateControl("AlphaSquadULTTracker_" .. key .. "_IconBG", card, CT_TEXTURE)
-    card.iconBG:SetDimensions(56, 56)
-    card.iconBG:SetAnchor(CENTER, card.iconBorder, CENTER, 0, 0)
-    card.iconBG:SetColor(0.005, 0.010, 0.020, 1)
-
-    card.icon = WINDOW_MANAGER:CreateControl("AlphaSquadULTTracker_" .. key .. "_Icon", card, CT_TEXTURE)
-    card.icon:SetDimensions(52, 52)
-    card.icon:SetAnchor(CENTER, card.iconBorder, CENTER, 0, 0)
-    card.icon:SetTextureCoords(0.04, 0.96, 0.04, 0.96)
-
-    card.readyGlow = WINDOW_MANAGER:CreateControl("AlphaSquadULTTracker_" .. key .. "_ReadyGlow", card, CT_TEXTURE)
-    card.readyGlow:SetDimensions(68, 68)
-    card.readyGlow:SetAnchor(CENTER, card.iconBorder, CENTER, 0, 0)
-    card.readyGlow:SetBlendMode(TEX_BLEND_MODE_ADD)
-    card.readyGlow:SetColor(COLORS.green[1], COLORS.green[2], COLORS.green[3], 0)
+local function CreateCard(parent,key)
+    local prefix="AlphaSquadULTTracker_"..key
+    local card=WINDOW_MANAGER:CreateControl(prefix.."_Card",parent,CT_CONTROL)
+    card.iconBorder=Texture(prefix.."_IconBorder",card,56,56,COLORS.muted)
+    card.icon=Texture(prefix.."_Icon",card,52,52)
+    card.icon:SetAnchor(CENTER,card.iconBorder,CENTER,0,0)
+    card.icon:SetTextureCoords(0.04,0.96,0.04,0.96)
+    card.readyGlow=Texture(prefix.."_ReadyGlow",card,58,58)
+    card.readyGlow:SetAnchor(CENTER,card.iconBorder,CENTER,0,0)
+    card.readyGlow:SetTexture("EsoUI/Art/ActionBar/abilityFrame64_up.dds")
     card.readyGlow:SetDrawLayer(DL_OVERLAY)
-
-    card.barLabel = Label(card, "AlphaSquadULTTracker_" .. key .. "_Bar", "ZoFontGameSmall", "", COLORS.orange)
-    card.barLabel:SetDimensions(102, 18)
-    card.barLabel:SetAnchor(TOPLEFT, card, TOPLEFT, 83, 8)
-    card.barLabel:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
-
-    card.activeLabel = Label(card, "AlphaSquadULTTracker_" .. key .. "_Active", "ZoFontGameSmall", "", COLORS.orange)
-    card.activeLabel:SetDimensions(76, 18)
-    card.activeLabel:SetAnchor(TOPRIGHT, card, TOPRIGHT, -9, 8)
-    card.activeLabel:SetHorizontalAlignment(TEXT_ALIGN_RIGHT)
-
-    card.nameLabel = Label(card, "AlphaSquadULTTracker_" .. key .. "_Name", "ZoFontGameBold", "NO ULTIMATE", COLORS.white)
-    card.nameLabel:SetDimensions(180, 23)
-    card.nameLabel:SetAnchor(TOPLEFT, card, TOPLEFT, 83, 27)
-    card.nameLabel:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
-    card.nameLabel:SetMaxLineCount(1)
-    if card.nameLabel.SetWrapMode and TEXT_WRAP_MODE_ELLIPSIS then
-        card.nameLabel:SetWrapMode(TEXT_WRAP_MODE_ELLIPSIS)
+    card.readyGlow:SetColor(0,0,0,0)
+    card.activeArrow=WINDOW_MANAGER:CreateControl(prefix.."_ActiveArrow",card,CT_CONTROL)
+    card.activeArrow:SetDimensions(12,18)
+    -- Small chevron built from nine static scanlines: no external texture,
+    -- uncertain asset path, rotation support or recurring animation required.
+    for row=0,8 do
+        local inset=4-math.abs(row-4)
+        local line=Texture(prefix.."_Arrow"..row,card.activeArrow,5,2,COLORS.green)
+        line:SetAnchor(TOPLEFT,card.activeArrow,TOPLEFT,inset*1.75,row*2)
     end
-
-    card.statusLabel = Label(card, "AlphaSquadULTTracker_" .. key .. "_Status", "ZoFontGameBold", "EMPTY", COLORS.muted)
-    card.statusLabel:SetDimensions(110, 20)
-    card.statusLabel:SetAnchor(TOPLEFT, card, TOPLEFT, 83, 51)
-    card.statusLabel:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
-
-    card.costLabel = Label(card, "AlphaSquadULTTracker_" .. key .. "_Cost", "ZoFontGameSmall", "", COLORS.muted)
-    card.costLabel:SetDimensions(72, 20)
-    card.costLabel:SetAnchor(TOPRIGHT, card, TOPRIGHT, -9, 51)
-    card.costLabel:SetHorizontalAlignment(TEXT_ALIGN_RIGHT)
-
-    card.progressBG = WINDOW_MANAGER:CreateControl("AlphaSquadULTTracker_" .. key .. "_ProgressBG", card, CT_TEXTURE)
-    card.progressBG:SetDimensions(180, 4)
-    card.progressBG:SetAnchor(BOTTOMLEFT, card, BOTTOMLEFT, 83, -12)
-    card.progressBG:SetColor(0.05, 0.08, 0.12, 1)
-
-    card.progress = WINDOW_MANAGER:CreateControl("AlphaSquadULTTracker_" .. key .. "_Progress", card, CT_TEXTURE)
-    card.progress:SetDimensions(0, 4)
-    card.progress:SetAnchor(LEFT, card.progressBG, LEFT, 0, 0)
-    SetColor(card.progress, COLORS.cyan)
-
+    card.progressBG=Texture(prefix.."_ProgressBG",card,52,3,{0.06,0.07,0.08,0.65})
+    card.progress=Texture(prefix.."_Progress",card,0,3,COLORS.cyan)
+    card.progress:SetAnchor(LEFT,card.progressBG,LEFT,0,0)
+    card.statusLabel=WINDOW_MANAGER:CreateControl(prefix.."_Status",card,CT_LABEL)
+    card.statusLabel:SetFont("ZoFontGameSmall")
+    card.statusLabel:SetHorizontalAlignment(TEXT_ALIGN_CENTER)
+    card.statusLabel:SetVerticalAlignment(TEXT_ALIGN_CENTER)
+    card.statusLabel:SetMaxLineCount(1)
+    if card.statusLabel.SetWrapMode and TEXT_WRAP_MODE_ELLIPSIS then card.statusLabel:SetWrapMode(TEXT_WRAP_MODE_ELLIPSIS) end
     card:SetMouseEnabled(true)
     card:SetHandler("OnMouseEnter",function()
         local bar=ULT:GetHUDBar(key)
-        local tooltips=AlphaSquadUI.Tooltips
-        if tooltips and bar and bar.abilityId>0 then
-            if tooltips.ShowSkill then tooltips.ShowSkill(card,{id=bar.abilityId,name=bar.name},false) end
+        if bar and bar.abilityId>0 and ASUI.Tooltips and ASUI.Tooltips.ShowSkill then
+            ASUI.Tooltips.ShowSkill(card,{id=bar.abilityId,name=bar.name},false)
         end
     end)
-    card:SetHandler("OnMouseExit",function() if AlphaSquadUI.Tooltips then AlphaSquadUI.Tooltips.Hide() end end)
-    if AlphaSquadUI.Input and AlphaSquadUI.Input.Register then
-        AlphaSquadUI.Input.Register(card,{kind="inspect",label="Personal Ultimate"})
-    end
+    card:SetHandler("OnMouseExit",function() if ASUI.Tooltips then ASUI.Tooltips.Hide() end end)
+    if ASUI.Input and ASUI.Input.Register then ASUI.Input.Register(card,{kind="inspect",label="Personal Ultimate"}) end
     return card
 end
-
 ULT.layoutName="Personal Ultimate"
-ULT.layoutBounds={minWidth=280,minHeight=116,maxWidth=1800,maxHeight=1000}
+ULT.layoutBounds={minWidth=148,minHeight=80,maxWidth=1800,maxHeight=1000}
+ULT.layoutBackground=false
 local EMPTY_ICON="EsoUI/Art/ActionBar/abilityFrame64_up.dds"
 local previewBars,previewMode
 local function PreviewMode(module)
@@ -185,83 +117,106 @@ function ULT:SetLayoutOrientation(orientation)
     return true
 end
 function ULT:GetWindowWidth()
-    if self:GetLayoutOrientation()=="vertical" then return 208 end
-    return self.sv and self.sv.trackMode=="both" and 600 or 300
+    return self:GetLayoutOrientation()=="vertical" and 72 or 152
 end
 function ULT:ApplyLayout()
     if not self.window or not self.sv then return end
-    local preview=PreviewMode(self)~="live"
-    self.window.ultCounter:SetText(preview and "EXAMPLE" or string.format("ULT %d",tonumber(self.currentUltimate) or 0))
-    self:RefreshCard(self.window.cards.primary,self:GetHUDBar("primary"))
-    self:RefreshCard(self.window.cards.backup,self:GetHUDBar("backup"))
-    local layout=AlphaSquadUI.Layout
-    local keys={}
-    for _,key in ipairs({"primary","backup"}) do if self:ShouldTrackBar(key) then keys[#keys+1]=key end end
-    local count=math.max(1,#keys)
+    local count=self:ShouldTrackBar("backup") and 2 or 1
     local vertical=self:GetLayoutOrientation()=="vertical"
-    local gap,padding,header=8,8,30
-    self.layoutBounds.minWidth=vertical and 176 or (count*268+padding*2+(count-1)*gap)
-    self.layoutBounds.minHeight=vertical and (header+count*150+padding+(count-1)*gap) or 116
-    local defaultW=self:GetWindowWidth()
-    local defaultH=vertical and (header+count*168+padding+(count-1)*gap) or 116
-    local width,height=defaultW,defaultH
-    if layout and layout.GetDimensions then width,height=layout.GetDimensions(self,defaultW,defaultH)
+    local gap=8
+    self.layoutBounds.minWidth=vertical and 72 or count*72+(count-1)*gap
+    self.layoutBounds.minHeight=vertical and count*80+(count-1)*gap or 80
+    local width,height=self.layoutBounds.minWidth,self.layoutBounds.minHeight
+    local layout=ASUI.Layout
+    if layout and layout.GetDimensions then width,height=layout.GetDimensions(self,width,height)
     else width=self.sv.hudWidth or width;height=self.sv.hudHeight or height end
     width=self.Clamp(width,self.layoutBounds.minWidth,1800)
     height=self.Clamp(height,self.layoutBounds.minHeight,1000)
-    local signature=table.concat({width,height,table.concat(keys,","),vertical and 1 or 0,self.sv.scale or 100,self.sv.opacity or 92,
-        PreviewMode(self),GuiRoot and GuiRoot:GetWidth() or 1920,GuiRoot and GuiRoot:GetHeight() or 1080,
-        AlphaSquadUI.Theme and AlphaSquadUI.Theme.presetId or ""},":")
-    if self.layoutSignature==signature then
-        self:UpdateLockState();self:ApplyVisibility();return
-    end
-    self.layoutSignature=signature
-    self.layoutWidth,self.layoutHeight=width,height
-    self.window:SetDimensions(width,height)
-    local cardW=vertical and width-padding*2 or (width-padding*2-(count-1)*gap)/count
-    local cardH=vertical and (height-header-padding-(count-1)*gap)/count or height-header-padding
-    for _,card in pairs(self.window.cards) do card:SetHidden(true) end
-    for index,key in ipairs(keys) do
-        local card=self.window.cards[key]
-        card:SetHidden(false);card:ClearAnchors()
-        card:SetAnchor(TOPLEFT,self.window,TOPLEFT,padding+(vertical and 0 or (index-1)*(cardW+gap)),header+(vertical and (index-1)*(cardH+gap) or 0))
-        card:SetDimensions(cardW,cardH);card.activeAccent:SetHeight(cardH)
-        local icon=vertical and math.max(36,math.min(72,cardH-108)) or math.max(36,math.min(72,cardH-24))
-        card.iconBorder:SetDimensions(icon+8,icon+8);card.iconBG:SetDimensions(icon+4,icon+4)
-        card.icon:SetDimensions(icon,icon);card.readyGlow:SetDimensions(icon+16,icon+16)
-        card.iconBorder:ClearAnchors()
-        if vertical then card.iconBorder:SetAnchor(TOP,card,TOP,0,23)
-        else card.iconBorder:SetAnchor(LEFT,card,LEFT,10,0) end
-        local textX=vertical and 8 or icon+28
-        local textW=math.max(1,cardW-textX-8)
-        local nameY=vertical and icon+34 or 21
-        local statusY=vertical and icon+60 or 44
-        for _,entry in ipairs({{card.barLabel,3,18},{card.nameLabel,nameY,22},{card.statusLabel,statusY,22}}) do
-            entry[1]:ClearAnchors();entry[1]:SetAnchor(TOPLEFT,card,TOPLEFT,textX,entry[2]);entry[1]:SetDimensions(textW,entry[3])
-            entry[1]:SetHorizontalAlignment(vertical and TEXT_ALIGN_CENTER or TEXT_ALIGN_LEFT)
+    local signature=table.concat({width,height,count,vertical and 1 or 0,self.sv.scale or 100,
+        GuiRoot and GuiRoot:GetWidth() or 1920,GuiRoot and GuiRoot:GetHeight() or 1080},":")
+    if signature~=self.layoutSignature then
+        self.layoutSignature=signature
+        self.layoutWidth,self.layoutHeight=width,height
+        self.window:SetDimensions(width,height)
+        local cardW=vertical and width or (width-(count-1)*gap)/count
+        local cardH=vertical and (height-(count-1)*gap)/count or height
+        for index,key in ipairs(BAR_KEYS) do
+            local card=self.window.cards[key]
+            card:SetHidden(index>count)
+            if index<=count then
+                card:ClearAnchors()
+                card:SetAnchor(TOPLEFT,self.window,TOPLEFT,vertical and 0 or (index-1)*(cardW+gap),vertical and (index-1)*(cardH+gap) or 0)
+                card:SetDimensions(cardW,cardH)
+                local icon=math.max(40,math.min(96,cardW-20,cardH-28))
+                local left=(cardW-icon+16)/2
+                local top=math.max(0,(cardH-icon-28)/2)
+                card.iconBorder:ClearAnchors();card.iconBorder:SetAnchor(TOPLEFT,card,TOPLEFT,left-1,top)
+                card.iconBorder:SetDimensions(icon+2,icon+2)
+                card.icon:SetDimensions(icon,icon);card.readyGlow:SetDimensions(icon+4,icon+4)
+                card.activeArrow:ClearAnchors();card.activeArrow:SetAnchor(RIGHT,card.iconBorder,LEFT,-4,0)
+                card.progressBG:ClearAnchors();card.progressBG:SetAnchor(TOPLEFT,card.iconBorder,BOTTOMLEFT,1,3)
+                card.progressBG:SetWidth(icon);card.progressWidth=icon
+                card.progress:SetWidth((card.progressValue or 0)*icon)
+                card.statusLabel:ClearAnchors();card.statusLabel:SetAnchor(TOP,card.progressBG,BOTTOM,0,1)
+                card.statusLabel:SetDimensions(math.max(56,icon),19)
+            end
         end
-        card.barLabel:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
-        card.barLabel:SetWidth(math.max(1,textW-54));card.activeLabel:SetWidth(54)
-        card.activeLabel:ClearAnchors();card.activeLabel:SetAnchor(TOPRIGHT,card,TOPRIGHT,-8,3)
-        card.costLabel:SetHidden(true)
-        card.progressBG:ClearAnchors();card.progressBG:SetAnchor(BOTTOMLEFT,card,BOTTOMLEFT,textX,-6)
-        card.progressBG:SetWidth(textW);card.progressWidth=textW
-        local bar=self:GetHUDBar(key)
-        local cost=bar.cost or 0
-        card.progress:SetWidth(cost>0 and textW*math.max(0,math.min(1,(bar.value or self.currentUltimate or 0)/cost)) or 0)
+        self:ApplyAppearance()
     end
-    self.window.brand:SetFont("ZoFontGameSmall")
-    self.window.brand:SetDimensions(math.max(60,width-110),24)
-    local preview=PreviewMode(self)~="live"
-    self.window.brand:SetText(preview and (vertical and "PREVIEW" or "ULT • PREVIEW") or (vertical and "ULT" or (AlphaSquadUI.Theme and AlphaSquadUI.Theme.Brand and AlphaSquadUI.Theme.Brand("ULT") or "Alpha Squad UI • ULT")))
-    self.window.brand:ClearAnchors();self.window.brand:SetAnchor(TOPLEFT,self.window,TOPLEFT,10,3)
-    self.window.ultCounter:ClearAnchors();self.window.ultCounter:SetAnchor(TOPRIGHT,self.window,TOPRIGHT,-10,3)
-    self.window.moveHint:SetHidden(true)
-    self:ApplyAppearance()
+    self:RefreshCard(self.window.cards.primary,self:GetHUDBar("primary"))
+    self:RefreshCard(self.window.cards.backup,self:GetHUDBar("backup"))
     self:UpdateLockState()
     self:ApplyVisibility()
 end
 
+-- A bounded 180 ms interpolation only runs when a visible charging bar increases.
+-- Spending, missing costs, slot changes and readiness transitions snap immediately.
+function ULT:StopProgressAnimation()
+    if self.window and self.progressRunning then self.window:SetHandler("OnUpdate",nil) end
+    self.progressRunning=false
+    if self.window and self.window.cards then
+        for _,card in pairs(self.window.cards) do
+            card.progressStarted=nil
+            if card.progressTarget then
+                card.progressValue=card.progressTarget
+                card.progress:SetWidth((card.progressWidth or 0)*card.progressValue)
+            end
+        end
+    end
+end
+function ULT:UpdateProgressAnimation()
+    if not self.window or self.window:IsHidden() then self:StopProgressAnimation();return end
+    local now=Now()
+    local running=false
+    for _,card in pairs(self.window.cards) do
+        if card.progressStarted then
+            local elapsed=math.max(0,math.min(1,(now-card.progressStarted)/180))
+            local eased=elapsed*(2-elapsed)
+            card.progressValue=card.progressFrom+(card.progressTarget-card.progressFrom)*eased
+            card.progress:SetWidth((card.progressWidth or 0)*card.progressValue)
+            if elapsed>=1 then card.progressStarted=nil else running=true end
+        end
+    end
+    if not running then self:StopProgressAnimation() end
+end
+function ULT:SetCardProgress(card,bar,value,state)
+    local changed=card.progressTarget~=value or card.progressAbility~=bar.abilityId or card.progressState~=state
+    if not changed then return end
+    local moving=ASUI.Layout and ASUI.Layout.IsMoving(self)
+    local animate=not moving and not card:IsHidden() and card.progressAbility==bar.abilityId
+        and card.progressValue~=nil and value>card.progressValue and value<1 and state=="charging"
+    card.progressAbility=bar.abilityId;card.progressTarget=value;card.progressState=state
+    if animate then
+        card.progressFrom=card.progressValue;card.progressStarted=Now()
+        if not self.progressRunning then
+            self.progressRunning=true
+            self.window:SetHandler("OnUpdate",function() ULT:UpdateProgressAnimation() end)
+        end
+    else
+        card.progressStarted=nil;card.progressValue=value
+        card.progress:SetWidth((card.progressWidth or 52)*value)
+    end
+end
 function ULT:ApplyPosition()
     if not self.window or not self.sv then return end
     self.window:ClearAnchors()
@@ -320,7 +275,6 @@ function ULT:UpdateLockState()
     if not self.window or not self.sv then return end
     self.window:SetMovable(not self.sv.locked)
     self.window.dragSurface:SetMouseEnabled(not self.sv.locked)
-    self.window.moveHint:SetHidden(true)
 end
 
 function ULT:ApplyVisibility()
@@ -346,6 +300,7 @@ function ULT:ApplyVisibility()
     if self.SetSafetyUpdateActive then self:SetSafetyUpdateActive(not hidden and not moving) end
 
     if hidden then
+        self:StopProgressAnimation()
         self:SetFlashUpdate(false)
     else
         self:SetFlashUpdate(self:NeedsPulse() and not moving)
@@ -381,196 +336,92 @@ function ULT:ApplyAppearance()
     if not self.window or not self.sv then return end
     self.window:SetScale(self:GetEffectiveScale())
     self.window:SetAlpha(1)
-    self.window.bg:SetAlpha((self.sv.opacity or 92) / 100)
     self:ClampToScreen(false)
 end
 
-function ULT:RefreshCard(card, bar)
+function ULT:RefreshCard(card,bar)
     if not card or not bar then return end
-
-    card.barLabel:SetText(bar.label)
-    card.activeLabel:SetText(bar.activeBar and "ACTIVE" or "")
-    card.activeAccent:SetHidden(not bar.activeBar)
-    local bgColor = bar.activeBar and COLORS.panelActive or COLORS.panel
-    card.bg:SetColor(bgColor[1], bgColor[2], bgColor[3], bgColor[4])
-
-    if bar.abilityId <= 0 then
-        card.icon:SetHidden(false)
-        card.icon:SetTexture(EMPTY_ICON)
-        card.icon:SetAlpha(0.55)
-        card.nameLabel:SetText("NO ULTIMATE")
-        card.statusLabel:SetText("EMPTY")
-        SetColor(card.statusLabel, COLORS.muted)
-        card.costLabel:SetText("")
-        SetColor(card.iconBorder, COLORS.cyanDim, 0.35)
-        card.readyGlow:SetColor(COLORS.green[1], COLORS.green[2], COLORS.green[3], 0)
-        card.progress:SetWidth(0)
-        return
-    end
-
-    card.icon:SetHidden(false)
-    card.icon:SetTexture(bar.icon and bar.icon~="" and bar.icon or EMPTY_ICON)
-    card.nameLabel:SetText(zo_strformat("<<C:1>>", bar.name ~= "" and bar.name or "Ultimate"))
-    card.costLabel:SetText(bar.cost > 0 and ("COST " .. tostring(bar.cost)) or "COST ?")
-
-    local state = bar.overload and bar.overloadState or bar.state or "charging"
-    local color = COLORS.cyan
-    local statusText = "CHARGING"
-
-    if bar.overload then
-        if state=="warning" then statusText="LOW RESERVE";color=COLORS.red
-        elseif state=="active" then statusText="OVERLOAD ON";color=COLORS.green
-        elseif state=="ready" then statusText="OVERLOAD READY";color=COLORS.gold
-        else statusText="OVERLOAD OFF";color=COLORS.muted end
-        card.costLabel:SetText("WARNING "..tostring(self.sv.overload and self.sv.overload.reserveWarningThreshold or 160))
-    elseif state == "ready" then
-        statusText = "READY"
-        color = COLORS.green
-    elseif state == "active" then
-        statusText = "ACTIVE"
-        color = COLORS.orange
-    elseif state == "used" then
-        statusText = "USED"
-        color = COLORS.gold
-    elseif state == "empty" then
-        statusText = "EMPTY"
-        color = COLORS.muted
-    end
-
-    card.statusLabel:SetText(statusText)
-    SetColor(card.statusLabel, color)
-    SetColor(card.iconBorder, color, state == "ready" and 0.88 or 0.72)
-    card.icon:SetAlpha(state == "ready" and 0.96 or (state == "active" and 1 or 0.72))
-
-    local progress = 0
-    if bar.cost > 0 then
-        progress = math.min(1, math.max(0, (bar.value or self.currentUltimate or 0) / bar.cost))
-    end
-    card.progress:SetWidth(math.floor((card.progressWidth or 180) * progress))
-    SetColor(card.progress, color)
+    local empty=(bar.abilityId or 0)<=0
+    local state=empty and "empty" or (bar.overload and bar.overloadState or bar.state or "unknown")
+    local value=math.max(0,tonumber(bar.value or self.currentUltimate) or 0)
+    local denominator=bar.cost or 0
+    if bar.overload then denominator=self.sv.overload and self.sv.overload.readyReminderThreshold or 400 end
+    local progress=denominator>0 and math.max(0,math.min(1,value/denominator)) or 0
+    if empty then progress=0 end
+    local color,text=COLORS.cyan,"?"
+    if state=="ready" then color,text=COLORS.green,L("READY")
+    elseif state=="warning" then color,text=COLORS.red,L("STOP")
+    elseif state=="active" then color,text=COLORS.gold,L("ACTIVE")
+    elseif state=="used" then color,text=COLORS.muted,L("USED")
+    elseif state=="empty" then color,text=COLORS.muted,L("EMPTY")
+    elseif state=="off" then color,text=COLORS.muted,L("OFF")
+    elseif state=="charging" and denominator>0 then text=tostring(math.min(99,math.floor(progress*100))).."%" end
+    -- The active indicator always describes the native hotbar, never READY.
+    card.activeArrow:SetHidden(not bar.activeBar)
+    card:SetAlpha(bar.activeBar and 1 or 0.52)
+    card.icon:SetTexture(not empty and bar.icon and bar.icon~="" and bar.icon or EMPTY_ICON)
+    card.icon:SetAlpha(empty and 0.45 or 1)
+    card.statusLabel:SetText(text);Color(card.statusLabel,color)
+    Color(card.iconBorder,color,state=="ready" and 0.9 or 0.65)
+    Color(card.progress,color)
+    card.readyGlow:SetColor(0,0,0,0)
+    card.statusLabel:SetAlpha(1)
+    self:SetCardProgress(card,bar,progress,state)
 end
-
 function ULT:RefreshHUD()
-    if not self.window or not self.sv then return end
-    if self.renderingHUD then return end
-    self.renderingHUD = true
+    if not self.window or not self.sv or self.renderingHUD then return end
+    self.renderingHUD=true
     self:ApplyVisibility()
-    if self.window:IsHidden() then
-        self.hudDirty = true
-        self.renderingHUD = false
-        return
-    end
-    self.hudDirty = false
+    if self.window:IsHidden() then self.hudDirty=true;self.renderingHUD=false;return end
+    self.hudDirty=false
     self:ApplyLayout()
-    self.renderingHUD = false
+    self.renderingHUD=false
 end
-
 function ULT:UpdateReadyPulse()
     if not self.window or not self.sv or self.window:IsHidden() then return end
-
-    local t = (GetGameTimeMilliseconds and GetGameTimeMilliseconds() or 0) / 1000
-    -- Slow, restrained breathing pulse: readable without a fluorescent/neon effect.
-    local pulse = (math.sin(t * 2.8) + 1) * 0.5
-    local alpha = 0.06 + (pulse * 0.22)
-    local borderAlpha = 0.76 + (pulse * 0.14)
-
-    for key, card in pairs(self.window.cards) do
-        local bar = self:GetLiveBar(key)
-        if self:ShouldTrackBar(key) and bar and bar.overload and (bar.overloadState=="warning" or bar.overloadState=="ready") then
-            local danger=bar.overloadState~="ready"
-            local rate=danger and 10 or 3
-            local wave=(math.sin(t*rate)+1)*0.5
-            local color=danger and COLORS.red or COLORS.gold
-            card.readyGlow:SetColor(color[1],color[2],color[3],0.08+wave*0.46)
-            card.iconBorder:SetColor(color[1],color[2],color[3],0.65+wave*0.35)
-        elseif self:ShouldTrackBar(key) and bar and bar.ready and self.sv.readyFlash then
-            card.readyGlow:SetColor(0.24, 0.78, 0.46, alpha)
-            card.iconBorder:SetColor(0.32, 0.90, 0.55, borderAlpha)
-            card.icon:SetScale(1)
-        else
-            card.readyGlow:SetColor(COLORS.green[1], COLORS.green[2], COLORS.green[3], 0)
-            card.icon:SetScale(1)
+    local t=Now()/1000
+    for key,card in pairs(self.window.cards) do
+        local bar=self:GetLiveBar(key)
+        if self:ShouldTrackBar(key) and bar then
+            local state=bar.overload and bar.overloadState or nil
+            if state=="warning" or state=="ready" then
+                local color=state=="warning" and COLORS.red or COLORS.green
+                local wave=(math.sin(t*(state=="warning" and 7 or 4))+1)*0.5
+                card.readyGlow:SetColor(color[1],color[2],color[3],0.15+wave*0.65)
+                card.iconBorder:SetColor(color[1],color[2],color[3],0.5+wave*0.5)
+                card.statusLabel:SetAlpha(0.55+wave*0.45)
+            elseif not bar.overload and bar.ready and self.sv.readyFlash then
+                local wave=(math.sin(t*2.8)+1)*0.5
+                card.readyGlow:SetColor(COLORS.green[1],COLORS.green[2],COLORS.green[3],0.06+wave*0.22)
+            else card.readyGlow:SetColor(0,0,0,0);card.statusLabel:SetAlpha(1) end
         end
     end
 end
-
 function ULT:ResetPulseVisuals()
-    if not self.window then return end
-    for _, card in pairs(self.window.cards) do
-        card.readyGlow:SetColor(COLORS.green[1], COLORS.green[2], COLORS.green[3], 0)
-        card.icon:SetScale(1)
+    if not self.window or not self.window.cards then return end
+    for _,card in pairs(self.window.cards) do
+        card.readyGlow:SetColor(0,0,0,0);card.statusLabel:SetAlpha(1)
     end
     if self.initialized then self:RefreshHUD() end
 end
-
 function ULT:CreateHUD()
-    local win = WINDOW_MANAGER:CreateTopLevelWindow("AlphaSquadULTTrackerWindow")
-    self.window = win
-    self.layoutSignature=nil
-    win:SetDimensions(self:GetWindowWidth(), 116)
-    win:SetClampedToScreen(true)
-    win:SetMovable(true)
-    win:SetMouseEnabled(true)
-    win:SetDrawTier(DT_HIGH)
-    win:SetDrawLayer(DL_OVERLAY)
-    win:SetDrawLevel(90)
-    if AlphaSquadUI.Settings and AlphaSquadUI.Settings.ApplyWindowLayer then AlphaSquadUI.Settings.ApplyWindowLayer(win, true) end
-
-    win.bg = Solid(win, "AlphaSquadULTTrackerBG", COLORS.bg)
-    if AlphaSquadUI.Theme and AlphaSquadUI.Theme.RegisterSurface then AlphaSquadUI.Theme.RegisterSurface(win,win.bg,"window") end
-
-    local topLine = WINDOW_MANAGER:CreateControl("AlphaSquadULTTrackerTopLine", win, CT_TEXTURE)
-    topLine:SetAnchor(TOPLEFT, win, TOPLEFT, 0, 0)
-    topLine:SetAnchor(TOPRIGHT, win, TOPRIGHT, 0, 0)
-    topLine:SetHeight(2)
-    SetColor(topLine, COLORS.orange)
-
-    win.brand = Label(win, "AlphaSquadULTTrackerBrand", "ZoFontGameBold", (AlphaSquadUI.Theme and AlphaSquadUI.Theme.Brand and AlphaSquadUI.Theme.Brand("ULT") or "Ąlpha Şquad UI • ULT"), COLORS.orange)
-    win.brand:SetDimensions(310, 24)
-    win.brand:SetAnchor(TOPLEFT, win, TOPLEFT, 18, 7)
-    win.brand:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
-    win.brand:SetMaxLineCount(1)
-    if win.brand.SetWrapMode and TEXT_WRAP_MODE_ELLIPSIS then win.brand:SetWrapMode(TEXT_WRAP_MODE_ELLIPSIS) end
-
-    win.moveHint = Label(win, "AlphaSquadULTTrackerMoveHint", "ZoFontGameSmall", "CLICK + DRAG", COLORS.gold)
-    win.moveHint:SetDimensions(105, 22)
-    win.moveHint:SetHorizontalAlignment(TEXT_ALIGN_RIGHT)
-
-    win.ultCounter = Label(win, "AlphaSquadULTTrackerCounter", "ZoFontGameBold", "ULT 0", COLORS.white)
-    win.ultCounter:SetDimensions(78, 22)
-    win.ultCounter:SetHorizontalAlignment(TEXT_ALIGN_RIGHT)
-
-    win.cards = {
-        primary = CreateCard(win, "primary", 18),
-        backup = CreateCard(win, "backup", 316),
-    }
-
-    win.dragSurface = WINDOW_MANAGER:CreateControl("AlphaSquadULTTrackerDragSurface", win, CT_CONTROL)
-    win.dragSurface:SetAnchorFill(win)
-    win.dragSurface:SetMouseEnabled(true)
-
-    win.dragSurface:SetHandler("OnMouseDown", function()
-        if ULT.sv and not ULT.sv.locked then win:StartMoving() end
+    local win=WINDOW_MANAGER:CreateTopLevelWindow("AlphaSquadULTTrackerWindow")
+    self.window=win;self.layoutSignature=nil
+    win:SetDimensions(self:GetWindowWidth(),80)
+    win:SetClampedToScreen(true);win:SetMovable(true);win:SetMouseEnabled(true)
+    win:SetDrawTier(DT_HIGH);win:SetDrawLayer(DL_OVERLAY);win:SetDrawLevel(90)
+    if ASUI.Settings and ASUI.Settings.ApplyWindowLayer then ASUI.Settings.ApplyWindowLayer(win,true) end
+    win.cards={primary=CreateCard(win,"primary"),backup=CreateCard(win,"backup")}
+    win.dragSurface=WINDOW_MANAGER:CreateControl("AlphaSquadULTTrackerDragSurface",win,CT_CONTROL)
+    win.dragSurface:SetAnchorFill(win);win.dragSurface:SetMouseEnabled(true)
+    win.dragSurface:SetHandler("OnMouseDown",function() if ULT.sv and not ULT.sv.locked then win:StartMoving() end end)
+    win.dragSurface:SetHandler("OnMouseUp",function()
+        if ULT.sv and not ULT.sv.locked then win:StopMovingOrResizing();ULT:SavePosition() end
     end)
-    win.dragSurface:SetHandler("OnMouseUp", function()
-        if ULT.sv and not ULT.sv.locked then
-            win:StopMovingOrResizing()
-            ULT:SavePosition()
-        end
-    end)
-
-    -- Covers releases outside the drag surface and movement stopped by the UI system.
-    win:SetHandler("OnMoveStop", function()
-        if ULT.sv and not ULT.sv.locked then
-            ULT:SavePosition()
-        end
-    end)
-
-    self:ApplyLayout()
-    self:ApplyPosition()
-    self:ApplyAppearance()
-    self:UpdateLockState()
-    self:ApplyVisibility()
-    if AlphaSquadUI.Layout and AlphaSquadUI.Layout.Attach then AlphaSquadUI.Layout.Attach(self) end
-    if AlphaSquadUI.Theme and AlphaSquadUI.Theme.OnChanged then AlphaSquadUI.Theme.OnChanged(function() ULT:RefreshHUD() end) end
+    win:SetHandler("OnMoveStop",function() if ULT.sv and not ULT.sv.locked then ULT:SavePosition() end end)
+    self:ApplyLayout();self:ApplyPosition();self:ApplyAppearance();self:UpdateLockState();self:ApplyVisibility()
+    if ASUI.Layout and ASUI.Layout.Attach then ASUI.Layout.Attach(self) end
+    if ASUI.Localization and ASUI.Localization.RegisterCallback then
+        ASUI.Localization.RegisterCallback("personalUltimate",function() ULT:RefreshHUD() end)
+    end
 end

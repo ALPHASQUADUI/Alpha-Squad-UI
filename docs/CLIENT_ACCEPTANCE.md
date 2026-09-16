@@ -2,6 +2,10 @@
 
 This checklist records behavior that automated Lua and packaging checks cannot establish. No row is passed until someone runs it in ESO on the stated versions. Never substitute a mock result for a native result.
 
+## 3.4.0 acceptance pending
+
+The 3.4.0 interface has not been tested in ESO by the maintainer yet. The previous acceptance below remains historical and does not approve this development cycle, a PR or a release. Run the [3.4.0 interface route](SUPPORT_COVERAGE_TESTING.md#340-interface-acceptance) against the delivered commit, including both client languages, manual override, both Ultimate slots, Overload, Move HUD, native settings return and realistic UI scales.
+
 ## Maintainer acceptance for 3.3.1
 
 On 2026-09-16, following delivery of development commit `6c07ce9da879474f4a8fe93b66c55f7957649e4d`, the maintainer reported that the version was stable and authorized promotion to `main` and release preparation. This records maintainer-reported acceptance; it is not an automated or independently observed native result.

@@ -24,7 +24,7 @@ def build(destination):
         f"## Version: {version}", f"## AddOnVersion: {addon_version}", f"## APIVersion: {api}",
         "## DependsOn: LibGroupBroadcast", "## OptionalDependsOn: AlphaSquadUI LibFoodDrinkBuff",
         "## SavedVariables: AlphaSquadBuildShareSavedVariables", "",
-        "Bootstrap.lua", "Shared/Sharing.lua", *["Shared/" + name for name in FILES], "Runtime.lua", "",
+        "Bootstrap.lua", "Shared/Localization.lua", "Shared/fr.lua", "Shared/fr_catalog.lua", "Shared/Sharing.lua", *["Shared/" + name for name in FILES], "Runtime.lua", "",
     ]
     destination = Path(destination).resolve()
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -32,11 +32,11 @@ def build(destination):
     members = {prefix + "AlphaSquadBuildShare.txt": "\n".join(metadata).encode()}
     for name in ("Bootstrap.lua", "Runtime.lua"):
         members[prefix + name] = (ROOT / "companion" / name).read_bytes()
-    for name in ["Sharing.lua", *FILES]:
+    for name in ["Localization.lua", "fr.lua", "fr_catalog.lua", "Sharing.lua", *FILES]:
         # A lexical host keeps this sender separate from the full addon's
         # global namespace while retaining byte-identical shared source.
         content = "if AlphaSquadBuildShare.disabled then return end\nlocal AlphaSquadUI = AlphaSquadBuildShare.Host\n"
-        source = ROOT / "AlphaSquadUI" / ("Core" if name == "Sharing.lua" else "Modules/SupportCoverage") / name
+        source = ROOT / "AlphaSquadUI" / ("Localization" if name in {"fr.lua", "fr_catalog.lua"} else "Core" if name in {"Localization.lua", "Sharing.lua"} else "Modules/SupportCoverage") / name
         content += source.read_text()
         members[prefix + "Shared/" + name] = content.encode()
     if (ROOT / "LICENSE").is_file():

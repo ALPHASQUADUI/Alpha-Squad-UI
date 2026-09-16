@@ -2,6 +2,11 @@
 AlphaSquadUI = AlphaSquadUI or {}
 AlphaSquadUI.Settings = AlphaSquadUI.Settings or {}
 
+local ASUI=AlphaSquadUI
+local function L(text, ...)
+    if ASUI.L then return ASUI.L(text, ...) end
+    return select("#", ...)>0 and string.format(text, ...) or text
+end
 local Settings = AlphaSquadUI.Settings
 local LogicalWidth = AlphaSquadUI.Utils.GetLogicalWidth
 local LogicalHeight = AlphaSquadUI.Utils.GetLogicalHeight
@@ -181,10 +186,11 @@ end
 function Settings.CloseExclusiveWindow(id)
     local entry = Settings.exclusiveWindows[id]
     if not entry or entry.control:IsHidden() then return false end
+    if id == "settings" then return Settings.CloseToGame() end
     if type(entry.close) == "function" then entry.close() else entry.control:SetHidden(true) end
-    if id == "settings" or NavigationBlocked() then
+    if NavigationBlocked() then
         Settings.windowHistory = {}
-        if id == "settings" then ReleaseCursor() else Settings.ownsCursor = nil end
+        Settings.ownsCursor = nil
         Settings.RefreshModuleVisibility()
         return true
     end
@@ -200,6 +206,31 @@ function Settings.CloseMain()
     Settings.windowHistory = {}
     ReleaseCursor()
     Settings.RefreshModuleVisibility()
+end
+
+-- Explicit root Close/Escape ends addon navigation and resumes gameplay.
+-- Raw scene teardown uses DismissAllWindows instead and never steals a scene.
+function Settings.CloseToGame()
+    local shell=ASUI.Shell
+    if shell then shell.pendingNativePage=nil end
+    Settings.DismissAllWindows()
+    local manager=SCENE_MANAGER
+    local scene=manager and manager.GetCurrentScene and manager:GetCurrentScene()
+    local name=scene and scene.GetName and scene:GetName()
+    if manager and (name=="hud" or name=="hudui" or name=="gameMenuInGame" or name=="gamepad_options_root") then
+        if manager.SetInUIMode then manager:SetInUIMode(false) end
+        if manager.ShowBaseScene then manager:ShowBaseScene() end
+    end
+    return true
+end
+
+function Settings.ReturnFromLayout(target)
+    if NavigationBlocked() or (ZO_Dialogs_IsShowingDialog and ZO_Dialogs_IsShowingDialog())
+        or (ZO_GenericGamepadDialog_IsShowing and ZO_GenericGamepadDialog_IsShowing()) then return false end
+    local page=target and target.page or "dashboard"
+    local shell=ASUI.Shell
+    if shell and shell.OpenNativeSettings then return shell:OpenNativeSettings(page) end
+    return Settings.OpenPage(page)
 end
 
 -- Clipped mouse-wheel/slider scrolling with no animation or OnUpdate loop.
@@ -292,7 +323,6 @@ function Settings.OpenPage(id)
     return true
 end
 
-local ASUI=AlphaSquadUI
 -- Native confirmation dialogs use MEDIUM/20. Keep addon windows below them,
 -- and leave tooltips on their native high tier. No modal hooks or polling.
 function Settings.ApplyWindowLayer(control,isHUD)
@@ -332,6 +362,8 @@ local function Label(ui,parent,name,text,x,y,w,h,color,font)
     local control=ui.CreateLabel(parent,name,font or "ZoFontGameSmall",text,color or ui.colors.muted)
     control:SetAnchor(TOPLEFT,parent,TOPLEFT,x,y);control:SetDimensions(w,h)
     control:SetHorizontalAlignment(TEXT_ALIGN_LEFT);control:SetVerticalAlignment(TEXT_ALIGN_TOP)
+    if control.SetMaxLineCount then control:SetMaxLineCount(math.max(1,math.floor(h/20))) end
+    if control.SetWrapMode and TEXT_WRAP_MODE_ELLIPSIS then control:SetWrapMode(TEXT_WRAP_MODE_ELLIPSIS) end
     parent.layoutLabels=parent.layoutLabels or {}
     parent.layoutLabels[#parent.layoutLabels+1]={control=control,x=x,y=y,right=LogicalWidth(parent)-x-w,height=h}
     return control
@@ -362,26 +394,67 @@ local function PresetDropdown(parent,ui,width)
     local combo=ZO_ComboBox_ObjectFromContainer(container)
     combo:SetSortsItems(false)
     if theme.ConfigureDropdown then theme.ConfigureDropdown(combo) end
-    local description=Label(ui,parent,"AlphaSquadThemeDescription","",14,88,width-28,50)
-    for _,preset in ipairs(theme.GetPresets()) do
-        local id=preset.id
-        local entry=combo:CreateItemEntry(preset.name,function() theme.SetPreset(id) end)
-        entry.id=id;entry.description=preset.description
-        combo:AddItem(entry)
+    local description=Label(ui,parent,"AlphaSquadThemeDescription","",14,78,width-28,28)
+    local renderedLanguage
+    local function RefreshItems()
+        local language=ASUI.Localization and ASUI.Localization.GetLanguage() or "en"
+        if renderedLanguage==language then return end
+        renderedLanguage=language
+        if combo.ClearItems then combo:ClearItems() elseif combo.entries then combo.entries={} end
+        for _,preset in ipairs(theme.GetPresets()) do
+            local id=preset.id
+            local entry=combo:CreateItemEntry(L(preset.name),function() theme.SetPreset(id) end)
+            entry.id=id;entry.description=preset.description
+            combo:AddItem(entry)
+        end
     end
+    RefreshItems()
     if ASUI.Input then ASUI.Input.Register(container, {kind = "dropdown", combo = combo, label = "Interface style"}) end
     ui.RegisterRefresher(function()
+        RefreshItems()
         local id=theme.GetPresetId()
         combo:SetSelectedItemByEval(function(entry)return entry.id==id end,true)
-        for _,preset in ipairs(theme.GetPresets()) do if preset.id==id then description:SetText(preset.description) end end
+        for _,preset in ipairs(theme.GetPresets()) do if preset.id==id then description:SetText(L(preset.description)) end end
     end)
     return container
+end
+local function LanguageDropdown(parent,ui,width)
+    local label=Label(ui,parent,"AlphaSquadLanguageLabel","Language",14,104,width-28,22)
+    local container=WINDOW_MANAGER:CreateControlFromVirtual("AlphaSquadLanguageChoice",parent,"ZO_ComboBox")
+    container:SetAnchor(TOPLEFT,parent,TOPLEFT,14,128);container:SetAnchor(TOPRIGHT,parent,TOPRIGHT,-14,128)
+    container:SetDimensions(width-28,30)
+    local combo=ZO_ComboBox_ObjectFromContainer(container)
+    combo:SetSortsItems(false)
+    if ASUI.Theme.ConfigureDropdown then ASUI.Theme.ConfigureDropdown(combo) end
+    local choices={{id="auto",name="Game language"},{id="en",name="English"},{id="fr",name="Français"}}
+    local renderedLanguage
+    local function Refresh()
+        local localization=ASUI.Localization
+        local language=localization and localization.GetLanguage() or "en"
+        if renderedLanguage~=language then
+            renderedLanguage=language
+            if combo.ClearItems then combo:ClearItems() elseif combo.entries then combo.entries={} end
+            for _,choice in ipairs(choices) do
+                local id=choice.id
+                local name=id=="auto" and L("Game language: %s",L(language=="fr" and "Français" or "English")) or L(choice.name)
+                local entry=combo:CreateItemEntry(name,function()
+                    if ASUI.Localization then ASUI.Localization.SetLanguage(id) end
+                end)
+                entry.id=id;combo:AddItem(entry)
+            end
+        end
+        local selected=localization and localization.GetPreference() or "auto"
+        combo:SetSelectedItemByEval(function(entry)return entry.id==selected end,true)
+    end
+    Refresh();ui.RegisterRefresher(Refresh)
+    if ASUI.Input then ASUI.Input.Register(container,{kind="dropdown",combo=combo,label="Language"}) end
+    return container,label
 end
 Settings.RegisterPage("dashboard",function(page,ui)
     page.responsiveCards=true;page.contentHeight=590
     local width=LogicalWidth(page)-16;local half=(width-16)/2
     Label(ui,page,"AlphaSquadDashboardTitle","DASHBOARD",8,2,width,34,ui.colors.orange,"ZoFontWinH2")
-    Label(ui,page,"AlphaSquadDashboardIntro","Your tools, your layout. Choose what you need and make it yours.",8,40,width,26)
+    Label(ui,page,"AlphaSquadDashboardIntro","Modules, appearance and language.",8,40,width,26)
     local entries={
         {"ulttracker","ULT TRACKER","Personal and group Ultimates, with specialized Sorcerer Overload support."},
         {"supportcoverage","SUPPORT COVERAGE","Prepare group support and inspect the equipped builds behind it."},
@@ -398,7 +471,8 @@ Settings.RegisterPage("dashboard",function(page,ui)
     end
     local appearance=ui.CreateCard(page,"AlphaSquadDashboardAppearance",8,280,half,172,"INTERFACE STYLE",ui.colors.orange)
     local themeChoice=PresetDropdown(appearance,ui,half)
-    Label(ui,appearance,"AlphaSquadThemeScope","Applies to every menu and HUD. Gameplay colors stay consistent.",14,136,half-28,24)
+    themeChoice:ClearAnchors();themeChoice:SetAnchor(TOPLEFT,appearance,TOPLEFT,14,42);themeChoice:SetAnchor(TOPRIGHT,appearance,TOPRIGHT,-14,42)
+    local languageChoice=LanguageDropdown(appearance,ui,half)
     local sync=ui.CreateCard(page,"AlphaSquadDashboardSync",8+half+16,280,half,172,"CROSS-SYNC",ui.colors.cyan)
     Label(ui,sync,"AlphaSquadDashboardSyncHelp","Keep your theme, HUD sizes, positions and preferences across characters on this server.",14,44,half-28,60,ui.colors.muted,"ZoFontGame")
     ui.AddToggleRow(sync,"AlphaSquadCrossSync","Across characters",124,function() return not ASUI.Preferences or not ASUI.Preferences.sv or ASUI.Preferences.sv.crossSync~=false end,
@@ -419,6 +493,7 @@ Settings.RegisterPage("dashboard",function(page,ui)
         local rowY=82+math.ceil(#cards/columns)*196
         CardLayout(appearance,page,8,rowY,column,172)
         themeChoice:SetWidth(column-28)
+        languageChoice:SetWidth(column-28)
         CardLayout(sync,page,columns==2 and 24+column or 8,columns==2 and rowY or rowY+188,column,172)
         local helpY=rowY+(columns==2 and 188 or 376)
         local stacked=available<640
@@ -458,13 +533,13 @@ Settings.RegisterPage("libraries",function(page,ui)
                 data.kind=="builds" and "Turn ON to share supported equipment, traits, glyphs, skill bars, CP and readiness in your current group. Both clients need compatible software. Build transport registration is pending; use in coordinated groups. Starts OFF on a new installation; existing choices are preserved. Module switches do not change sharing."
                 or "Turn ON to share this data in your current group. Changes this library's matching group protocols and saved settings here. Other addons using the same protocols follow this setting. Starts OFF on a new installation; existing choices are preserved. Module switches do not change sharing.")
             record.switch=switch
-            local baseHelp=switch.help.."\n\n"..data.text
+            local baseHelp=switch.help
             ui.RegisterRefresher(function()
                 local _,reason,available=false,"Install the listed libraries to enable sharing.",false
                 if ASUI.Sharing then _,reason,available=ASUI.Sharing.GetStatus(data.kind) end
-                switch.help=baseHelp..(reason and ("\n\n"..reason) or "")
+                switch.help=L(baseHelp).."\n\n"..L(data.text)..(reason and ("\n\n"..L(reason)) or "")
                 if not available then
-                    switch.label:SetText("N/A")
+                    switch.label:SetText(L("N/A"))
                     if switch.thumb then switch.thumb:SetHidden(true) end
                     if switch.track then switch.track:SetHidden(true) end
                     switch.label:ClearAnchors();switch.label:SetAnchorFill(switch)
@@ -480,7 +555,7 @@ Settings.RegisterPage("libraries",function(page,ui)
         ui.RegisterRefresher(function()
             local lib=rawget(_G,data.key);local installed=lib~=nil
             local old=data.key=="LibAddonMenu2" and type(lib)=="table" and tonumber(lib.version) and tonumber(lib.version)<38
-            status:SetText(old and "UPDATE NEEDED" or installed and "INSTALLED" or "MISSING")
+            status:SetText(L(old and "UPDATE NEEDED" or installed and "INSTALLED" or "MISSING"))
             local color=installed and not old and c.green or c.red;status:SetColor(color[1],color[2],color[3],1)
         end)
     end
@@ -533,7 +608,7 @@ Settings.RegisterPage("community",function(page,ui)
         ui.CreateButton(site,"AlphaSquadReleases","RELEASE NOTES",520,116,190,36,function()OpenLink("https://github.com/ALPHASQUADUI/Alpha-Squad-UI/releases")end),
     }
     local about=ui.CreateCard(page,"AlphaSquadCommunityAbout",8,286,half,210,"ABOUT THE ADDON",ui.colors.cyan)
-    Label(ui,about,"AlphaSquadAboutText","Clear group preparation and one unified Ultimate tracker. Built around native ESO information and controls.\n\nCreated by "..ASUI.Theme.authorText,16,46,half-32,130,ui.colors.muted,"ZoFontGame")
+    Label(ui,about,"AlphaSquadAboutText","Group preparation and Ultimates. Built around native ESO controls.",16,46,half-32,130,ui.colors.muted,"ZoFontGame")
     local discord=ui.CreateCard(page,"AlphaSquadCommunityDiscord",8+half+16,286,half,210,"JOIN THE COMMUNITY",ui.colors.orange)
     Label(ui,discord,"AlphaSquadCommunityDiscordText","Find the Alpha Squad Discord, meet the roster and connect with other players.",16,46,half-32,80,ui.colors.muted,"ZoFontGame")
     local join=ui.CreateButton(discord,"AlphaSquadCommunityDiscordButton","JOIN DISCORD",16,148,190,36,function()OpenLink(ASUI.discord)end)
@@ -555,8 +630,8 @@ Settings.RegisterPage("community",function(page,ui)
         CardLayout(about,page,8,aboutY,column,210)
         CardLayout(discord,page,columns==2 and 24+column or 8,columns==2 and aboutY or aboutY+226,column,210)
         local commandY=aboutY+(columns==2 and 226 or 452)
-        commands:SetText(columns==2 and "/asui  Settings     /asmove  Arrange HUD     /assupport builds  Inspect builds"
-            or "/asui  Settings\n/asmove  Arrange HUD\n/assupport builds  Inspect builds")
+        commands:SetText(L(columns==2 and "/asui  Settings     /asmove  Arrange HUD     /assupport builds  Inspect builds"
+            or "/asui  Settings\n/asmove  Arrange HUD\n/assupport builds  Inspect builds"))
         Place(commands,page,8,commandY,available,columns==2 and 30 or 72)
         page.contentHeight=commandY+(columns==2 and 42 or 84)
     end) end

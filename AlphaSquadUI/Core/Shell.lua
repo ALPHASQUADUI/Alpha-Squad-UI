@@ -1,5 +1,9 @@
 -- Shared settings shell: available independently of gameplay modules.
 local ASUI=AlphaSquadUI
+local function L(text, ...)
+    if ASUI.L then return ASUI.L(text, ...) end
+    return select("#", ...)>0 and string.format(text, ...) or text
+end
 local Shell={settingsRefreshers={},settingsPageRefreshers={},settingsPages={},settingsNavButtons={},activeSettingsPage="dashboard"}
 ASUI.Shell=Shell
 local COLORS=ASUI.Theme.colors
@@ -32,7 +36,9 @@ end
 local function CreateLabel(parent, name, font, text, color)
     local label = WINDOW_MANAGER:CreateControl(name, parent, CT_LABEL)
     label:SetFont(font)
-    label:SetText(text or "")
+    if ASUI.Localization and text and text~="" then ASUI.Localization.Bind(label,text)
+    else label:SetText(text or "") end
+    if label.SetWrapMode and TEXT_WRAP_MODE_ELLIPSIS then label:SetWrapMode(TEXT_WRAP_MODE_ELLIPSIS) end
     label:SetColor(color[1], color[2], color[3], color[4])
     label:SetVerticalAlignment(TEXT_ALIGN_CENTER)
     if ASUI.Theme.BindColor then ASUI.Theme.BindColor(label,color) end
@@ -60,7 +66,7 @@ local function CreateButton(parent, name, text, x, y, width, height, onClick)
     button:SetHandler("OnMouseEnter", function()
         if button.enabled then SetColor(bg,COLORS.hover or COLORS.panelActive) end
         local tooltips = AlphaSquadUI.Tooltips
-        if button.help and tooltips then tooltips.ShowText(button, button.help) end
+        if button.help and tooltips then tooltips.ShowText(button, L(button.help)) end
     end)
     button:SetHandler("OnMouseExit", function()
         local color = button.restingColor or COLORS.panel
@@ -126,8 +132,8 @@ function Shell:ApplySettingsGeometry()
     local contentWidth=width-contentX-12
     local viewport=math.max(60,height-contentY-32)
     if self.settingsHeader then self.settingsHeader:SetWidth(width) end
-    if self.settingsTitle then self.settingsTitle:SetWidth(width-40) end
-    if self.settingsSubtitle then self.settingsSubtitle:SetWidth(width-42) end
+    if self.settingsTitle then self.settingsTitle:SetWidth(width-180) end
+    if self.settingsSubtitle then self.settingsSubtitle:SetWidth(width-180) end
     if self.settingsSidebar then
         self.settingsSidebar:SetDimensions(compact and width or SIDEBAR_WIDTH,compact and navHeight or height-64)
     end
@@ -309,7 +315,7 @@ function Shell:CreateSettingsWindow()
     title:SetAnchor(TOPLEFT, win, TOPLEFT, 20, 10)
     title:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
 
-    local subtitle = CreateLabel(win, "AlphaSquadSettingsSubtitle", "ZoFontGameSmall", "Group preparation & Ultimate tracking  •  " .. (AlphaSquadUI.Theme and AlphaSquadUI.Theme.authorText or "@SeRuM1"), COLORS.muted)
+    local subtitle = CreateLabel(win, "AlphaSquadSettingsSubtitle", "ZoFontGameSmall", "Group preparation and Ultimates", COLORS.muted)
     self.settingsSubtitle=subtitle
     subtitle:SetDimensions(520, 20)
     subtitle:SetAnchor(TOPLEFT, win, TOPLEFT, 21, 38)
@@ -322,6 +328,13 @@ function Shell:CreateSettingsWindow()
     win.inputHint:SetHorizontalAlignment(TEXT_ALIGN_RIGHT)
     win.inputHint:SetMaxLineCount(1)
     if win.inputHint.SetWrapMode and TEXT_WRAP_MODE_ELLIPSIS then win.inputHint:SetWrapMode(TEXT_WRAP_MODE_ELLIPSIS) end
+
+    self.settingsCloseButton = CreateButton(win, "AlphaSquadSettingsClose", "CLOSE", 0, 0, 130, 34, function()
+        ASUI.Settings.CloseToGame()
+    end)
+    self.settingsCloseButton:ClearAnchors()
+    self.settingsCloseButton:SetAnchor(TOPRIGHT, win, TOPRIGHT, -14, 14)
+    self.settingsCloseButton.help="Close and return to the game."
 
     local separator = WINDOW_MANAGER:CreateControl("AlphaSquadSettingsSeparator", win, CT_TEXTURE)
     separator:SetAnchor(TOPLEFT, win, TOPLEFT, 0, 63)
@@ -401,7 +414,7 @@ function Shell:CreateSettingsWindow()
     end)
     self.settingsMoveButton:ClearAnchors()
     self.settingsMoveButton:SetAnchor(BOTTOMLEFT, sidebar, BOTTOMLEFT, 12, -56)
-    self.settingsMoveButton.help = "Outside combat, place enabled HUDs against the game interface. Enable at least one module in Dashboard first. Drag a panel to move it, its corners to scale it, or its sides to reshape it. Choose Done or press Escape to save and lock your layout."
+    self.settingsMoveButton.help = "Drag to move. Drag a corner to resize. Done or Escape saves and returns to settings."
 
     local versionLabel = CreateLabel(sidebar, "AlphaSquadSidebarVersion", "ZoFontGameSmall", "v" .. VERSION, COLORS.muted)
     self.settingsSidebarVersion=versionLabel
@@ -470,11 +483,11 @@ function Shell:CreateSettingsWindow()
         button.thumb:SetDimensions(10,10);button.thumb:ClearAnchors()
         button.label:ClearAnchors();button.label:SetAnchor(TOPLEFT,button,TOPLEFT,3,0)
         button.label:SetDimensions(40,30)
-        button.help = help or (labelText .. "\n\nClick the label or switch to change this setting. Changes are saved automatically.")
+        button.help = help or labelText
         if ASUI.Input then ASUI.Input.Register(button, {activate = Toggle, label = labelText}) end
         label:SetMouseEnabled(true)
         label:SetHandler("OnMouseEnter", function()
-            if AlphaSquadUI.Tooltips then AlphaSquadUI.Tooltips.ShowText(label, button.help) end
+            if AlphaSquadUI.Tooltips then AlphaSquadUI.Tooltips.ShowText(label, L(button.help)) end
         end)
         label:SetHandler("OnMouseExit", function()
             if AlphaSquadUI.Tooltips then AlphaSquadUI.Tooltips.Hide() end
@@ -484,7 +497,7 @@ function Shell:CreateSettingsWindow()
         end)
         self:RegisterSettingsRefresher(function()
             local enabled = getter()
-            button.label:SetText(enabled and "ON" or "OFF")
+            button.label:SetText(L(enabled and "ON" or "OFF"))
             local c = enabled and COLORS.green or COLORS.muted
             button.label:SetColor(c[1], c[2], c[3], 1)
             button.thumb:SetHidden(false);button.thumb:ClearAnchors()
@@ -519,16 +532,18 @@ function Shell:CreateSettingsWindow()
         minus:ClearAnchors();minus:SetAnchor(TOPRIGHT,parent,TOPRIGHT,-116,y)
         value:ClearAnchors();value:SetAnchor(TOPRIGHT,parent,TOPRIGHT,-56,y)
         plus:ClearAnchors();plus:SetAnchor(TOPRIGHT,parent,TOPRIGHT,-14,y)
-        local help = string.format("%s%s\n\nAdjust from %s%s to %s%s. Changes are saved automatically.",
-            labelText, description and ("\n\n" .. description) or "", minimum, suffix or "", maximum, suffix or "")
-        minus.help, plus.help = help, help
+        local function Help()
+            return L("%s%s\n\nAdjust from %s%s to %s%s.", L(labelText),
+                description and ("\n\n" .. L(description)) or "", minimum, suffix or "", maximum, suffix or "")
+        end
+        self:RegisterSettingsRefresher(function() minus.help,plus.help=Help(),Help() end)
         if ASUI.Input then
             ASUI.Input.Register(minus, {label = "Decrease " .. labelText})
             ASUI.Input.Register(plus, {label = "Increase " .. labelText})
         end
         label:SetMouseEnabled(true)
         label:SetHandler("OnMouseEnter", function()
-            if AlphaSquadUI.Tooltips then AlphaSquadUI.Tooltips.ShowText(label, help) end
+            if AlphaSquadUI.Tooltips then AlphaSquadUI.Tooltips.ShowText(label, Help()) end
         end)
         label:SetHandler("OnMouseExit", function()
             if AlphaSquadUI.Tooltips then AlphaSquadUI.Tooltips.Hide() end
@@ -639,6 +654,56 @@ function Shell:RegisterDirectSettingsPanel()
     end
 end
 
+-- Use the native menu tree after it finishes rebuilding, selecting only our
+-- registered settings data. No queued retry or permanent update is required.
+function Shell:SelectNativeSettings()
+    local page=self.pendingNativePage
+    if not page then return false end
+    self.pendingNativePage=nil
+    if not ASUI.Settings.CanOpenWindow() then return false end
+    local menu=ZO_GameMenu_InGame and ZO_GameMenu_InGame.gameMenu
+    local tree=menu and menu.navigationTree
+    local found
+    if tree and tree.ExecuteOnSubTree and tree.SelectNode then
+        tree:ExecuteOnSubTree(nil,function(node)
+            if node.data==Shell.directSettingsPanelData then found=node end
+        end)
+    end
+    if found then
+        tree:SelectNode(found)
+        -- A restored selection may be unchanged and skip the native callback.
+        if not self.settingsOpenedFromGameMenu then self.directSettingsPanelData.callback() end
+        self:ShowSettingsPage(page)
+        return true
+    end
+    return ASUI.Settings.OpenPage(page)
+end
+
+function Shell:HandleNativeSettingsScene(scene,state)
+    if not self.pendingNativePage or not scene or not scene.GetName then return end
+    local name=scene:GetName()
+    if name=="gameMenuInGame" and state==SCENE_SHOWN then self:SelectNativeSettings()
+    elseif (name=="gameMenuInGame" and state==SCENE_HIDING)
+        or (state==SCENE_SHOWING and name~="gameMenuInGame" and name~="hud" and name~="hudui") then
+        self.pendingNativePage=nil
+    end
+end
+
+function Shell:OpenNativeSettings(page)
+    if not ASUI.Settings.CanOpenWindow() then return false end
+    local manager=SCENE_MANAGER
+    if not self.directSettingsPanelData or not manager or not manager.Show
+        or (IsInGamepadPreferredMode and IsInGamepadPreferredMode()) then
+        return ASUI.Settings.OpenPage(page)
+    end
+    self.pendingNativePage=page or "dashboard"
+    local scene=manager.GetCurrentScene and manager:GetCurrentScene()
+    if scene and scene.GetName and scene:GetName()=="gameMenuInGame"
+        and scene.GetState and scene:GetState()==SCENE_SHOWN then return self:SelectNativeSettings() end
+    manager:Show("gameMenuInGame")
+    return true
+end
+
 function Shell:ToggleSettingsWindow()
     if not self.settingsWindow then return end
     if not self.settingsWindow:IsHidden() then
@@ -672,12 +737,31 @@ function Shell:Initialize()
     if self.initialized then return end
     self.initialized=true
     if ASUI.Theme.Initialize then ASUI.Theme.Initialize() end
+    if ASUI.Localization then ASUI.Localization.Initialize() end
     if ASUI.Input then ASUI.Input.Initialize() end
     self:CreateSettingsWindow()
     self:RegisterDirectSettingsPanel()
+    if SCENE_MANAGER and SCENE_MANAGER.RegisterCallback then
+        SCENE_MANAGER:RegisterCallback("SceneStateChanged",function(scene,_,state)
+            Shell:HandleNativeSettingsScene(scene,state)
+        end)
+    end
+    if EVENT_PLAYER_DEACTIVATED then EVENT_MANAGER:RegisterForEvent("AlphaSquadUI_SettingsLoading",EVENT_PLAYER_DEACTIVATED,function()Shell.pendingNativePage=nil end) end
+    if EVENT_PLAYER_COMBAT_STATE then EVENT_MANAGER:RegisterForEvent("AlphaSquadUI_SettingsCombat",EVENT_PLAYER_COMBAT_STATE,function(_,combat)if combat then Shell.pendingNativePage=nil end end) end
     if ASUI.Theme.OnChanged then
         ASUI.Theme.OnChanged(function()
             Shell:ShowSettingsPage(Shell.activeSettingsPage or "dashboard")
+            Shell:RefreshSettingsWindow()
+        end)
+    end
+    if ASUI.Localization then
+        ASUI.Localization.RegisterCallback("Shell",function()
+            Shell.settingsAppliedWidth=nil
+            Shell:ApplySettingsGeometry()
+            -- Repaint hidden pages too: all labels/dropdowns must agree before opening.
+            for _,refreshers in pairs(Shell.settingsPageRefreshers) do
+                for _,refresh in ipairs(refreshers) do refresh() end
+            end
             Shell:RefreshSettingsWindow()
         end)
     end

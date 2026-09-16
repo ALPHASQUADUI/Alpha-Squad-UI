@@ -12,7 +12,7 @@ assert(loadfile("AlphaSquadUI/Modules/ULTTracker/ULTTracker.lua"))()
 assert(loadfile("AlphaSquadUI/Modules/ULTTracker/ULTOverload.lua"))()
 local ULT=AlphaSquadUI.Modules.ULTTracker;local O=ULT.Overload
 local function Reset(specific)
-    ULT.sv={enabled=false,visible=false,trackMode="both",x=500,y=100,scale=100}
+    ULT.sv={enabled=false,visible=false,hudOrientation="vertical",hudWidth=224,hudHeight=410,x=500,y=100,scale=100}
     for key,value in pairs(specific or {}) do ULT.sv[key]=value end
     ULT.bars.primary={abilityId=30366,icon="native/icon",category=1}
     ULT.bars.backup={abilityId=101,icon="native/other",category=2}
@@ -22,7 +22,7 @@ account={addonEnabled=true,visible=true,x=123,y=456,scale=115,positionSaved=true
 Reset();O:Migrate()
 check(ULT.sv.enabled and ULT.sv.visible,"An actively used legacy Overload HUD survives an old disabled standard tracker")
 check(ULT.sv.x==123 and ULT.sv.y==456 and ULT.sv.scale==115,"A used slotted Overload position and size become the common personal layout")
-check(ULT.sv.trackMode=="both","An existing explicit Both choice is preserved")
+check(ULT.sv.hudOrientation=="vertical" and ULT.sv.hudWidth==224 and ULT.sv.hudHeight==410,"Existing orientation and custom dimensions survive Overload migration")
 check(ULT.sv.overload.reserveThreshold==nil and ULT.sv.overload.reserveWarningThreshold==175 and not ULT.sv.overload.reserveSound,"Legacy reserve values and an explicit silent preference are copied")
 check(account.x==123 and account.reserveThreshold==140 and account.addonEnabled,"Migration never deletes or mutates the legacy profile")
 ULT.sv.enabled=false;ULT.sv.visible=false;ULT.sv.x=850;ULT.sv.overload.enabled=false
@@ -51,6 +51,6 @@ check(ULT.sv.unifiedUltimateVersion~=1 and not ULT.sv.enabled,"Unavailable start
 ULT.bars.primary.abilityId=30366
 check(O:Migrate() and ULT.sv.enabled and ULT.sv.x==222 and ULT.sv.unifiedUltimateVersion==1,"Readable activation bars finalize and preserve the formerly active Overload HUD")
 account={}
-Reset({enabled=true,visible=true,trackMode="auto"});O:Migrate()
-check(ULT.sv.enabled and ULT.sv.overload.enabled and ULT.sv.trackMode=="auto","Fresh installations retain AUTO and enabled behavior without a legacy Overload profile")
+Reset({enabled=true,visible=true});O:Migrate()
+check(ULT.sv.enabled and ULT.sv.overload.enabled and ULT:ShouldTrackBar("primary") and ULT:ShouldTrackBar("backup"),"Fresh installations expose both weapons and enabled Overload behavior")
 print(string.format("PASS: %d assertions; Lua %s. No ESO-runtime certification.",total,_VERSION))

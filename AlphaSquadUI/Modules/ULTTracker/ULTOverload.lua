@@ -4,6 +4,10 @@ local ASUI=AlphaSquadUI
 local ULT=ASUI.Modules.ULTTracker
 local O={active=false,level="none",lastAlertAt=0,lastReadyAt=0}
 ULT.Overload=O
+local function L(text,...)
+    if ASUI.L then return ASUI.L(text,...) end
+    return select("#",...)>0 and string.format(text,...) or text
+end
 local EM=EVENT_MANAGER
 local defaults={enabled=true,reserveAlertsEnabled=true,reserveWarningThreshold=160,
     reserveSound=true,readyReminderEnabled=true,readyReminderThreshold=400,readyReminderSound=true,disableInPvP=false}
@@ -212,8 +216,8 @@ function O:RegisterCommands()
         elseif command=="reset" then if ASUI.Layout then ASUI.Layout.Start();ASUI.Layout.Select(ULT);ASUI.Layout.ResetSelected() end
         elseif command=="website" or command=="site" or command=="community" then if ASUI.Settings then ASUI.Settings.OpenLink(ASUI.website or "https://alphasquadeso.com/") end
         elseif command=="status" or command=="inspect" or command=="diagnostics" then
-            if d then d(string.format("Overload behavior: %s • State: %s • Warning: %d • Ready: %d",
-                O:Config().enabled and "ON" or "OFF",O.active and "ACTIVE" or "OFF",O:Config().reserveWarningThreshold,O:Config().readyReminderThreshold)) end
+            if d then d(L("Overload behavior: %s • State: %s • Warning: %d • Ready: %d",
+                L(O:Config().enabled and "ON" or "OFF"),L(O.active and "ACTIVE" or "OFF"),O:Config().reserveWarningThreshold,O:Config().readyReminderThreshold)) end
         elseif command=="readytest" or command=="testready" or command=="debug" then ASUI.Settings.OpenPage("ultoverload")
         elseif command=="move" or command=="unlock" then if ASUI.Layout then ASUI.Layout.Start() end
         elseif command=="lock" then if ASUI.Layout then ASUI.Layout.Finish() end

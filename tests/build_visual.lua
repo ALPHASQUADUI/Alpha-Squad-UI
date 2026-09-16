@@ -17,6 +17,7 @@ local function Control(name,parent)
     function c:GetParent()return self.parent end
     function c:GetName()return self.name end
     function c:SetHeight(value)self.height=value end
+    function c:SetWidth(value)self.width=value end
     setmetatable(c,{__index=function(_,key)if key:match('^Set') or key:match('^Clear')then return function()end end end})
     return c
 end
@@ -47,6 +48,12 @@ assert(loadfile('AlphaSquadUI/Modules/SupportCoverage/SupportCoverageBuildView.l
 local V=SC.BuildView
 local canvas=V.Create(Control('Parent'))
 check(canvas.width==830 and canvas.height==502,'Compact body fits830x502 logical viewport')
+check(canvas.equipment.title.x+canvas.equipment.title.width<canvas.equipment.glyphs.x,
+    'Translated equipment headings cannot overlap the independent glyph summary')
+check(canvas.sets.title.x+canvas.sets.title.width<canvas.sets.front.x,
+    'Long translated set headings stop before their front and back counts')
+check(canvas.masteries.title.x+canvas.masteries.title.width<canvas.masteries.icons[1].x,
+    'Mastery headings reserve the full icon hit area in either language')
 check(#V.EquipmentPositions==14,'All fourteen equipment slots are present')
 local unique={}
 for _,slot in ipairs(V.EquipmentPositions)do

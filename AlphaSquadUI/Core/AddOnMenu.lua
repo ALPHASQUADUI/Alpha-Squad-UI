@@ -1,6 +1,10 @@
 -- Enhance only this suite's entry in ESO's native Add-Ons menu.
 -- Dependencies remain optional at load time so missing libraries can be diagnosed.
 local ASUI = AlphaSquadUI
+local function L(text, ...)
+    if ASUI.L then return ASUI.L(text, ...) end
+    return select("#", ...)>0 and string.format(text, ...) or text
+end
 local Menu = {}
 ASUI.AddOnMenu = Menu
 
@@ -17,24 +21,24 @@ local GREEN, RED = "|c66DD88", "|cFF6666"
 local DESCRIPTION = "Modular Alpha Squad UI with pre-combat group readiness and voluntary build inspection.\n\nLibraries below are required for the complete group feature set. Local trackers remain available without them."
 
 local function LibraryStatus(api, entry, library, enabled)
-    if not entry then return "Missing library" end
-    if not enabled or not entry.addOnEnabled then return "Disabled" end
+    if not entry then return L("Missing library") end
+    if not enabled or not entry.addOnEnabled then return L("Disabled") end
     if library.minimum and type(api.GetAddOnVersion) == "function" then
         local version = tonumber(api:GetAddOnVersion(entry.index)) or 0
-        if version < library.minimum then return "Update required (" .. library.minimum .. "+)" end
+        if version < library.minimum then return L("Update required (%d+)",library.minimum) end
     end
     -- Read the selected character's native dependency state, not loaded globals.
     if type(api.GetAddOnNumDependencies) == "function" and type(api.GetAddOnDependencyInfo) == "function" then
         for index = 1, api:GetAddOnNumDependencies(entry.index) do
             local _, exists, active, minimum, version = api:GetAddOnDependencyInfo(entry.index, index)
-            if not exists then return "Missing dependency" end
-            if not active then return "Dependency disabled" end
-            if (tonumber(version) or 0) < (tonumber(minimum) or 0) then return "Dependency update required" end
+            if not exists then return L("Missing dependency") end
+            if not active then return L("Dependency disabled") end
+            if (tonumber(version) or 0) < (tonumber(minimum) or 0) then return L("Dependency update required") end
         end
     end
-    if entry.addOnState == ADDON_STATE_DEPENDENCIES_DISABLED then return "Dependency unavailable" end
-    if entry.addOnState == ADDON_STATE_VERSION_MISMATCH then return "Incompatible version" end
-    if entry.addOnState == ADDON_STATE_ERROR_STATE_UNABLE_TO_LOAD then return "Unable to load" end
+    if entry.addOnState == ADDON_STATE_DEPENDENCIES_DISABLED then return L("Dependency unavailable") end
+    if entry.addOnState == ADDON_STATE_VERSION_MISMATCH then return L("Incompatible version") end
+    if entry.addOnState == ADDON_STATE_ERROR_STATE_UNABLE_TO_LOAD then return L("Unable to load") end
     return nil
 end
 
@@ -57,10 +61,10 @@ function Menu.Refresh(manager)
     local lines, enabled = {}, api:AreAddOnsEnabled()
     for _, library in ipairs(libraries) do
         local issue = LibraryStatus(api, installed[library.name], library, enabled)
-        local text = library.name .. " - " .. (issue or "Installed")
+        local text = library.name .. " - " .. (issue or L("Installed"))
         lines[#lines + 1] = "\n    •  " .. (issue and RED or GREEN) .. text .. "|r"
     end
-    target.addOnDescription = DESCRIPTION
+    target.addOnDescription = L(DESCRIPTION)
     target.addOnDependencyText = table.concat(lines)
     target.expandable = true
     -- Do not alter native enablement, error flags, sorting or other addons.
@@ -75,3 +79,8 @@ function Menu.Initialize()
 end
 
 Menu.Initialize()
+
+if ASUI.Localization then ASUI.Localization.RegisterCallback("AddOnMenu",function()
+    local manager=ADD_ON_MANAGER or ZO_AddOnManager
+    if manager then Menu.Refresh(manager) end
+end) end

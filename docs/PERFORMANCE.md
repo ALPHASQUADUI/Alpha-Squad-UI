@@ -95,3 +95,11 @@ Readiness-only changes are coalesced separately from build changes. If food/poti
 Transfer watchdogs exist only for live transfers. They enforce inactivity and total duration, have at most one live next check per transfer, and stop after cancellation. Incoming summary/capability work is bounded and duplicate content reuses existing state without suppressing a stale-to-fresh transition. The protocol still retains one incoming and one outgoing build.
 
 Counter-based regressions establish skipped work, not a measured FPS gain. Solo, four-player and twelve-player measurements remain native-client acceptance work.
+
+## 3.4.0 presentation and sender work
+
+The personal Ultimate renderer interpolates positive progress changes for 180 ms only while visible. A decrease/spend updates immediately, and interpolation cannot make an unready ability display 100%. Its shared animation lifecycle stops on hide, disable, loading and placement. Group readiness is steady green; the old full-row pulse and its timer are removed. Solo Group ULT no longer retains an empty-roster recovery update.
+
+Localization uses one dictionary lookup per changed label and a one-shot refresh of existing controls on language choice. It never changes protocol tokens, native item/skill names or player names. Cached readiness stores its English template/arguments, allowing translated tooltips without a new build scan. Hidden views render from current cached state when opened. Native tooltip text remains in the ESO client language.
+
+A detailed response reuses the already validated encoding of that exact local snapshot, avoiding a second Encode pass. When tracking is OFF and actual native sending is OFF/unavailable, expensive scans are skipped. Dirty flags, combat/loading/queue cleanup and the slow 60-second sender wake check remain, so later native ON can recover. A peer request while native sending is OFF is rejected before capture or encoding, without preventing receipt of compatible summaries. These are counter-tested work reductions, not measured FPS improvements.

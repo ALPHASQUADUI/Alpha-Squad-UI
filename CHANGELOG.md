@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.4.0 — Development validation
+
+Compact transparent personal/group Ultimate HUDs, both personal weapon slots with active-bar indication, concise Overload states, live English/French selection and clearer Move HUD navigation. Gameplay surfaces use neutral framing while main settings retain their accent. Added language-independent data checks and targeted lifecycle regressions. This is a development build awaiting native client acceptance; no PR or release is authorized for this cycle. See [development notes](releases/3.4.0.md).
+
 ## 3.3.1 — Development validation
 
 Sharing starts OFF for new installations while preserving existing choices. Tightened build-transfer cleanup, native source consistency and package privacy checks. Corrected settings input transitions, readiness warnings and partial-build transfer feedback. Hidden views defer presentation work, and unchanged readiness events avoid full coverage evaluation. Public releases require a separately authorized main-based manual operation and completed transport/client gates. See [development notes](releases/3.3.1.md).

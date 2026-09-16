@@ -2,11 +2,15 @@
 local SC=AlphaSquadUI and AlphaSquadUI.Modules and AlphaSquadUI.Modules.SupportCoverage
 if not SC then return end
 local UI,C=SC.UI,SC.UI.colors
+local function L(text,...)
+    if AlphaSquadUI.L then return AlphaSquadUI.L(text,...) end
+    return select("#",...)>0 and string.format(text,...) or text
+end
 local View={};SC.BuildView=View
 local WIDTH,HEIGHT=830,502
 local function Text(value,fallback)
     if type(value)=="string" and value~="" then return (value:gsub("%^.*$","")) end
-    return fallback or "Unknown"
+    return L(fallback or "Unknown")
 end
 local function Try(fn,...)
     if type(fn)~="function" then return nil end
@@ -28,7 +32,7 @@ local function Panel(parent,name,x,y,w,h,title)
     local panel=WINDOW_MANAGER:CreateControl(name,parent,CT_CONTROL);At(panel,parent,x,y,w,h)
     panel.bg=UI.Solid(panel,name.."BG",C.panel)
     if UI.Surface then UI.Surface(panel,panel.bg,"card") end
-    panel.title=Label(panel,name.."Title",title,12,5,w-24,22,"ZoFontGameBold",C.orange)
+    panel.title=Label(panel,name.."Title",title,12,5,w-24,22,"ZoFontGameBold",C.white)
     return panel
 end
 local function Icon(parent,name,x,y,size,label)
@@ -54,7 +58,7 @@ local function Icon(parent,name,x,y,size,label)
         if data.kind=="item" and data.value and UI.ItemTooltip then UI.ItemTooltip(tile,data.value,tile.ownerSheet and tile.ownerSheet.isRemote)
         elseif data.kind=="skill" and data.value and UI.SkillTooltip then UI.SkillTooltip(tile,data.value,tile.ownerSheet and tile.ownerSheet.isRemote)
         elseif data.kind=="champion" and data.value and UI.ChampionTooltip then UI.ChampionTooltip(tile,data.value)
-        else UI.Tooltip(tile,data.tooltip or "Information unavailable") end
+        else UI.Tooltip(tile,data.tooltip or L("Information unavailable")) end
     end)
     tile:SetHandler("OnMouseExit",UI.ClearTooltip)
     if AlphaSquadUI.Input and AlphaSquadUI.Input.Register then AlphaSquadUI.Input.Register(tile,{kind="inspect",label=label}) end
@@ -106,11 +110,11 @@ function View.GetDimensions(canvas)
 end
 local DISCIPLINES={{"COMBAT","Warfare",{0.32,0.66,1,1}},{"CONDITIONING","Fitness",{1,0.38,0.35,1}},{"WORLD","Craft",{0.40,0.80,0.45,1}}}
 local function SourceAge(updatedAt)
-    if not Number(updatedAt) or not SC.NowMs then return "Report age unavailable" end
+    if not Number(updatedAt) or not SC.NowMs then return L("Report age unavailable") end
     local age=math.max(0,SC.NowMs()-updatedAt)
-    if age<10000 then return "Last reported just now" end
-    if age<60000 then return "Last reported "..math.floor(age/1000).."s ago" end
-    return "Last reported "..math.floor(age/60000).."m ago"
+    if age<10000 then return L("Last reported just now") end
+    if age<60000 then return L("Last reported %ds ago",math.floor(age/1000)) end
+    return L("Last reported %dm ago",math.floor(age/60000))
 end
 local function ValidLibraryReport(updatedAt)
     if not Number(updatedAt) or updatedAt<=0 or not SC.NowMs then return false end
@@ -198,9 +202,10 @@ function View.SetRows(equipment,external)
         local effective=(front or back) and math.max(front or 0,back or 0) or nil
         local name=Text(set.name,"Set name unavailable")
         local count=effective and ((front and back and "" or "≥")..tostring(effective).."× ") or ""
-        local tooltip=name.."\n\nFront bar: "..(front and tostring(front) or "unknown").." set pieces\nBack bar: "..(back and tostring(back) or "unknown").." set pieces\n\nThe headline shows the highest known bar total. Body and jewelry count on both bars; only the weapons on that bar count. A two-handed weapon contributes two set pieces. A proc is not guaranteed active."
-        if physical then tooltip=tooltip.."\n\n"..physical.." physical item"..(physical==1 and "" or "s").." equipped across both bars." end
-        if external then tooltip=tooltip.."\n\nLibSetDetection • "..SourceAge(external.updatedAt)..". This report is retained for the current uninterrupted group session. The player may withhold sets." end
+        local tooltip=name.."\n\n"..L("Front bar: %s set pieces\nBack bar: %s set pieces",front and tostring(front) or L("unknown"),back and tostring(back) or L("unknown"))
+            .."\n\n"..L("The headline shows the highest known bar total. Body and jewelry count on both bars; only the weapons on that bar count. A two-handed weapon contributes two set pieces. A proc is not guaranteed active.")
+        if physical then tooltip=tooltip.."\n\n"..L(physical==1 and "%d physical item equipped across both bars." or "%d physical items equipped across both bars.",physical) end
+        if external then tooltip=tooltip.."\n\nLibSetDetection • "..SourceAge(external.updatedAt)..". "..L("This report is retained for the current uninterrupted group session. The player may withhold sets.") end
         local item
         for _,candidate in ipairs(equipment and equipment.items or {}) do
             if ((set.id or set.setId) and (set.id or set.setId)>0 and (candidate.setId==set.id or candidate.setId==set.setId)) or candidate.setName==set.name then item=candidate;break end
@@ -212,9 +217,9 @@ function View.SetRows(equipment,external)
         local extra=math.max(frontExtra,backExtra)
         local warning
         if extra>0 then
-            local bar=frontExtra>0 and backExtra>0 and "both bars" or frontExtra>0 and "front bar" or "back bar"
-            warning=extra.." extra piece"..(extra==1 and "" or "s").." • "..bar
-            tooltip=tooltip.."\n\n"..warning..". This set's last native bonus requires "..required.." pieces; additional pieces on that bar add no further set bonus. Check whether the extra piece is intentional."
+            local bar=L(frontExtra>0 and backExtra>0 and "both bars" or frontExtra>0 and "front bar" or "back bar")
+            warning=L(extra==1 and "%d extra piece • %s" or "%d extra pieces • %s",extra,bar)
+            tooltip=tooltip.."\n\n"..warning..". "..L("This set's last native bonus requires %d pieces; additional pieces on that bar add no further set bonus. Check whether the extra piece is intentional.",required)
         end
         rows[#rows+1]={name=count..name,front=front,back=back,tooltip=tooltip,physical=physical,effective=effective,item=item,warning=warning,required=required}
     end
@@ -230,6 +235,7 @@ function View.Create(parent)
     canvas:SetDimensions(WIDTH,HEIGHT);canvas.logicalHeight=HEIGHT;canvas.isBuildSheet=true
     canvas.equipment=Panel(canvas,"AlphaSquadBuildEquipment",0,0,266,HEIGHT,"EQUIPPED")
     local gear=canvas.equipment
+    gear.title:SetWidth(86) -- Reserve the independent glyph summary beside the heading.
     gear.silhouette=WINDOW_MANAGER:CreateControl("AlphaSquadBuildSilhouette",gear,CT_TEXTURE)
     -- Native characterwindow_keyboard.xml uses a 64:256 paper doll. Preserve its
     -- aspect ratio, centered between equal-distance armor columns above jewelry.
@@ -243,12 +249,13 @@ function View.Create(parent)
         UI.Separator(gear,"AlphaSquadBuildJewelryDivider",12,296,242)
         UI.Separator(gear,"AlphaSquadBuildWeaponsDivider",12,384,242)
     end
-    Label(gear,"AlphaSquadBuildJewelry","JEWELRY",12,298,242,24,"ZoFontGameBold",C.orange)
-    Label(gear,"AlphaSquadBuildFrontWeapons","FRONT WEAPONS",12,389,121,24,"ZoFontGameSmall",C.orange)
-    Label(gear,"AlphaSquadBuildBackWeapons","BACK WEAPONS",142,389,118,24,"ZoFontGameSmall",C.orange)
+    Label(gear,"AlphaSquadBuildJewelry","JEWELRY",12,298,242,24,"ZoFontGameBold",C.white)
+    Label(gear,"AlphaSquadBuildFrontWeapons","FRONT WEAPONS",12,389,121,24,"ZoFontGameSmall",C.white)
+    Label(gear,"AlphaSquadBuildBackWeapons","BACK WEAPONS",142,389,118,24,"ZoFontGameSmall",C.white)
     gear.glyphs=Label(gear,"AlphaSquadBuildGlyphCheck","",102,5,152,22,"ZoFontGameSmall",C.muted)
     gear.glyphs:SetHorizontalAlignment(TEXT_ALIGN_RIGHT);UI.Hover(gear.glyphs,function()return gear.glyphTooltip end)
     canvas.sets=Panel(canvas,"AlphaSquadBuildSets",278,0,552,124,"SETS")
+    canvas.sets.title:SetWidth(374)
     canvas.sets.front=Label(canvas.sets,"AlphaSquadBuildSetFront","FRONT",398,5,60,22,nil,C.muted)
     canvas.sets.back=Label(canvas.sets,"AlphaSquadBuildSetBack","BACK",478,5,60,22,nil,C.muted)
     canvas.sets.rows={}
@@ -282,7 +289,7 @@ function View.Create(parent)
         if UI.Separator and row>1 then group.divider=UI.Separator(group,"AlphaSquadBuildBarDivider"..row,0,-3,526) end
         group.icons={}
         for i=1,6 do group.icons[i]=Icon(group,"AlphaSquadBuildSkill"..row.."_"..i,98+(i-1)*68,0,44)
-            group.icons[i].slotNumber=Label(group,"AlphaSquadBuildSkillSlot"..row.."_"..i,i==6 and "ULT" or tostring(i),98+(i-1)*68,44,44,16,nil,i==6 and C.orange or C.muted)
+            group.icons[i].slotNumber=Label(group,"AlphaSquadBuildSkillSlot"..row.."_"..i,i==6 and "ULT" or tostring(i),98+(i-1)*68,44,44,16,nil,i==6 and C.white or C.muted)
             group.icons[i].slotNumber:SetHorizontalAlignment(TEXT_ALIGN_CENTER)
         end
         canvas.skills.bars[bar[1]]=group
@@ -297,6 +304,7 @@ function View.Create(parent)
         canvas.champion.rows[discipline[1]]=group
     end
     canvas.masteries=Panel(canvas,"AlphaSquadBuildMasteries",278,394,552,48,"MASTERIES")
+    canvas.masteries.title:SetWidth(96)
     canvas.masteries.icons={}
     UI.Hover(canvas.masteries.title,function()return canvas.masteries.eligibilityTooltip end)
     for i=1,7 do canvas.masteries.icons[i]=Icon(canvas.masteries,"AlphaSquadBuildMastery"..i,120+(i-1)*40,8,32) end
@@ -359,7 +367,7 @@ function View.Bind(canvas,player,details,status)
     for _,def in ipairs(EQUIPMENT) do
         local slot=map[def[1]];local item=slot and slot.known~=false and not slot.empty and slot.item
         local known=slot and slot.known==true
-        local tooltip=def[2].."\n\n"..(known and "No item equipped in this slot." or "This equipment slot has not been shared or verified.")
+        local tooltip=L(def[2]).."\n\n"..L(known and "No item equipped in this slot." or "This equipment slot has not been shared or verified.")
         local color=C.muted
         if item then
             color=C.gold
@@ -382,17 +390,18 @@ function View.Bind(canvas,player,details,status)
         local pairedKey=def[1]=="OFF_HAND" and "MAIN_HAND" or def[1]=="BACKUP_OFF" and "BACKUP_MAIN"
         local main=pairedKey and map[pairedKey] and map[pairedKey].item
         if not item and known and main and main.twoHanded==true then
-            Bind(canvas.equipment.slots[def[1]],"info",nil,"Two-handed weapon\n\n"..Text(main.name,"Main-hand weapon").." occupies both hands. This is one equipped item, not a second weapon. Hover the main-hand slot for its exact trait and enchantment.","2H",C.muted)
+            Bind(canvas.equipment.slots[def[1]],"info",nil,L("Two-handed weapon").."\n\n"..L("%s occupies both hands. This is one equipped item, not a second weapon. Hover the main-hand slot for its exact trait and enchantment.",Text(main.name,"Main-hand weapon")),"2H",C.muted)
         end
     end
     local glyphVerified=equipment and equipment.glyphs and equipment.glyphs.verified==true
-    local glyphText=not equipment and "Glyphs unknown" or missingGlyphs>0 and (missingGlyphs.." missing glyph"..(missingGlyphs==1 and "" or "s")) or glyphVerified and unknownGlyphs==0 and "Glyphs checked" or "Glyphs incomplete"
+    local glyphText=not equipment and "Glyphs unknown" or missingGlyphs>0 and L(missingGlyphs==1 and "%d missing glyph" or "%d missing glyphs",missingGlyphs) or glyphVerified and unknownGlyphs==0 and "Glyphs checked" or "Glyphs incomplete"
+    glyphText=L(glyphText)
     canvas.equipment.glyphs:SetText(glyphText);UI.Color(canvas.equipment.glyphs,missingGlyphs>0 and C.gold or glyphVerified and C.green or C.muted)
-    canvas.equipment.glyphTooltip="Glyph check\n\n"..glyphText..". Hover an equipment slot for that item's exact trait and enchantment. Poison overrides and remaining weapon charges are shown when available."
+    canvas.equipment.glyphTooltip=L("Glyph check").."\n\n"..glyphText..". "..L("Hover an equipment slot for that item's exact trait and enchantment. Poison overrides and remaining weapon charges are shown when available.")
     local external=not details and player and player.connected~=false and player.externalSets
     if not (external and external.sessionValid and external.fresh) then external=nil end
     local rows=View.SetRows(equipment,external)
-    canvas.sets.title:SetText(external and "SETS • LAST REPORTED" or "SETS • EQUIPPED")
+    canvas.sets.title:SetText(L(external and "SETS • LAST REPORTED" or "SETS • EQUIPPED"))
     local columns=#rows>6 and 2 or 1
     local rowCount=math.max(3,math.ceil(#rows/columns))
     local columnHeights={0,0}
@@ -415,7 +424,7 @@ function View.Bind(canvas,player,details,status)
             local icon=data.item and (data.item.icon or Try(GetItemLinkIcon,data.item.link))
             if (not icon or icon=="") and SC.Catalog and SC.Catalog.GetCategoryIcon then
                 icon=SC.Catalog:GetCategoryIcon("sets")
-                row.tooltip=(row.tooltip or "").."\n\nCategory symbol: no verified item preview is available for this set."
+                row.tooltip=(row.tooltip or "").."\n\n"..L("Category symbol: no verified item preview is available for this set.")
             end
             row.icon:SetTexture(icon or "");row.icon:SetHidden(not icon or icon=="")
             At(row.name,row,24,0,width-(columns==2 and 120 or 164),22)
@@ -424,16 +433,16 @@ function View.Bind(canvas,player,details,status)
             row.name:SetText(UI.Text(data.name))
             row.warning:SetHidden(not data.warning);row.warning:SetText(data.warning or "")
             At(row.warning,row,24,21,width-26,18)
-            UI.Color(row.front,data.required and data.front and data.front>data.required and C.orange or C.gold)
-            UI.Color(row.back,data.required and data.back and data.back>data.required and C.orange or C.gold)
-            row.front:SetText((columns==2 and "F " or "")..(data.front and tostring(data.front).."×" or "?"))
-            row.back:SetText((columns==2 and "B " or "")..(data.back and tostring(data.back).."×" or "?"))
+            UI.Color(row.front,data.required and data.front and data.front>data.required and C.gold or C.white)
+            UI.Color(row.back,data.required and data.back and data.back>data.required and C.gold or C.white)
+            row.front:SetText((columns==2 and L("F ") or "")..(data.front and tostring(data.front).."×" or "?"))
+            row.back:SetText((columns==2 and L("B ") or "")..(data.back and tostring(data.back).."×" or "?"))
         end
     end
     canvas.state:SetHidden(#rows>0)
     local setState=details and (equipment and equipment.complete and "No equipped set items." or "Set information is incomplete.") or Text(status,"Request a shared build to inspect equipment, skills and Champion Points.")
     if external and #rows==0 then setState=external.incognito and "The player has kept their set information private." or "No named sets were disclosed." end
-    canvas.state:SetText(UI.Text(setState))
+    canvas.state:SetText(UI.Text(L(setState)))
     local externalUlts={}
     if not details and player and player.connected~=false then
         for _,ultimate in ipairs(player.externalUltimates or {}) do
@@ -457,10 +466,10 @@ function View.Bind(canvas,player,details,status)
         local known=bar=="werewolf" and skills.werewolfKnown==true or bar~="werewolf" and skills.known==true
         local highlight=bar=="werewolf" and curse.transformed==true
         group:SetHidden(bar=="werewolf" and not showWerewolf)
-        UI.Color(group.title,highlight and C.orange or C.muted)
+        UI.Color(group.title,highlight and C.white or C.muted)
         for i=1,6 do
             local entry=barMap[i]
-            Bind(group.icons[i],"skill",entry,(i==6 and "Ultimate" or "Skill "..i).."\n\n"..(known and "No ability is slotted here." or "This ability slot has not been shared."),known and "—" or "?",entry and (i==6 and C.orange or C.gold) or C.muted)
+            Bind(group.icons[i],"skill",entry,(i==6 and L("Ultimate") or L("Skill %d",i)).."\n\n"..L(known and "No ability is slotted here." or "This ability slot has not been shared."),known and "—" or "?",entry and (i==6 and C.white or C.gold) or C.muted)
         end
     end
     local champion,championLayoutKnown=View.ChampionMap(skills.champion)
@@ -469,46 +478,46 @@ function View.Bind(canvas,player,details,status)
         local group=canvas.champion.rows[discipline[1]]
         for i=1,4 do
             local star=champion[discipline[1]][i]
-            Bind(group.icons[i],"champion",star,discipline[2].." Champion slot\n\n"..(championKnown and "No Champion star was reported for this slot." or "Champion selections or their slot positions are unavailable."),championKnown and "—" or "?",star and discipline[3] or C.muted,star and star.pointsKnown==true and Number(star.points) and tostring(star.points) or "")
+            Bind(group.icons[i],"champion",star,L("%s Champion slot",L(discipline[2])).."\n\n"..L(championKnown and "No Champion star was reported for this slot." or "Champion selections or their slot positions are unavailable."),championKnown and "—" or "?",star and discipline[3] or C.muted,star and star.pointsKnown==true and Number(star.points) and tostring(star.points) or "")
         end
     end
     local masteries=details and details.masteries or {}
     local selected=masteries.selected or {}
-    canvas.masteries.eligibilityTooltip="Class Masteries\n\n"..(masteries.known and (masteries.eligible==true and "The selected masteries meet their class skill-line requirements." or masteries.eligible==false and "These selections are currently inactive: class skill-line requirements are not met." or "Mastery eligibility has not been verified.") or "Mastery selections or eligibility are incomplete.").."\nHover a mastery icon for its ability description."
+    canvas.masteries.eligibilityTooltip=L("Class Masteries").."\n\n"..L(masteries.known and (masteries.eligible==true and "The selected masteries meet their class skill-line requirements." or masteries.eligible==false and "These selections are currently inactive: class skill-line requirements are not met." or "Mastery eligibility has not been verified.") or "Mastery selections or eligibility are incomplete.").."\n"..L("Hover a mastery icon for its ability description.")
     canvas.masteries.empty:SetHidden(#selected>0)
-    canvas.masteries.empty:SetText(masteries.known and (masteries.eligible==false and "Inactive • class requirements" or "No selected masteries") or "Masteries unavailable")
+    canvas.masteries.empty:SetText(L(masteries.known and (masteries.eligible==false and "Inactive • class requirements" or "No selected masteries") or "Masteries unavailable"))
     for i,tile in ipairs(canvas.masteries.icons) do
         local mastery=selected[i];tile:SetHidden(not mastery)
         if mastery then Bind(tile,"skill",mastery,Text(mastery.name),"?",masteries.eligible==true and C.gold or C.muted) end
     end
-    local passiveLines={"Committed class passives"}
-    for _,passive in ipairs(masteries.passives or {}) do passiveLines[#passiveLines+1]=Text(passive.name).." • "..Text(passive.lineName,"Class passive")..(Number(passive.rank) and " • rank "..passive.rank or "") end
+    local passiveLines={L("Committed class passives")}
+    for _,passive in ipairs(masteries.passives or {}) do passiveLines[#passiveLines+1]=Text(passive.name).." • "..Text(passive.lineName,"Class passive")..(Number(passive.rank) and " • "..L("rank %d",passive.rank) or "") end
     canvas.masteries.passiveTooltip=table.concat(passiveLines,"\n\n")
-    canvas.masteries.passives:SetText(masteries.known and tostring(#(masteries.passives or {})).." passives • hover" or "Passives unknown")
+    canvas.masteries.passives:SetText(masteries.known and L("%d passives • hover",#(masteries.passives or {})) or L("Passives unknown"))
     local lineNames={}
     for _,line in ipairs(masteries.skillLines or {}) do if not line.mastery and line.active~=false then lineNames[#lineNames+1]=Text(line.name) end end
     local externalLines=not details and player and player.connected~=false and player.externalSkillLines
     if externalLines and ValidLibraryReport(externalLines.updatedAt) then for _,name in ipairs(externalLines.names or {}) do lineNames[#lineNames+1]=Text(name) end end
-    canvas.masteries.lines:SetText(#lineNames>0 and (#lineNames.." class lines • hover") or "Class lines unknown")
-    canvas.masteries.lineTooltip="Active class skill lines\n\n"..(#lineNames>0 and table.concat(lineNames,"\n") or "No verified class skill lines available.")..(externalLines and "\n\nShared class lines do not establish passive or mastery selections." or "")
+    canvas.masteries.lines:SetText(#lineNames>0 and L("%d class lines • hover",#lineNames) or L("Class lines unknown"))
+    canvas.masteries.lineTooltip=L("Active class skill lines").."\n\n"..(#lineNames>0 and table.concat(lineNames,"\n") or L("No verified class skill lines available."))..(externalLines and "\n\n"..L("Shared class lines do not establish passive or mastery selections.") or "")
     local food=details and details.food or player and player.food or {}
     local potion=details and details.potion or player and player.potion or {}
     local mundus=details and details.mundus or {}
     local foodTile,potionTile,mundusTile,curseTile=canvas.consumables.tiles[1],canvas.consumables.tiles[2],canvas.consumables.tiles[3],canvas.consumables.tiles[4]
-    foodTile.value:SetText(food.verified and (food.active and "Active" or "No food") or "Unknown")
+    foodTile.value:SetText(L(food.verified and (food.active and "Active" or "No food") or "Unknown"))
     UI.Color(foodTile.value,food.verified and (food.active and C.green or C.red) or C.muted)
-    Bind(foodTile.icon,"skill",food.verified and food.active and food or nil,"Food information unavailable",food.verified and not food.active and "—" or "?",food.verified and food.active and C.green or C.muted)
-    foodTile.tooltip="Food & drink\n\n"..(food.verified and (food.active and Text(food.name,"Food active") or "No active food or drink detected.") or "Food presence has not been verified.")
-    potionTile.value:SetText(UI.Text(potion.known and Text(potion.name,"Potion selected") or potion.selectionKnown and "None selected" or "Unknown"))
+    Bind(foodTile.icon,"skill",food.verified and food.active and food or nil,L("Food information unavailable"),food.verified and not food.active and "—" or "?",food.verified and food.active and C.green or C.muted)
+    foodTile.tooltip=L("Food & drink").."\n\n"..(food.verified and (food.active and Text(food.name,"Food active") or L("No active food or drink detected.")) or L("Food presence has not been verified."))
+    potionTile.value:SetText(UI.Text(potion.known and Text(potion.name,"Potion selected") or potion.selectionKnown and L("None selected") or L("Unknown")))
     UI.Color(potionTile.value,potion.known and C.white or potion.selectionKnown and C.gold or C.muted)
-    Bind(potionTile.icon,"item",potion.known and potion or nil,"Selected potion unavailable",potion.selectionKnown and "—" or "?",potion.known and C.gold or C.muted)
-    potionTile.tooltip="Selected potion\n\n"..(potion.known and Text(potion.name,"Potion selected")..(Number(potion.count) and "\n"..potion.count.." available" or "") or potion.selectionKnown and "The quickslot does not contain a potion." or "The selected quickslot has not been shared.").."\n\nSelection is preparation evidence, not proof of potion use."
-    mundusTile.value:SetText(UI.Text(#(mundus.names or {})>0 and table.concat(mundus.names," + ") or mundus.known and "None" or "Unknown"))
+    Bind(potionTile.icon,"item",potion.known and potion or nil,L("Selected potion unavailable"),potion.selectionKnown and "—" or "?",potion.known and C.gold or C.muted)
+    potionTile.tooltip=L("Selected potion").."\n\n"..(potion.known and Text(potion.name,"Potion selected")..(Number(potion.count) and "\n"..L("%d available",potion.count) or "") or L(potion.selectionKnown and "The quickslot does not contain a potion." or "The selected quickslot has not been shared.")).."\n\n"..L("Selection is preparation evidence, not proof of potion use.")
+    mundusTile.value:SetText(UI.Text(#(mundus.names or {})>0 and table.concat(mundus.names," + ") or mundus.known and L("None") or L("Unknown")))
     local mundusId=(mundus.ids or {})[1]
-    Bind(mundusTile.icon,"skill",mundusId and {abilityId=mundusId,name=(mundus.names or {})[1],icon=Try(GetAbilityIcon,mundusId)} or nil,"Mundus information unavailable",mundus.known and "—" or "?",mundusId and C.gold or C.muted)
-    mundusTile.tooltip="Mundus stones\n\n"..(#(mundus.names or {})>0 and table.concat(mundus.names,"\n") or mundus.known and "No Mundus blessing detected." or "Mundus blessings have not been shared.")
-    local curseText=not curse.known and "Unknown" or curse.kind=="VAMPIRE" and ("Vampire"..(Number(curse.stage) and " • "..curse.stage or "")) or curse.kind=="WEREWOLF" and (curse.transformed and "Werewolf • active" or "Werewolf") or "None"
-    curseTile.value:SetText(curseText);UI.Color(curseTile.value,curse.transformed and C.orange or C.white)
-    curseTile.tooltip="Vampirism & lycanthropy\n\n"..curseText..(curse.kind=="WEREWOLF" and "\nThe werewolf bar is displayed separately; front and back weapon skill bars are preserved." or "")
+    Bind(mundusTile.icon,"skill",mundusId and {abilityId=mundusId,name=(mundus.names or {})[1],icon=Try(GetAbilityIcon,mundusId)} or nil,L("Mundus information unavailable"),mundus.known and "—" or "?",mundusId and C.gold or C.muted)
+    mundusTile.tooltip=L("Mundus stones").."\n\n"..(#(mundus.names or {})>0 and table.concat(mundus.names,"\n") or L(mundus.known and "No Mundus blessing detected." or "Mundus blessings have not been shared."))
+    local curseText=not curse.known and L("Unknown") or curse.kind=="VAMPIRE" and (L("Vampire")..(Number(curse.stage) and " • "..curse.stage or "")) or curse.kind=="WEREWOLF" and L(curse.transformed and "Werewolf • active" or "Werewolf") or L("None")
+    curseTile.value:SetText(curseText);UI.Color(curseTile.value,curse.transformed and C.gold or C.white)
+    curseTile.tooltip=L("Vampirism & lycanthropy").."\n\n"..curseText..(curse.kind=="WEREWOLF" and "\n"..L("The werewolf bar is displayed separately; front and back weapon skill bars are preserved.") or "")
     canvas.player=player;canvas.snapshot=details;canvas.playerEvidenceKey=playerEvidenceKey
 end

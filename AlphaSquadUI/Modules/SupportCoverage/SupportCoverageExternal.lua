@@ -66,7 +66,7 @@ local function CloneCapabilities(capabilities)
     end
     return out
 end
-local function Add(entry,key,name,kind,conditions,front,back,evidence,updatedAt,recipientLimit)
+local function Add(entry,key,name,kind,conditions,front,back,evidence,updatedAt,recipientLimit,presentation)
     local effect=Catalog.effects[key]
     if not effect or effect.personal==true then return end
     local cap=entry.capabilities[key]
@@ -79,7 +79,7 @@ local function Add(entry,key,name,kind,conditions,front,back,evidence,updatedAt,
     cap.mainBar=cap.mainBar or front;cap.backBar=cap.backBar or back
     cap.evidence=cap.evidence or evidence
     cap.sourceDetails[name]={name=name,kind=kind,conditions=conditions,mainBar=front,backBar=back,
-        evidence=evidence,external=true,updatedAt=updatedAt,recipientLimit=recipientLimit}
+        evidence=evidence,external=true,updatedAt=updatedAt,recipientLimit=recipientLimit,presentation=presentation}
 end
 local skillIndex,setIndex,indexedSkills,indexedSets={},{},nil,nil
 local function RebuildSourceIndexes()
@@ -125,7 +125,10 @@ local function MergeCombatStats(entry,now,skillsAuthoritative)
                 for _,source in ipairs(skillIndex[id] or {}) do
                     for _,key in ipairs(source.provides or {}) do
                         Add(entry,key,label,"skill",(source.conditions or "Meet the skill's cast and recipient conditions.")
-                            .." Last reported Ultimate slot; casting has not been observed.",index==1,index==2,"LGCS_ULTIMATE_SLOT",updated)
+                            .." Last reported Ultimate slot; casting has not been observed.",index==1,index==2,"LGCS_ULTIMATE_SLOT",updated,nil,
+                            {labelKey="Shared ultimate: %s (%s)",name=name,barKey=bar,
+                                conditionKey=source.conditions or "Meet the skill's cast and recipient conditions.",
+                                noteKey="Last reported Ultimate slot; casting has not been observed."})
                     end
                 end
             end
@@ -316,7 +319,10 @@ function SC:MergeExternalCapabilities(entry,rosterAlreadyPruned)
                     for _,effectKey in ipairs(source.provides or {}) do
                         Add(entry,effectKey,label,"set",(source.conditions or "Meet the set's activation and recipient conditions.")
                             .." Last reported this group session; the library sends changes without a heartbeat.",
-                            front,back,"LIBSETDETECTION",report.updatedAt,source.recipientLimit)
+                            front,back,"LIBSETDETECTION",report.updatedAt,source.recipientLimit,
+                            {labelKey="Shared set: %s (%s)",name=source.label or set.name,barKey=bar,
+                                conditionKey=source.conditions or "Meet the set's activation and recipient conditions.",
+                                noteKey="Last reported this group session; the library sends changes without a heartbeat."})
                     end
                 end
             end

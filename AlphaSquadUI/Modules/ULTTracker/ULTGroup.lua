@@ -14,6 +14,10 @@ if not ULT then return end
 
 ULT.Group = ULT.Group or {}
 local Group = ULT.Group
+local function L(text, ...)
+    if AlphaSquadUI.L then return AlphaSquadUI.L(text, ...) end
+    return select("#", ...) > 0 and string.format(text, ...) or text
+end
 
 Group.version = (AlphaSquadUI and AlphaSquadUI.version) or "2.9.0"
 Group.lgcs = nil
@@ -89,7 +93,7 @@ local function GetCharacterName(unitTag)
         local name = GetUnitName(unitTag)
         if name and name ~= "" then return zo_strformat("<<C:1>>", name) end
     end
-    return unitTag or "Unknown"
+    return unitTag or L("Unknown")
 end
 
 local function GetDisplayNameSafe(unitTag)
@@ -110,7 +114,7 @@ function Group:GetDefaults()
         scale = 100,
         hudWidth = 312,
         hudOrientation = "vertical",
-        rowHeight = 36,
+        rowHeight = 32,
         opacity = 92,
         x = math.floor(rootW * 0.03),
         y = math.floor(rootH * 0.16),
@@ -270,9 +274,9 @@ end
 local abilityMeta,abilityMetaCount={},0
 function Group:GetAbilityMeta(abilityId)
     abilityId=IsAbilityId(abilityId)
-    if not abilityId then return "No Ultimate", "", 0 end
+    if not abilityId then return L("No Ultimate"), "", 0 end
     local cached=abilityMeta[abilityId]
-    if cached then return cached.name,cached.icon,abilityId end
+    if cached then return cached.fallback and L("Unknown Ultimate") or cached.name,cached.icon,abilityId end
     local name,icon="",""
     if GetAbilityName then
         local ok,value=pcall(GetAbilityName,abilityId)
@@ -282,12 +286,12 @@ function Group:GetAbilityMeta(abilityId)
         local ok,value=pcall(GetAbilityIcon,abilityId)
         if ok and type(value)=="string" then icon=value end
     end
-    if name=="" then name="Unknown Ultimate" end
-    name=zo_strformat("<<C:1>>",name)
+    local fallback=name==""
+    if not fallback then name=zo_strformat("<<C:1>>",name) end
     -- At most two slots per player plus saved filters; never grow with peer IDs.
     if abilityMetaCount>=128 then abilityMeta={};abilityMetaCount=0 end
-    abilityMeta[abilityId]={name=name,icon=icon};abilityMetaCount=abilityMetaCount+1
-    return name,icon,abilityId
+    abilityMeta[abilityId]={name=name,icon=icon,fallback=fallback};abilityMetaCount=abilityMetaCount+1
+    return fallback and L("Unknown Ultimate") or name,icon,abilityId
 end
 
 function Group:InitializeSharing()
@@ -597,12 +601,12 @@ function Group:GetTrackedEntries()
 end
 
 function Group:GetEmptyMessage()
-    if #(self.roster or {})==0 then return "No teammates in this group" end
-    if not self.libraryAvailable then return "Group data unavailable • See Libraries" end
-    if self:GetTrackedAbilityCount()==0 then return "Choose Ultimates in Configure Group" end
+    if #(self.roster or {})==0 then return L("No teammates in this group") end
+    if not self.libraryAvailable then return L("Group data unavailable • Libraries") end
+    if self:GetTrackedAbilityCount()==0 then return L("Select Ultimates in group settings") end
     local shared=self:GetSharingCount()
-    if shared==0 then return "No teammates sharing Ultimates" end
-    return "No matching Ultimates shared"
+    if shared==0 then return L("No teammates sharing Ultimates") end
+    return L("No matching Ultimates shared")
 end
 
 function Group:GetSharingCount()
@@ -744,7 +748,7 @@ function Group:RegisterRosterEvents()
 end
 
 function Group:SetSafetyUpdateActive(enabled)
-    enabled = enabled == true and not ULT.loading and not (AlphaSquadUI.Layout and AlphaSquadUI.Layout.IsMoving(self))
+    enabled = enabled == true and #(self.roster or {}) > 0 and not ULT.loading and not (AlphaSquadUI.Layout and AlphaSquadUI.Layout.IsMoving(self))
     if self.safetyUpdateActive == enabled then return end
     self.safetyUpdateActive = enabled
     local name = "AlphaSquadUI_ULTGroup_Safety"

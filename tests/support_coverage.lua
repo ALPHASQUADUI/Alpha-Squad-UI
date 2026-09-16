@@ -440,4 +440,19 @@ check(SC:OpenInspector()==false and SC:OpenMatrix()==false,'Preparation windows 
 events.AlphaSquadUI_SupportCoverage_Activated.fn();later[#later].fn()
 check(not SC.loading and events.AlphaSquadUI_SupportCoverage_Inventory and SC.scanDirty,'Zone activation resumes subscriptions and marks the build for refresh')
 
+-- Readiness translation consumes cached templates, preserving evidence and names.
+local originalTranslator=AlphaSquadUI.L
+AlphaSquadUI.L=function(source,...)
+    local translated=source=='%s - offline' and '%s - hors ligne' or source
+    return select('#',...)>0 and string.format(translated,...) or translated
+end
+local previousRoster=SC.roster
+SC.roster={{displayName='@ExamplePlayer',connected=false,capabilities={},dataQuality='ASUI',capabilitiesComplete=true}}
+local localizedCoverage=SC:EvaluateCoverage('language rendering regression')
+local readiness=localizedCoverage.readinessIssues[1]
+check(readiness.details[1]=='@ExamplePlayer - offline','Cached readiness evidence stays canonical')
+check(SC:FormatReadinessDetail(readiness,readiness.details[1])=='@ExamplePlayer - hors ligne',
+    'Cached readiness translates templates without changing account names or rescanning')
+AlphaSquadUI.L=originalTranslator;SC.roster=previousRoster
+
 print(string.format('Support Coverage preparation: %d assertions passed',total))

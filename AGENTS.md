@@ -4,21 +4,21 @@
 
 **Ąlpha Şquad UI**, maintained by **@SeRuM1**, is a modular ESO addon. The package folder is `AlphaSquadUI/`. Runtime modules are ULT Tracker (personal/group, with optional Overload behavior) and Support Coverage. `companion/` contains the optional sharing-only sender.
 
-Read the existing implementation and the maintainer's current request before editing. Work only within the explicitly authorized Git scope. Preserve unrelated changes. Do not create a pull request, merge, tag or public release until requested and the required client validation is complete. Do not update a protected release ref as part of development.
+Read the existing implementation and the maintainer's current request before editing. Work only within the explicitly authorized Git scope. Preserve unrelated changes. All development and documentation changes belong on dev. Create dev-to-main pull requests only after the maintainer has tested and explicitly approved that development cycle and requested the PR. Never approve or merge a PR, enable auto-merge, push directly to main, or move main to simulate a merge: approval and merging are exclusively human actions. Generic finalization or release requests do not override this rule. Tags and GitHub Releases require separate authorization after a verified human merge. ESOUI and website publication are separate scopes.
 
-Prefer `SeRuM1 <info@alphasquadeso.com>` for maintainer commits in this project. The maintainer explicitly approves this public project mailbox and also authorizes the matching public GitHub `noreply` identity when a connector selects it automatically. Neither address is mandatory when the other approved identity is used. Do not substitute a personal address; verify the author and committer identity before publishing through an external connection.
+Use `SeRuM1 <info@alphasquadeso.com>` for new maintainer commits. This public project mailbox is explicitly authorized; noreply is not mandatory. Verify author and committer before publication and do not substitute a personal address.
 
 ## Product and evidence
 
-- Keep the interface and public documentation in English, concise and understandable.
+- Keep code, identifiers, comments, commits and public documentation in English. The interface supports English and French through the localization layer; use the game language by default, with a persistent Dashboard override. Translate addon-owned presentation, never protocol keys, native item links or player names. Keep French and English layouts readable and bounded.
 - Module switches belong to Dashboard; sharing belongs to Libraries. Disabling tracking must not revoke sharing consent.
 - Native group membership is not permission or an API for arbitrary remote inventory inspection. Missing or stale data remains Unknown.
 - Item links and effective morph IDs are authoritative. Never substitute another item's trait/enchant or the viewer's build for a peer.
 - Class identity alone does not prove learned passives, eligible masteries or slotted abilities.
 - Count front/back set pieces separately. Two-handed weapons contribute two pieces but remain one physical item. Set headlines use the highest known bar count; only native bonus thresholds may produce an excess warning.
 - Keep HUD placement centralized. Corners scale proportionally, edges reshape/reflow content, and the toolbar owns background opacity, scale, fit and reset. Preserve disabled modules and normal visibility choices; save/lock on completion and stop placement during combat/loading.
-- Preserve existing Ultimate display choices, especially BOTH. AUTO is the fresh-install default. Overload uses the same personal HUD and an independent behavior toggle.
-- Apply saved Ember Classic, Tactical Compact and Obsidian Studio themes across the suite; Obsidian is the default. Preserve semantic readiness, quality and Champion colors.
+- Personal Ultimate always displays both weapon-bar slots in a compact transparent layout. Do not restore AUTO/FRONT/BACK/BOTH selectors. Show the green left-side marker only for the verified active bar, dim the inactive slot, and preserve special-bar uncertainty. Overload shares this HUD: gold active, green ready pulse, red stop pulse.
+- Apply saved Ember Classic, Tactical Compact and Obsidian Studio themes to the settings shell; Obsidian is the default. Gameplay windows use quiet neutral surfaces, transparent Ultimate HUDs and no orange branding. Preserve semantic readiness, quality, class and Champion colors.
 - The About page opens the verified Discord invitation through ESO's native URL confirmation. Do not embed HTML, use a widget as an invitation, fabricate live member counts or send build data through community links.
 - Champion visuals use native discipline stars; descriptions use the inspected player's allocated points.
 - Keep native tooltips in front of addon windows and restore their original draw state afterward.

@@ -203,7 +203,7 @@ readyRow.ready, readyRow.recentlyUsed = true, false
 Group.window.rows = {readyRow}
 Group.sv.enabled = true
 Group:ApplyVisibility()
-check(updates.AlphaSquadUI_ULTGroup_ReadyPulse ~= nil, "Showing a READY group row restarts its pulse immediately")
+check(updates.AlphaSquadUI_ULTGroup_ReadyPulse == nil, "A ready group row remains readable without a recurring pulse timer")
 readyRow.ready = false
 Group.sv.enabled = false
 Group:ApplyVisibility()

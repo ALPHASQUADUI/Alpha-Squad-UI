@@ -195,7 +195,14 @@ local request=assert(Take("@Alice",507,0))
 check(request.data.body=="@Bob" and #frames==0,"A build request queues only its addressed request frame")
 Deliver(request,carol)
 check(#frames==0,"A third group member cannot answer another player's request")
+local requestedEncodes=0
+local originalRequestedEncode=bob.SC.BuildCodec.Encode
+bob.SC.BuildCodec.Encode=function(snapshot)
+    requestedEncodes=requestedEncodes+1
+    return originalRequestedEncode(snapshot)
+end
 Deliver(request,bob)
+check(requestedEncodes==1,"A requested capture is encoded once for its summary fingerprint and detail chunks")
 local summary=assert(Take("@Bob",510));local expanded=Take("@Bob",507,2)
 local chunk=assert(Take("@Bob",507,1))
 check(summary.at<=chunk.at and bob.SC.share.lastBuildFingerprint>0,"The sender binds its exact build to a queued summary before chunks")
@@ -595,4 +602,40 @@ alice.SC:OnPeerShareData("group2",recovered)
 check(alice.SC.peerData["@Bob"].supportScore==25,"A rate-limited peer recovers on the next bounded window")
 members={"@Alice","@Carol"};alice.SC:PrunePeerSharingData()
 check(alice.SC.share.receiveBudgets["@Bob"]==nil,"Departed identities cannot accumulate receive budget entries")
+
+-- Validation still precedes all response traffic, even with prepared bodies.
+for _,nativeOff in ipairs({510,507}) do
+    ResetWorld();alice,bob=NewClient("@Alice"),NewClient("@Bob")
+    local nativeOffCaptures,nativeOffEncodes=0,0
+    local nativeOffEncode=bob.SC.BuildCodec.Encode
+    bob.SC.ScanLocalPlayer=function(self) nativeOffCaptures=nativeOffCaptures+1;return copy(self.localSnapshot) end
+    bob.SC.BuildCodec.Encode=function(snapshot) nativeOffEncodes=nativeOffEncodes+1;return nativeOffEncode(snapshot) end
+    bob.protocols[nativeOff].enabled=false
+    assert(alice.SC:RequestPlayerBuild("@Bob"))
+    local blockedRequest=assert(Take("@Alice",507,0))
+    Deliver(blockedRequest,bob)
+    check(nativeOffCaptures==0 and nativeOffEncodes==0 and #frames==0 and not bob.SC.share.outgoingBuild,
+        "Native OFF rejects requested capture, encoding and response traffic: "..nativeOff)
+    check(bob.SC:OnPeerShareData("group1",alice.SC:BuildSharePayload())==true,
+        "Native sending OFF does not revoke consented summary reception: "..nativeOff)
+    bob.protocols[nativeOff].enabled=true
+    Deliver(blockedRequest,bob)
+    check(nativeOffCaptures==1 and nativeOffEncodes==1 and bob.SC.share.outgoingBuild and Take("@Bob",510),
+        "Native ON can serve the next valid request without an OFF-induced throttle: "..nativeOff)
+end
+ResetWorld();alice,bob=NewClient("@Alice"),NewClient("@Bob")
+bob.SC.localSnapshot.classId=300
+assert(alice.SC:RequestPlayerBuild("@Bob"))
+Deliver(assert(Take("@Alice",507,0)),bob)
+check(#frames==0 and not bob.SC.share.outgoingBuild and bob.SC.share.detailError,
+    "An unencodable capture queues neither a summary nor a partial detail response")
+bob.SC.localSnapshot=Snapshot()
+local earlier=bob.SC.localSnapshot
+local earlierBody=assert(bob.SC.BuildCodec.Encode(earlier))
+bob.SC.localSnapshot=copy(earlier);bob.SC.localSnapshot.classId=2
+local expectedBody=assert(bob.SC.BuildCodec.Encode(bob.SC.localSnapshot))
+local current=bob.SC:BuildSharePayload({snapshot=earlier,body=earlierBody})
+check(bob.SC.share.preparedBuildBody==expectedBody
+    and math.floor(current.cap4/512)==bob.SC.BuildCodec.Hash(expectedBody)%32767+1,
+    "A prepared body from another snapshot cannot advertise an obsolete fingerprint")
 print("Build sharing: "..assertions.." assertions passed")

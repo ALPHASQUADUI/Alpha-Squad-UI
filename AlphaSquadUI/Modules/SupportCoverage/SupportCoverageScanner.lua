@@ -587,19 +587,20 @@ function SC:ScanPotion()
             result.effects = tostring(header or "") .. " " .. tostring(description or "")
         end
     end
+    -- Crafted potions expose their effects through trait descriptions rather
+    -- than necessarily through the base on-use ability. Keep the native text;
+    -- category hints are matched against native localized buff names later.
+    if GetItemLinkTraitOnUseAbilityInfo then
+        for index=1,3 do
+            local hasTrait,description=SafeCall(GetItemLinkTraitOnUseAbilityInfo,link,index)
+            if hasTrait==true and type(description)=="string" then
+                result.effects=result.effects.." "..description
+            end
+        end
+    end
 
     return result
 end
-
-local SUPPORT_CP_HINTS = {
-    "enlivening overflow",
-    "from the brink",
-    "hope infusion",
-    "soothing tide",
-    "swift renewal",
-    "salve of renewal",
-    "focused mending",
-}
 
 function SC:GetSupportScore(capabilities, skills)
     local score = 0
@@ -607,13 +608,21 @@ function SC:GetSupportScore(capabilities, skills)
     for _ in pairs(capabilities or {}) do count = count + 1 end
     score = score + math.min(18, count * 3)
 
-    for _, star in ipairs(skills and skills.champion or {}) do
-        local name = Normalize(star.name)
-        for _, token in ipairs(SUPPORT_CP_HINTS) do
-            if name:find(token, 1, true) then
-                score = score + 3
-                break
+    -- A localized display name is not a stable Champion identity, and a
+    -- slotted star without an active allocation cannot establish support.
+    local seen={}
+    for _, star in ipairs(skills and skills.championKnown==true and skills.champion or {}) do
+        local id=Integer(star.id,1,MAX_INTEGER_ID)
+        if id and not seen[id] and self.IsChampionStarActive and self:IsChampionStarActive(star) then
+            seen[id]=true
+            local matched=false
+            for _,source in ipairs(Catalog and Catalog.championSources or {}) do
+                for _,knownId in ipairs(source.championIds or {}) do
+                    if id==knownId then matched=true;break end
+                end
+                if matched then break end
             end
+            if matched then score=score+3 end
         end
     end
 

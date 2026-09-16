@@ -1,13 +1,16 @@
 ## Title: |cFF6F0CĄlpha |cFFB83EŞquad |cFFFFFFUI|r
 ## APIVersion: 101050 101051
-## Version: 3.3.1
-## AddOnVersion: 30301
+## Version: 3.4.0
+## AddOnVersion: 30400
 ## Author: |c4E9EFF@Se|c69BFFFRu|c84E0FFM1|r
 ## Description: Modular Alpha Squad UI with pre-combat group readiness and voluntary build inspection. Group libraries: LibGroupBroadcast, LibGroupCombatStats, LibSetDetection, LibFoodDrinkBuff, LibCombat, LibAddonMenu-2.0 and LibDebugLogger.
 ## SavedVariables: AlphaSquadOverloadTrackerSavedVariables AlphaSquadULTTrackerSavedVariables AlphaSquadSupportCoverageSavedVariables AlphaSquadUISettingsSavedVariables
 ## OptionalDependsOn: LibAddonMenu-2.0 LibDebugLogger LibGroupBroadcast LibCombat LibGroupCombatStats LibFoodDrinkBuff LibSetDetection
 
 Core/Core.lua
+Core/Localization.lua
+Localization/fr.lua
+Localization/fr_catalog.lua
 Core/Theme.lua
 Core/AddOnMenu.lua
 Core/Utils.lua

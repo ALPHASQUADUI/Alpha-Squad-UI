@@ -1,7 +1,7 @@
 -- Work counters validate lifecycle boundaries, not in-game frame times.
 local assertions=0
 local function check(value,message) assertions=assertions+1;assert(value,message) end
-local queued,events,updates={},{},{}
+local queued,events,updates,updateIntervals={},{},{},{}
 local now,groupSize=10000,2
 local names={"EVENT_ADD_ON_LOADED","EVENT_PLAYER_ACTIVATED","EVENT_PLAYER_DEACTIVATED",
     "EVENT_PLAYER_COMBAT_STATE","EVENT_EFFECT_CHANGED","EVENT_GROUP_MEMBER_JOINED",
@@ -9,8 +9,8 @@ local names={"EVENT_ADD_ON_LOADED","EVENT_PLAYER_ACTIVATED","EVENT_PLAYER_DEACTI
 for index,name in ipairs(names) do _G[name]=index end
 EVENT_MANAGER={RegisterForEvent=function(_,name,event,fn) events[name]=fn end,
     UnregisterForEvent=function(_,name) events[name]=nil end,AddFilterForEvent=function() end,
-    RegisterForUpdate=function(_,name,interval,fn) updates[name]=fn end,
-    UnregisterForUpdate=function(_,name) updates[name]=nil end}
+    RegisterForUpdate=function(_,name,interval,fn) updates[name]=fn;updateIntervals[name]=interval end,
+    UnregisterForUpdate=function(_,name) updates[name]=nil;updateIntervals[name]=nil end}
 function zo_callLater(fn) queued[#queued+1]=fn end
 function GetGameTimeMilliseconds() return now end
 function GetGroupSize() return groupSize end
@@ -91,4 +91,45 @@ check(resumes==2 and not SC.resumeSharingPending,
 events.AlphaSquadUI_SupportCoverage_Deactivated()
 check(pauses==3 and SC.loading and not SC:NeedsBuildData(),
     "Loading revokes transport before suspending gameplay subscriptions")
+
+-- Saved consent is not proof that native sending remains ON. Preserve only
+-- lightweight wake/invalidation work while no active consumer needs a scan.
+SC.loading=false;SC.inCombat=false;SC.sv.enabled=false
+SC.sv.shareData=true;SC.sv.experimentalSharing=true
+local nativeStatus,sends="LOCAL",0
+SC.GetSharingStatus=function() return nativeStatus end
+SC.share={available=true,lastSendAt=now,protocol={IsEnabled=function() return nativeStatus=="SHARING" end}}
+SC.ShareLocalSnapshot=function(self)
+    if nativeStatus~="SHARING" or self.inCombat or self.loading then return false end
+    sends=sends+1;self.share.lastSendAt=now;return true
+end
+SC:UpdateRuntime()
+check(events.AlphaSquadUI_SupportCoverage_Combat and events.AlphaSquadUI_SupportCoverage_LocalEffects
+    and updateIntervals.AlphaSquadUI_SupportCoverage_Safety==60000,
+    "Tracking OFF preserves lightweight lifecycle guards and the slow native-state wake timer")
+beforeScans,beforeFood=scans,foodReads
+SC:MarkScanDirty("equipment changed while native OFF");Flush()
+updates.AlphaSquadUI_SupportCoverage_Safety()
+check(scans==beforeScans and foodReads==beforeFood and sends==0 and SC.scanDirty,
+    "Tracking OFF and native OFF perform no build or readiness capture and retain dirty state")
+SC:ScheduleRefresh("language or interface changed",50,true);Flush()
+check(scans==beforeScans and sends==0,"A UI refresh cannot emit build data while native sending is OFF")
+nativeStatus="SHARING"
+updates.AlphaSquadUI_SupportCoverage_Safety()
+check(scans==beforeScans+1 and sends==1 and not SC.scanDirty,
+    "An external native ON resumes with one fresh capture on the retained heartbeat")
+SC:ScheduleRefresh("cached interface presentation",50,true);Flush()
+check(scans==beforeScans+1 and sends==1,
+    "An unchanged presentation refresh does not scan or send a new build after sharing resumes")
+nativeStatus="LOCAL";SC:MarkScanDirty("another hidden build change");Flush()
+nativeStatus="SHARING";SC:UpdateRuntime();SC:MarkScanDirty("explicit sharing ON");Flush()
+check(scans==beforeScans+2 and sends==2,
+    "An explicit sharing ON consumes the retained invalidation without waiting for the heartbeat")
+nativeStatus="LOCAL";beforeScans=scans;local pausesBefore=pauses
+SC:OnCombatState(true);SC:MarkScanDirty("combat build change");Flush()
+check(pauses==pausesBefore+1 and scans==beforeScans and SC.scanDirty,
+    "Native OFF does not remove combat queue revocation or consume deferred build changes")
+nativeStatus="SHARING";SC:OnCombatState(false);Flush()
+check(scans==beforeScans+1 and sends==3,
+    "Leaving combat resumes one fresh permitted sender capture after an external ON")
 print("Performance lifecycle: "..assertions.." assertions passed; no ESO frame-time measurement")

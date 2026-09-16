@@ -43,13 +43,13 @@ ULT.bars.backup={key="backup",category=2,abilityId=30366,name="Power Overload",i
 O:Migrate()
 check(ULT.sv.overload.enabled and ULT.sv.overload.reserveWarningThreshold==160,"New installs initialize the optional Overload behavior")
 check(AlphaSquadUI.Modules.Overload==nil,"No second Overload module or HUD is created")
-check(O:GetPriorityBar()=="backup" and ULT:ShouldTrackBar("backup") and not ULT:ShouldTrackBar("primary"),"AUTO prioritizes actually slotted Overload on the other bar")
+check(O:GetPriorityBar()=="backup" and ULT:ShouldTrackBar("backup") and ULT:ShouldTrackBar("primary"),"Overload specializes its native weapon without hiding the other bar")
 ULT.sv.trackMode="main"
-check(ULT:ShouldTrackBar("backup") and not ULT:ShouldTrackBar("primary"),"Enabled Overload priority is explicit even with Front preference")
+check(ULT:ShouldTrackBar("backup") and ULT:ShouldTrackBar("primary"),"Obsolete Front settings cannot hide the other weapon bar")
 ULT.sv.trackMode="both"
 check(ULT:ShouldTrackBar("primary") and ULT:ShouldTrackBar("backup"),"Explicit Both preserves both cards in the same HUD")
 O:SetOption("enabled",false);ULT.sv.trackMode="main"
-check(ULT:ShouldTrackBar("primary") and not ULT:ShouldTrackBar("backup"),"Behavior OFF restores ordinary Front/Back selection")
+check(ULT:ShouldTrackBar("primary") and ULT:ShouldTrackBar("backup"),"Behavior OFF retains both native weapon icons")
 check(events.AlphaSquadUI_ULTTracker_OverloadEffect==nil,"Behavior OFF removes its only specialized event")
 O:SetOption("enabled",true);ULT.sv.trackMode="auto"
 O:Update(420,"slot changed")

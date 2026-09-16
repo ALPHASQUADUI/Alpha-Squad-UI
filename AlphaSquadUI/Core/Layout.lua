@@ -1,8 +1,12 @@
 -- Shared placement and sizing. Only an active pointer drag owns a frame callback.
 AlphaSquadUI=AlphaSquadUI or {}
 local ASUI=AlphaSquadUI
+local function L(text, ...)
+    if ASUI.L then return ASUI.L(text, ...) end
+    return select("#", ...)>0 and string.format(text, ...) or text
+end
 local Layout={active=false,participants={},attachments={}}
-local TOOLBAR_WIDTH,TOOLBAR_HEIGHT=780,120
+local TOOLBAR_WIDTH,TOOLBAR_HEIGHT=620,120
 ASUI.Layout=Layout
 local function Finite(value,fallback)
     value=tonumber(value)
@@ -291,17 +295,16 @@ function Layout.Attach(module)
         if handle.SetDrawLayer and DL_OVERLAY then handle:SetDrawLayer(DL_OVERLAY) end
         if handle.SetDrawLevel then handle:SetDrawLevel(horizontal~=0 and vertical~=0 and 220 or 200) end
         local fill=WINDOW_MANAGER:CreateControl(nil,handle,CT_TEXTURE);fill:SetAnchorFill(handle)
-        fill:SetColor(1,0.55,0.12,0.92)
-        if ASUI.Theme and ASUI.Theme.BindColor then ASUI.Theme.BindColor(fill,"accent") end
+        fill:SetColor(0.62,0.7,0.73,0.8)
         handle:SetHandler("OnMouseDown",function(_,button)
             if button==MOUSE_BUTTON_INDEX_LEFT then Layout.BeginResize(module,horizontal,vertical,handle) end
         end)
         handle:SetHandler("OnMouseUp",function(_,button) if button==MOUSE_BUTTON_INDEX_LEFT then Layout.EndResize() end end)
         handle:SetHandler("OnHide",function() if Layout.drag and Layout.drag.handle==handle then Layout.EndResize() end end)
         handle:SetHandler("OnMouseEnter",function()
-            if ASUI.Tooltips then ASUI.Tooltips.ShowText(handle,horizontal~=0 and vertical~=0
+            if ASUI.Tooltips then ASUI.Tooltips.ShowText(handle,L(horizontal~=0 and vertical~=0
                 and "Resize the whole panel."
-                or "Change the panel's width or height.") end
+                or "Change the panel's width or height.")) end
         end)
         handle:SetHandler("OnMouseExit",function() if ASUI.Tooltips then ASUI.Tooltips.Hide() end end)
         handle:SetHidden(not Layout.IsMoving(module));handles[#handles+1]=handle
@@ -313,14 +316,59 @@ function Layout.Attach(module)
             Layout.Select(module);if previous then return previous(control,...) end
         end)
     end
+    if module.SetLayoutOrientation then
+        local button=WINDOW_MANAGER:CreateControl(nil,win,CT_CONTROL)
+        button:SetDimensions(28,28);button:SetMouseEnabled(true)
+        if button.SetDrawLayer and DL_OVERLAY then button:SetDrawLayer(DL_OVERLAY) end
+        if button.SetDrawLevel then button:SetDrawLevel(225) end
+        local background=WINDOW_MANAGER:CreateControl(nil,button,CT_TEXTURE)
+        background:SetAnchorFill(button);background:SetColor(0.035,0.04,0.05,0.85)
+        button.tiles={}
+        for index=1,3 do
+            local tile=WINDOW_MANAGER:CreateControl(nil,button,CT_TEXTURE)
+            tile:SetDimensions(5,5);tile:SetColor(0.84,0.9,0.88,1);button.tiles[index]=tile
+        end
+        local function Switch()
+            if not Layout.IsMoving(module) then return end
+            Layout.Select(module);Layout.CycleOrientation(1)
+        end
+        button:SetHandler("OnMouseUp",function(_,mouseButton,inside)
+            if mouseButton==MOUSE_BUTTON_INDEX_LEFT and inside~=false then Switch() end
+        end)
+        button:SetHandler("OnMouseEnter",function()
+            if ASUI.Tooltips then ASUI.Tooltips.ShowText(button,L(module:GetLayoutOrientation()=="horizontal"
+                and "Switch to vertical layout" or "Switch to horizontal layout")) end
+        end)
+        button:SetHandler("OnMouseExit",function()if ASUI.Tooltips then ASUI.Tooltips.Hide() end end)
+        if ASUI.Input then ASUI.Input.Register(button,{window=Layout.toolbar,activate=Switch,label="Change orientation"}) end
+        handles.orientation=button
+    end
     Layout.attachments[module]=handles
     return handles
+end
+function Layout.RefreshOrientation(module)
+    local handles=Layout.attachments[module]
+    local button=handles and handles.orientation
+    if not button then return end
+    button:SetHidden(not Layout.IsMoving(module))
+    if not Layout.IsMoving(module) then return end
+    local rootW=RootSize();local win=module.window
+    local footprint=34*math.max(0.001,Finite(win.GetScale and win:GetScale(),1))
+    button:ClearAnchors()
+    if win:GetLeft()+win:GetWidth()+footprint<=rootW then button:SetAnchor(TOPLEFT,win,TOPRIGHT,6,0)
+    elseif win:GetLeft()>=footprint then button:SetAnchor(TOPRIGHT,win,TOPLEFT,-6,0)
+    else button:SetAnchor(TOPRIGHT,win,TOPRIGHT,-3,3) end
+    local vertical=module:GetLayoutOrientation()=="horizontal"
+    for index,tile in ipairs(button.tiles) do
+        tile:ClearAnchors();tile:SetAnchor(TOPLEFT,button,TOPLEFT,vertical and 11 or 4+(index-1)*7,vertical and 4+(index-1)*7 or 11)
+    end
 end
 function Layout.Refresh()
     for _,module in ipairs(Modules()) do
         RefreshModule(module)
         local handles=Layout.IsMoving(module) and Layout.Attach(module) or Layout.attachments[module]
         for _,handle in ipairs(handles or {}) do handle:SetHidden(not Layout.IsMoving(module)) end
+        Layout.RefreshOrientation(module)
     end
     Layout.RefreshToolbar()
 end
@@ -334,17 +382,18 @@ function Layout.RefreshToolbar()
     local function Text(control,value)
         if control and control.layoutText~=value then control:SetText(value);control.layoutText=value end
     end
-    Text(toolbar.selection,module and (module.layoutName or "HUD Panel") or "No active panel")
-    Text(toolbar.size,module and string.format("SIZE %.0f%% −",Finite(module.window:GetScale(),1)*100) or "SIZE −")
-    Text(toolbar.opacity,module and string.format("BACKGROUND %d%% −",math.floor(Clamp(Finite(module.sv.opacity,92),30,100))) or "BACKGROUND −")
-    local orientation=module and module.GetLayoutOrientation and module:GetLayoutOrientation()
-    Text(toolbar.orientation,orientation and (orientation=="vertical" and "VERTICAL" or "HORIZONTAL") or "FIXED LAYOUT")
-    if toolbar.orientation and toolbar.orientation.SetEnabled then toolbar.orientation:SetEnabled(orientation~=nil) end
+    Text(toolbar.selection,L(module and (module.layoutName or "HUD Panel") or "No active panel"))
+    Text(toolbar.size,module and L("SIZE %.0f%% −",Finite(module.window:GetScale(),1)*100) or L("SIZE −"))
+    Text(toolbar.opacity,module and L("BACKGROUND %d%% −",math.floor(Clamp(Finite(module.sv.opacity,92),30,100))) or L("BACKGROUND −"))
+    local backgroundEnabled=module and module.layoutBackground~=false
+    if toolbar.opacity.SetEnabled then toolbar.opacity:SetEnabled(backgroundEnabled==true) end
+    if toolbar.opacityPlus.SetEnabled then toolbar.opacityPlus:SetEnabled(backgroundEnabled==true) end
+    for _,participant in ipairs(Modules()) do Layout.RefreshOrientation(participant) end
     local preview=ASUI.Preview;local mode=preview and preview.GetMode and preview.GetMode() or "mixed"
     local names={mixed="EXAMPLES: MIXED",ready="EXAMPLES: READY",missing="EXAMPLES: MISSING",overload="EXAMPLES: OVERLOAD",live="LIVE DATA"}
-    Text(toolbar.preview,names[mode] or names.mixed)
+    Text(toolbar.preview,L(names[mode] or names.mixed))
     local rootW,rootH=RootSize()
-    local format=rootW>=804 and "wide" or rootW>=624 and "compact" or "narrow"
+    local format=rootW>=644 and "wide" or rootW>=624 and "compact" or "narrow"
     if toolbar.layoutFormat~=format then
         toolbar.layoutFormat=format
         local function PlaceControl(control,x,y,width)
@@ -354,15 +403,15 @@ function Layout.RefreshToolbar()
         local positions
         if format=="wide" then
             toolbar.layoutWidth,toolbar.layoutHeight=TOOLBAR_WIDTH,TOOLBAR_HEIGHT
-            positions={selection={14,10,220},orientation={244,10,164},preview={418,10,218},done={646,10,120},
-                size={14,48,128},sizePlus={146,48,34},opacity={196,48,192},opacityPlus={392,48,34},reset={444,48,132},fit={586,48,70}}
+            positions={selection={14,10,188},preview={210,10,260},done={478,10,128},
+                size={14,48,128},sizePlus={146,48,30},opacity={184,48,184},opacityPlus={372,48,30},reset={410,48,112},fit={530,48,76}}
         elseif format=="compact" then
             toolbar.layoutWidth,toolbar.layoutHeight=600,158
-            positions={selection={14,10,220},orientation={244,10,164},done={424,10,162},preview={14,48,218},
+            positions={selection={14,10,396},done={424,10,162},preview={14,48,218},
                 size={244,48,128},sizePlus={376,48,34},reset={430,48,156},opacity={14,86,192},opacityPlus={210,86,34},fit={260,86,70}}
         else
             toolbar.layoutWidth,toolbar.layoutHeight=440,204
-            positions={selection={14,10,220},done={306,10,120},orientation={14,48,164},preview={188,48,238},
+            positions={selection={14,10,280},done={306,10,120},preview={14,48,412},
                 size={14,86,128},sizePlus={146,86,34},opacity={196,86,192},opacityPlus={392,86,34},reset={14,124,132},fit={162,124,70}}
         end
         toolbar:SetDimensions(toolbar.layoutWidth,toolbar.layoutHeight)
@@ -377,6 +426,7 @@ function Layout.AdjustSelected(field,delta)
     if field~="scale" and field~="opacity" then return end
     delta=Finite(delta,0)
     local module=Layout.selected;if not Layout.IsMoving(module) then return end
+    if field=="opacity" and module.layoutBackground==false then return end
     local minimum,maximum,default=field=="scale" and 60 or 30,field=="scale" and 180 or 100,field=="scale" and 100 or 92
     Layout.EndResize()
     local value=Clamp(Finite(module.sv[field],default)+delta,minimum,maximum)
@@ -405,8 +455,9 @@ function Layout.Finish(skipRefresh,restoreOrigin)
     local returnTarget=Layout.returnTarget or (Layout.pending and Layout.pending.returnTarget)
     Layout.pending,Layout.returnTarget=nil,nil
     if not Layout.active then
-        if restoreOrigin==true and returnTarget and ASUI.Settings and ASUI.Settings.RestoreReturnTarget then
-            ASUI.Settings.RestoreReturnTarget(returnTarget)
+        if restoreOrigin==true and returnTarget and ASUI.Settings then
+            local restore=ASUI.Settings.ReturnFromLayout or ASUI.Settings.RestoreReturnTarget
+            if restore then restore(returnTarget) end
         end
         return
     end
@@ -417,6 +468,7 @@ function Layout.Finish(skipRefresh,restoreOrigin)
         if module.SavePosition then module:SavePosition() end
         if module.sv then module.sv.locked=true end
         for _,handle in ipairs(Layout.attachments[module] or {}) do handle:SetHidden(true) end
+        Layout.RefreshOrientation(module)
     end
     if ASUI.Tooltips then ASUI.Tooltips.Hide() end
     if Layout.toolbar then
@@ -426,8 +478,9 @@ function Layout.Finish(skipRefresh,restoreOrigin)
     if skipRefresh~=true then Layout.Refresh() end
     -- The shared navigation bridge restores the originating page and cursor
     -- after ESO releases the editor's native top-level mouse ownership.
-    if restoreOrigin==true and returnTarget and ASUI.Settings and ASUI.Settings.RestoreReturnTarget then
-        ASUI.Settings.RestoreReturnTarget(returnTarget)
+    if restoreOrigin==true and returnTarget and ASUI.Settings then
+        local restore=ASUI.Settings.ReturnFromLayout or ASUI.Settings.RestoreReturnTarget
+        if restore then restore(returnTarget) end
     end
 end
 -- Only deliberate Done/Back navigation returns to the originating addon page.
@@ -445,11 +498,14 @@ function Layout.CreateToolbar()
     if ASUI.Theme and ASUI.Theme.RegisterSurface then ASUI.Theme.RegisterSurface(win,background,"window") end
     local function Label(text,x,y,width)
         local label=WINDOW_MANAGER:CreateControl(nil,win,CT_LABEL);label:SetFont("ZoFontGameSmall")
-        label:SetDimensions(width,24);label:SetAnchor(TOPLEFT,win,TOPLEFT,x,y);label:SetText(text);return label
+        label:SetDimensions(width,24);label:SetAnchor(TOPLEFT,win,TOPLEFT,x,y);if ASUI.Localization then ASUI.Localization.Bind(label,text) else label:SetText(text) end
+        if label.SetMaxLineCount then label:SetMaxLineCount(2) end
+        if label.SetWrapMode and TEXT_WRAP_MODE_ELLIPSIS then label:SetWrapMode(TEXT_WRAP_MODE_ELLIPSIS) end
+        return label
     end
     local function Button(text,x,width,callback,y,help)
         local button=WINDOW_MANAGER:CreateControl(nil,win,CT_BUTTON);button:SetDimensions(width,30)
-        button:SetAnchor(TOPLEFT,win,TOPLEFT,x,y or 10);button:SetFont("ZoFontGameBold");button:SetText(text)
+        button:SetAnchor(TOPLEFT,win,TOPLEFT,x,y or 10);button:SetFont("ZoFontGameBold");if ASUI.Localization then ASUI.Localization.Bind(button,text) else button:SetText(text) end
         button:SetMouseEnabled(true)
         local bg=WINDOW_MANAGER:CreateControl(nil,button,CT_TEXTURE);bg:SetAnchorFill(button)
         if bg.SetDrawLayer and DL_BACKGROUND then bg:SetDrawLayer(DL_BACKGROUND) end
@@ -457,14 +513,14 @@ function Layout.CreateToolbar()
         local theme=ASUI.Theme
         if theme and theme.RegisterSurface then theme.RegisterSurface(button,bg,"button") end
         if button.SetNormalFontColor then button:SetNormalFontColor(0.96,0.97,1,1) end
-        if button.SetMouseOverFontColor then button:SetMouseOverFontColor(1,0.68,0.3,1) end
+        if button.SetMouseOverFontColor then button:SetMouseOverFontColor(0.8,0.9,0.86,1) end
         local function Paint(role)
             if theme and theme.BindColor then theme.BindColor(bg,role)
             else bg:SetColor(role=="hover" and 0.12 or 0.055,0.07,0.095,0.98) end
         end
         button:SetHandler("OnMouseEnter",function()
             Paint("hover")
-            if help and ASUI.Tooltips then ASUI.Tooltips.ShowText(button,help) end
+            if help and ASUI.Tooltips then ASUI.Tooltips.ShowText(button,L(help)) end
         end)
         button:SetHandler("OnMouseExit",function()Paint("panel");if ASUI.Tooltips then ASUI.Tooltips.Hide() end end)
         button:SetHandler("OnClicked",callback)
@@ -472,7 +528,6 @@ function Layout.CreateToolbar()
         return button
     end
     win.selection=Button("HUD Panel",14,220,function()Layout.CycleSelected(1)end,nil,"Choose the next active panel, or click the panel itself.")
-    win.orientation=Button("HORIZONTAL",244,164,function()Layout.CycleOrientation(1)end,nil,"Switch between vertical and horizontal layouts.")
     win.preview=Button("EXAMPLES: MIXED",418,218,function()Layout.CyclePreview(1)end,nil,"Cycle example states. Examples are never shared with the group.")
     win.done=Button("DONE",646,120,Layout.Done,nil,"Save placement and return.")
     win.size=Button("SIZE −",14,128,function()Layout.AdjustSelected("scale",-5)end,48)
@@ -483,6 +538,11 @@ function Layout.CreateToolbar()
     win.fit=Button("FIT",586,70,function()
         local module=Layout.selected;if Layout.IsMoving(module) then RefreshModule(module);Place(module,module.window:GetLeft(),module.window:GetTop()) end
     end,48,"Keep this panel inside the screen.")
+    -- These values are computed from the selected HUD; rebinding their initial
+    -- placeholders would overwrite the live values on an equivalent-language switch.
+    if ASUI.Localization and ASUI.Localization.Unbind then
+        for _,control in ipairs({win.selection,win.size,win.opacity,win.preview}) do ASUI.Localization.Unbind(control) end
+    end
     win.inputHint=Label("Drag a panel to move it. Drag a corner to resize. Esc saves.",14,88,752)
     win:SetHandler("OnHide",Layout.Finish)
     if ASUI.Input and ASUI.Input.RegisterWindow then ASUI.Input.RegisterWindow(win,{layout=true,close=Layout.Done,dismiss=Layout.Finish}) end
@@ -500,13 +560,14 @@ local function ActivatePending()
     end
     if SCENE_MANAGER and SCENE_MANAGER.ShowTopLevel then SCENE_MANAGER:ShowTopLevel(Layout.toolbar)
     else Layout.toolbar:SetHidden(false) end
-    Layout.Refresh();return true
+    Layout.Refresh();Layout.Select(pending.preferredModule);return true
 end
-function Layout.Start()
-    if Layout.active or Layout.pending then return true end
+function Layout.Start(preferredModule)
+    if Layout.active then Layout.Select(preferredModule);return true end
+    if Layout.pending then if type(preferredModule)=="table" then Layout.pending.preferredModule=preferredModule end;return true end
     if not CanStart() then return false end
     Layout.CreateToolbar();local settings=ASUI.Settings
-    local returnTarget=settings and settings.CaptureReturnTarget and settings.CaptureReturnTarget()
+    local returnTarget=settings and settings.CaptureReturnTarget and settings.CaptureReturnTarget() or {id="settings",page="dashboard"}
     if settings and settings.DismissAllWindows then settings.DismissAllWindows()
     else
         for _,entry in pairs(settings and settings.exclusiveWindows or {}) do
@@ -514,7 +575,7 @@ function Layout.Start()
         end
         if settings and settings.CloseMain then settings.CloseMain() end
     end
-    Layout.pending={returnTarget=returnTarget}
+    Layout.pending={returnTarget=returnTarget,preferredModule=type(preferredModule)=="table" and preferredModule or nil}
     -- Native scene transitions are asynchronous. Showing a top-level before
     -- the previous menu finishes hiding lets its scene cleanup close the editor.
     -- One permanent scene callback completes/cancels this request; no polling,
@@ -558,3 +619,5 @@ if SCENE_MANAGER and SCENE_MANAGER.RegisterCallback then
     end)
 end
 if SLASH_COMMANDS then SLASH_COMMANDS["/asmove"]=Layout.Start end
+
+if ASUI.Localization then ASUI.Localization.RegisterCallback("Layout",function()Layout.RefreshToolbar() end) end

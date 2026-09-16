@@ -198,7 +198,8 @@ function Theme.GetPresets()
     local result={}
     for _,id in ipairs(presetOrder) do
         local preset=presets[id]
-        result[#result+1]={id=id,name=preset.name,description=preset.description}
+        result[#result+1]={id=id,name=AlphaSquadUI.L and AlphaSquadUI.L(preset.name) or preset.name,
+            description=AlphaSquadUI.L and AlphaSquadUI.L(preset.description) or preset.description}
     end
     return result
 end

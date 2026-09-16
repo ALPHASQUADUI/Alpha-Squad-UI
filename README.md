@@ -2,15 +2,15 @@
 
 A modular **The Elder Scrolls Online** addon by **@SeRuM1** for group preparation, visual build inspection and Ultimate tracking.
 
-Version **3.3.1** is a development validation build. Native ESO acceptance and formal reservation/coexistence validation of the build transport remain outstanding; development pushes do not publish a release.
+Version **3.4.0** is a development validation build. Native ESO acceptance and formal reservation/coexistence validation of the build transport remain outstanding; development pushes do not publish a release.
 
-[Website](https://alphasquadeso.com/) · [Releases](https://github.com/ALPHASQUADUI/Alpha-Squad-UI/releases) · [Changelog](CHANGELOG.md) · [Downloads and installation](releases/README.md) · [Security](SECURITY.md)
+[Website](https://alphasquadeso.com/) · [Releases](https://github.com/ALPHASQUADUI/Alpha-Squad-UI/releases) · [Changelog](CHANGELOG.md) · [Downloads and installation](releases/README.md) · [Security](SECURITY.md) · [Current development audit](docs/AUDIT_3.4.0.md)
 
 ## Get started
 
 1. Install the `AlphaSquadUI` folder in ESO's `live/AddOns` directory and enable it in the Add-Ons menu.
 2. Open **Settings → Ąlpha Şquad UI** in keyboard or gamepad mode, or use `/asui`.
-3. In **Dashboard**, choose **ULT Tracker** and **Support Coverage**, then pick an **Interface Style**. Tracking starts enabled; you can switch either module off.
+3. In **Dashboard**, choose **ULT Tracker** and **Support Coverage**, then pick a **Language** and **Interface Style**. Automatic language follows ESO English/French; other game languages use English. Tracking starts enabled; you can switch either module off.
 4. Open **Libraries** to check dependencies and sharing. New installations start sharing **OFF**. Enable only the categories you want to share with your current group; existing saved choices are preserved.
 5. Use **MOVE HUD** to arrange your panels. Drag to move, drag a corner to resize, then choose **DONE**. Horizontal/vertical layouts and example states help you place panels while solo.
 6. Open **Support Coverage → Builds** or **Coverage** to prepare your group.
@@ -25,9 +25,15 @@ Use [Minion](https://minion.mmoui.com/) to install and update published ESO addo
 
 Settings adapt their cards and navigation to the available screen width while preserving text size. Very small viewports use readable scrolling where needed. Group Ultimate rows retain the size chosen in the twelve-player preview; fewer players reduce the panel's occupied space without enlarging the remaining rows.
 
+## Language and personal Ultimate HUD
+
+Dashboard offers **Automatic**, **English** and **French**. Automatic follows the game language; the explicit choice is saved account-wide and updates addon windows without reloading. Game-supplied names and native tooltip descriptions stay in the client language; the selector does not change ESO itself or translate player names.
+
+The personal HUD always shows both weapon-bar Ultimates. Native skill icons and a compact progress indicator replace the old background, Ultimate names and repeated headers. A green chevron immediately left of the active slot identifies the current weapon bar; the other slot is dimmed. No AUTO/FRONT/BACK/BOTH selector is needed. Special bars retain conservative native state handling. Optional Overload uses gold **ACTIVE**, pulsing green **READY** and pulsing red **STOP**; it never activates or cancels a skill for you.
+
 ## Choose your style
 
-Select **Dashboard → Interface Style** to apply one saved appearance across the settings and HUD panels:
+Select **Dashboard → Interface Style** to customize the main settings. Gameplay windows remain neutral, with transparent Ultimate HUDs and semantic state colors:
 
 | Style | Appearance |
 | --- | --- |
@@ -39,16 +45,16 @@ Styles change immediately without a reload. Readiness colors, item quality and C
 
 ## Arrange your HUD
 
-Click **MOVE HUD** in the settings sidebar or enter `/asmove` outside combat. It opens over the normal game view, including the action bar. Select the panel you want to arrange, then:
+Click **MOVE HUD** in the settings sidebar or a movable module page, or enter `/asmove` outside combat. It opens over the normal game view, including the action bar. Select the panel you want to arrange, then:
 
 - Drag the panel to move it.
 - Drag a **corner** to scale the whole panel proportionally.
 - Drag an **edge** to change its shape; the contents rearrange and icons stay square.
-- Select **HORIZONTAL** or **VERTICAL** for personal and Group Ultimate panels. Resizing preserves this choice; it never switches layout unexpectedly at a width threshold.
+- Use the orientation icon beside a personal or Group Ultimate panel to switch **HORIZONTAL / VERTICAL**. Resizing preserves this choice; it never switches layout unexpectedly at a width threshold.
 - Keep the example states while arranging panels, or choose **Live** to see your current group. Group examples contain twelve fictional accounts; they never affect tracking or sharing.
-- **Size** changes the whole panel. **Background** changes its opacity without fading icons or text. **Reset panel** and **Fit** recover a misplaced panel.
+- **Size** changes the whole panel. **Background** adjusts supported panel surfaces without fading icons or text; transparent Ultimate HUDs have no background to adjust. **Reset panel** and **Fit** recover a misplaced panel.
 
-**DONE** or Back/Escape saves and locks the panels, then returns to the addon window you came from. Combat, loading or another game menu ends placement without reopening settings. The normal HUD/cursor-mode transition keeps placement active.
+**DONE** or Back/Escape saves and locks the panels, then returns to the native game Settings with Alpha Squad selected. Combat, loading or another game menu ends placement without reopening settings. The normal HUD/cursor-mode transition keeps placement active.
 
 Placement preserves disabled modules and normal visibility preferences. Personal Ultimate and Overload use the same panel, position and size. Group Ultimate tracking keeps its own panel and selection.
 
@@ -56,7 +62,7 @@ Examples exist only in the editor's presentation. They are never sent, stored as
 
 ## Keyboard and controller
 
-The gamepad Settings menu includes **Ąlpha Şquad UI**. **Open Alpha Squad UI** and **Move Alpha Squad UI HUD** can also be assigned in Controls without replacing gameplay bindings. Opening from gameplay provides the mouse cursor immediately; closing restores the prior input state.
+The gamepad Settings menu includes **Ąlpha Şquad UI**. **Open Alpha Squad UI** and **Move Alpha Squad UI HUD** can also be assigned in Controls without replacing gameplay bindings. Opening from gameplay provides the mouse cursor immediately; the main top-right Close action returns to gameplay.
 
 Use arrows or the controller directional input to navigate, Select to activate, and Back to return from a secondary window. The X/CLOSE controls in Group configuration, Coverage and Builds follow the same return path; they restore the previous addon window instead of leaving a blank settings screen. Tab/Shift+Tab cycle keyboard focus. Left/right change a focused dropdown or slider. Focus displays the same explanations as mouse hover, including equipment and Champion details, and scrolls overflowing lists into view.
 

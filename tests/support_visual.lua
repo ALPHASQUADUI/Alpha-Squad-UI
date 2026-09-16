@@ -53,7 +53,10 @@ function SC:IsGrouped()return true end
 function SC:ScanLocalBuild()scans=scans+1 end
 function SC:RequestPlayerBuild()requests=requests+1;return true end
 function SC.NowMs()return 100000 end
-AlphaSquadUI={Modules={SupportCoverage=SC},Settings=Settings}
+AlphaSquadUI={Modules={SupportCoverage=SC},Settings=Settings,
+    Preferences={sv={language="en"},Initialize=function()end}}
+assert(loadfile('AlphaSquadUI/Core/Localization.lua'))()
+assert(loadfile('AlphaSquadUI/Localization/fr.lua'))()
 assert(loadfile('AlphaSquadUI/Core/Theme.lua'))()
 assert(loadfile('AlphaSquadUI/Core/Layout.lua'))()
 assert(loadfile('AlphaSquadUI/Modules/SupportCoverage/SupportCoverageUI.lua'))()
@@ -90,7 +93,7 @@ GuiRoot:SetDimensions(1920,1080);SC:ApplyLayout()
 check(win.scale==1,'Returning to a large display restores the requested HUD scale')
 local pool=created;local before=ColorKey(win.bg.color)
 Theme.SetPreset('ember')
-check(ColorKey(win.bg.color)~=before and ColorKey(win.status.color)==ColorKey(Theme.colors.gold),'Theme changes repaint the HUD without overwriting its readiness color')
+check(ColorKey(win.bg.color)==before and ColorKey(win.status.color)==ColorKey(Theme.colors.gold),'Dashboard theme changes preserve the neutral HUD and semantic readiness color')
 check(created==pool and requests==0 and scans==0,'Changing the HUD theme allocates no controls and performs no scan or build request')
 
 -- Complete player selection remains visible while the shared build stays compact.
@@ -107,6 +110,8 @@ SC.inspectorPlayerKey='player1'
 function SC:GetPlayerBuildDetails()return details end
 SC:CreateInspectorWindow();SC.inspectorWindow:SetHidden(false);SC:RefreshInspector()
 local inspector=SC.inspectorWindow
+check(inspector.title.text=='Builds' and win.title.text=='Coverage','Gameplay titles identify their content without repeated suite branding')
+check(inspector.title.relative==inspector.request,'The build title ends before the toolbar actions instead of overlapping them')
 local backTarget
 Settings.CloseExclusiveWindow=function(id)backTarget=id;return true end
 inspector.close.handlers.OnMouseUp(inspector.close,MOUSE_BUTTON_INDEX_LEFT,true)
@@ -130,13 +135,13 @@ check(skill.icon.texture=='native-morph','The larger skill tile preserves its ac
 local head=inspector.buildSheet.equipment.slots.HEAD
 local quality=ColorKey(head.frame.color);local gearFill=ColorKey(inspector.buildSheet.equipment.bg.color)
 pool=created;Theme.SetPreset('tactical')
-check(ColorKey(inspector.buildSheet.equipment.bg.color)~=gearFill and ColorKey(head.frame.color)==quality,
-    'Build panels change theme while equipment quality remains semantic')
+check(ColorKey(inspector.buildSheet.equipment.bg.color)==gearFill and ColorKey(head.frame.color)==quality,
+    'Build panels stay neutral while equipment quality remains semantic')
 check(skill.icon.texture=='native-morph' and head.icon.texture=='native-head','Changing theme never substitutes item or skill artwork')
-check(ColorKey(inspector.playerList.rows[1].bg.color)==ColorKey(Theme.colors.selected),'The selected group member keeps its themed selection after repaint')
+check(ColorKey(inspector.playerList.rows[1].bg.color)==ColorKey(SC.UI.colors.selected),'The selected group member keeps its quiet selection after repaint')
 check(created==pool and requests==0 and scans==0,'Theme refresh reuses the build and roster pools without collecting or transmitting data')
 inspector:SetHidden(true);Theme.SetPreset('obsidian');inspector:SetHidden(false);SC:RefreshInspector()
-check(ColorKey(inspector.playerList.rows[1].bg.color)==ColorKey(Theme.colors.selected),'Opening a previously hidden build restores selection in the current theme')
+check(ColorKey(inspector.playerList.rows[1].bg.color)==ColorKey(SC.UI.colors.selected),'Opening a previously hidden build restores selection in the current theme')
 check(requests==0 and scans==0,'Reopening presentation through refresh uses the cached snapshot only')
 local originalBuildDetails=SC.GetPlayerBuildDetails
 local transferStatus='Receiving build: 1 / 4'
@@ -217,4 +222,31 @@ check(backTarget=='supportContributors','Contributor Back returns through the sh
 local beforeRequest=requests
 registeredWindows.supportContributors.options.restore()
 check(requests==beforeRequest,'Returning from a build to contributor choices sends no additional request')
+-- Live language changes reuse controls and exact native/player data. Hidden HUD text
+-- refreshes when it becomes visible; no transport or scan is needed for translation.
+picker:SetHidden(true);inspector:SetHidden(false)
+SC.GetPlayerBuildDetails=originalBuildDetails
+SC.inspectorPlayerKey='player1';SC:RefreshInspector()
+local languagePool,languageRequests,languageScans=created,requests,scans
+local savedSnapshot=inspector.buildSheet.snapshot
+local nativeItem=inspector.buildSheet.equipment.slots.HEAD.icon.texture
+check(AlphaSquadUI.Localization.SetLanguage('fr'),'French can be selected after the build window is open')
+check(inspector.close.label.text=='RETOUR' and inspector.buildSheet.skills.bars.primary.title.text==AlphaSquadUI.L('FRONT'),
+    'Static navigation and skill-bar labels refresh immediately in French')
+check(inspector.playerHeader.text==AlphaSquadUI.L('GROUP  •  %d',12),
+    'Dynamic group counts use a translated format after changing language')
+check(inspector.buildSheet.consumables.tiles[1].value.text=='Actif',
+    'Cached build values repaint in French without collecting a new build')
+check(inspector.buildSheet.snapshot==savedSnapshot and inspector.buildSheet.equipment.slots.HEAD.icon.texture==nativeItem,
+    'Language selection preserves the exact native item and original build snapshot')
+check(inspector.playerList.rows[1].label.text=='@Player1','Player identities are never translated')
+check(AlphaSquadUI.Localization.SetLanguage('en') and inspector.close.label.text=='BACK'
+    and inspector.buildSheet.consumables.tiles[1].value.text=='Active','English is restored without rebuilding the controls')
+check(created==languagePool and requests==languageRequests and scans==languageScans,
+    'Language toggles allocate no controls and perform no build requests or scans')
+inspector:SetHidden(true);SC:RefreshHUD()
+check(AlphaSquadUI.Localization.SetLanguage('fr') and win.title.text=='Couverture',
+    'The visible preparation HUD also switches language immediately')
+check(win.list.rows[1].value.text==AlphaSquadUI.L('SOURCE'),'Live source status is translated while preserving semantic color')
+AlphaSquadUI.Localization.SetLanguage('en')
 print(string.format('Support visual integration: %d assertions passed',total))

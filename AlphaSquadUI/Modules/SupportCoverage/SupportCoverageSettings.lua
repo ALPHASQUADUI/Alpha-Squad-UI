@@ -3,6 +3,10 @@ local SC=AlphaSquadUI and AlphaSquadUI.Modules and AlphaSquadUI.Modules.SupportC
 if not SC then return end
 local UI,Catalog=SC.UI,SC.Catalog
 local C=UI.colors
+local function L(text,...)
+    if AlphaSquadUI.L then return AlphaSquadUI.L(text,...) end
+    return select("#",...)>0 and string.format(text,...) or text
+end
 local function EffectTooltip(key)
     return UI.EffectTooltip and UI.EffectTooltip(key) or Catalog:GetEffectTooltip(key)
 end
@@ -41,13 +45,13 @@ function SC:BuildIntegratedSettingsPage(page,ui)
         "Drag an edge to resize a panel. Drag a corner to scale it. Done saves your layout.",C.muted)
     help:SetAnchor(TOPLEFT,appearance,TOPLEFT,14,42);help:SetDimensions(294,66)
     ui.CreateButton(appearance,"AlphaSquadSupportGlobalMove","MOVE HUD",14,122,190,32,function()
-        if AlphaSquadUI.Layout and AlphaSquadUI.Layout.Start then AlphaSquadUI.Layout.Start() end
+        if AlphaSquadUI.Layout and AlphaSquadUI.Layout.Start then AlphaSquadUI.Layout.Start(SC) end
     end)
     local placement=ui.CreateLabel(appearance,"AlphaSquadSupportPlacementNote","ZoFontGameSmall",
         "Preview shows sample states while you arrange panels. It never changes group data.",C.muted)
     placement:SetAnchor(TOPLEFT,appearance,TOPLEFT,14,170);placement:SetDimensions(294,76)
     local native=ui.CreateLabel(appearance,"AlphaSquadSupportNativeNote","ZoFontGameSmall",
-        "Equipment, skills and Champion stars use the game's own icons. Choose the suite design in Dashboard.",C.muted)
+        "Use native item, skill and Champion tooltips for details.",C.muted)
     native:SetAnchor(TOPLEFT,appearance,TOPLEFT,14,250);native:SetDimensions(294,70)
     if ui.RegisterLayout then
         ui.RegisterLayout(page,function(width)
@@ -68,7 +72,7 @@ function SC:BuildIntegratedSettingsPage(page,ui)
     end
     ui.RegisterRefresher(function()
         local coverage=SC.coverage or {}
-        status:SetText(string.format("%d / %d sources  •  %d missing  •  %d unknown",coverage.coveredCount or 0,coverage.requiredCount or 0,coverage.confirmedMissingCount or 0,coverage.unknownCount or 0))
+        status:SetText(L("%d / %d sources  •  %d missing  •  %d unknown",coverage.coveredCount or 0,coverage.requiredCount or 0,coverage.confirmedMissingCount or 0,coverage.unknownCount or 0))
         UI.Color(status,coverage.ready and #(coverage.readinessIssues or {})==0 and (coverage.limitedSourceCount or 0)==0 and C.green or C.gold)
     end)
 end
@@ -108,11 +112,11 @@ function SC:GetCoverageGridLayout(counts)
     return layout
 end
 local function ContributorTooltip(data)
-    if not data then return "No group information is available." end
+    if not data then return L("No group information is available.") end
     local owners=data.owners or {}
-    local lines={data.effect and data.effect.label or Catalog.effects[data.key].label}
+    local lines={L(data.effect and data.effect.label or Catalog.effects[data.key].label)}
     local status=UI.Status(data)
-    lines[#lines+1]=status.." • "..#owners.." known contributor"..(#owners==1 and "" or "s")
+    lines[#lines+1]=status.." • "..L(#owners==1 and "%d known contributor" or "%d known contributors",#owners)
     local recipients=UI.RecipientNotice and UI.RecipientNotice(data)
     if recipients then lines[#lines+1]=recipients end
     -- Every contributor remains visible on hover even when twelve players duplicate a source.
@@ -120,15 +124,17 @@ local function ContributorTooltip(data)
         local capability=player.capabilities and player.capabilities[data.key]
         local sources={}
         for name,active in pairs(capability and capability.sources or {}) do
-            if active and type(name)=="string" and name~="Shared build" and name~="ASUI peer" then sources[#sources+1]=name end
+            if active and type(name)=="string" and name~="Shared build" and name~="ASUI peer" then
+                sources[#sources+1]=UI.SourceName and UI.SourceName(capability,name) or L(name)
+            end
         end
         table.sort(sources)
-        local bars=capability and (capability.mainBar and capability.backBar and " • both bars" or capability.mainBar and " • front bar" or capability.backBar and " • back bar" or "") or ""
-        lines[#lines+1]=tostring(player.displayName or "Unknown player")..bars.."\n"..(#sources>0 and table.concat(sources,", ") or "Detailed sources unavailable • inspect build")
+        local bars=capability and (capability.mainBar and capability.backBar and " • "..L("both bars") or capability.mainBar and " • "..L("front bar") or capability.backBar and " • "..L("back bar") or "") or ""
+        lines[#lines+1]=tostring(player.displayName or L("Unknown player"))..bars.."\n"..(#sources>0 and table.concat(sources,", ") or L("Detailed sources unavailable • inspect build"))
     end
-    if #owners==0 then lines[#lines+1]="No verified source in the current group. Unknown builds may contain a source." end
-    if #owners==1 then lines[#lines+1]="Click to inspect this player's build."
-    elseif #owners>1 then lines[#lines+1]="Click to choose a player's build." end
+    if #owners==0 then lines[#lines+1]=L("No verified source in the current group. Unknown builds may contain a source.") end
+    if #owners==1 then lines[#lines+1]=L("Click to inspect this player's build.")
+    elseif #owners>1 then lines[#lines+1]=L("Click to choose a player's build.") end
     return table.concat(lines,"\n\n")
 end
 function SC:GetCoverageContributorTooltip(data)return ContributorTooltip(data)end
@@ -155,8 +161,8 @@ function SC:RefreshContributorPicker()
     local height=math.max(172,count*34+136)
     win:SetDimensions(420,height)
     win:SetScale(math.max(.1,math.min(1,(GuiRoot:GetWidth()-24)/420,(GuiRoot:GetHeight()-24)/height)))
-    win.subtitle:SetText(effect and UI.Text(effect.label) or "Source unavailable")
-    win.footer:SetText(count>0 and "Choose a player to inspect their build." or "No current contributor is available.")
+    win.subtitle:SetText(UI.Text(L(effect and effect.label or "Source unavailable")))
+    win.footer:SetText(L(count>0 and "Choose a player to inspect their build." or "No current contributor is available."))
     for index=1,count do
         local row=win.rows[index]
         if not row then
@@ -170,7 +176,7 @@ function SC:RefreshContributorPicker()
         end
         local player=owners[index]
         row.playerKey=player.key or player.displayName;row.characterName=player.characterName
-        row.label:SetText(UI.Text(player.displayName or "Unknown player"));row:SetHidden(false)
+        row.label:SetText(UI.Text(player.displayName or L("Unknown player")));row:SetHidden(false)
         row.data={key=key,effect=effect,status="covered",owners={player}}
     end
     for index=count+1,#win.rows do win.rows[index]:SetHidden(true);win.rows[index].playerKey=nil;win.rows[index].data=nil end
@@ -182,10 +188,9 @@ function SC:OpenContributorPicker(data)
     if #owners==1 then return self:InspectContributor(owners[1].key or owners[1].displayName,owners[1].characterName) end
     self.contributorEffectKey=data.key
     if not self.contributorWindow then
-        local win=UI.Window("AlphaSquadContributors","Ąlpha Şquad UI  •  Contributors",function()
+        local win=UI.Window("AlphaSquadContributors","Contributors",function()
             UI.CloseWindow("supportContributors",function() SC:CloseContributorPicker() end)
         end)
-        win.title:SetText("CONTRIBUTORS")
         win.hasContentLayout=true;win.rows={};self.contributorWindow=win
         UI.RegisterWindow("supportContributors",win,function()SC:CloseContributorPicker()end,function()SC:RefreshContributorPicker()end)
     end
@@ -193,7 +198,7 @@ function SC:OpenContributorPicker(data)
     self:RefreshContributorPicker();return true
 end
 function SC:CreateMatrixWindow()
-    local win=UI.Window("AlphaSquadSupportCoverageMatrix","Ąlpha Şquad UI  •  Coverage",function()
+    local win=UI.Window("AlphaSquadSupportCoverageMatrix","Coverage",function()
         UI.CloseWindow("supportCoverage",function() SC:CloseMatrix() end)
     end)
     win.hasContentLayout=true
@@ -216,14 +221,14 @@ function SC:CreateMatrixWindow()
         panel.bg=UI.Solid(panel,"AlphaSquadCoverageCategoryBG"..index,C.surface or C.panel)
         if UI.Surface then UI.Surface(panel,panel.bg,"card") end
         win.categoryPanels[index]=panel
-        win.columns[index]=UI.Label(win,"AlphaSquadCoverageColumn"..index,label,"ZoFontGameBold",C.orange)
+        win.columns[index]=UI.Label(win,"AlphaSquadCoverageColumn"..index,label,"ZoFontGameBold",C.white)
     end
     win.list=WINDOW_MANAGER:CreateControl("AlphaSquadSupportCoverageGrid",win,CT_CONTROL)
     win.list:SetAnchor(TOPLEFT,win,TOPLEFT,18,144);win.list.rows={}
     win.legend=WINDOW_MANAGER:CreateControl("AlphaSquadCoverageLegend",win,CT_CONTROL)
     win.legend.bg=UI.Solid(win.legend,"AlphaSquadCoverageLegendBG",C.surface or C.panel)
     if UI.Surface then UI.Surface(win.legend,win.legend.bg,"card") end
-    win.legend.title=UI.Label(win.legend,"AlphaSquadCoverageLegendTitle","STATUS","ZoFontGameBold",C.accent or C.orange)
+    win.legend.title=UI.Label(win.legend,"AlphaSquadCoverageLegendTitle","STATUS","ZoFontGameBold",C.white)
     win.legend.title:SetAnchor(TOPLEFT,win.legend,TOPLEFT,10,5);win.legend.title:SetHeight(24)
     win.legend.rows={}
     for index,data in ipairs({{"Source available",C.green},{"Missing",C.red},{"Unknown / limited / duplicate",C.gold},{"Optional",C.muted}}) do
@@ -232,7 +237,7 @@ function SC:CreateMatrixWindow()
         local label=UI.Label(win.legend,"AlphaSquadCoverageLegendLabel"..index,data[1],"ZoFontGameSmall",C.white)
         label:SetAnchor(TOPLEFT,win.legend,TOPLEFT,30,29+(index-1)*32);win.legend.rows[index]=label
     end
-    win.footer:SetText("Hover names for sources and conditions • Hover counts for contributors • Click a count to choose a build")
+    UI.Hover(win.list,"Hover names for sources and conditions • Hover counts for contributors • Click a count to choose a build")
 end
 function SC:RefreshMatrix()
     local win=self.matrixWindow;if not win or win:IsHidden() then return end
@@ -242,14 +247,14 @@ function SC:RefreshMatrix()
     win:SetDimensions(layout.width,layout.height);win:SetScale(math.max(0.1,math.min(1,(GuiRoot:GetWidth()-24)/layout.width,(GuiRoot:GetHeight()-24)/layout.height)))
     win.list:SetDimensions(layout.width-36,layout.height-198)
     local coverage=self.coverage or {}
-    win.subtitle:SetText(string.format("%s  •  %d / %d sources  •  %d missing  •  %d unknown",coverage.profileLabel or "Group preparation",coverage.coveredCount or 0,coverage.requiredCount or 0,coverage.confirmedMissingCount or 0,coverage.unknownCount or 0))
+    win.subtitle:SetText(L("%s  •  %d / %d sources  •  %d missing  •  %d unknown",L(coverage.profileLabel or "Group preparation"),coverage.coveredCount or 0,coverage.requiredCount or 0,coverage.confirmedMissingCount or 0,coverage.unknownCount or 0))
     if UI.SetButtonSelected then
         UI.SetButtonSelected(win.trial,self.sv.activeProfile=="trial");UI.SetButtonSelected(win.dungeon,self.sv.activeProfile=="dungeon")
         for key,button in pairs(win.filterButtons) do UI.SetButtonSelected(button,(self.matrixFilter or "ALL")==key) end
     end
-    UI.Color(win.trial.label,self.sv.activeProfile=="trial" and C.orange or C.muted)
-    UI.Color(win.dungeon.label,self.sv.activeProfile=="dungeon" and C.orange or C.muted)
-    for key,b in pairs(win.filterButtons) do UI.Color(b.label,(self.matrixFilter or "ALL")==key and C.orange or C.muted) end
+    UI.Color(win.trial.label,self.sv.activeProfile=="trial" and C.white or C.muted)
+    UI.Color(win.dungeon.label,self.sv.activeProfile=="dungeon" and C.white or C.muted)
+    for key,b in pairs(win.filterButtons) do UI.Color(b.label,(self.matrixFilter or "ALL")==key and C.white or C.muted) end
     for index,label in ipairs(win.columns) do
         label:ClearAnchors();label:SetAnchor(TOPLEFT,win,TOPLEFT,18+layout.starts[index],116)
         local width=layout.lanes[index]*layout.laneWidth+(layout.lanes[index]-1)*5
@@ -294,7 +299,7 @@ function SC:RefreshMatrix()
                 end)
                 row.toggle.label:SetFont("ZoFontGameSmall")
                 row.toggle:SetAnchor(TOPRIGHT,row,TOPRIGHT,0,0)
-                UI.Hover(row.toggle,function()return row.data and (SC:IsEffectTracked(row.data.key) and "Tracking is on. Click to make this effect optional for " or "Tracking is off. Click to require this effect for ")..SC.sv.activeProfile.."." end)
+                UI.Hover(row.toggle,function()return row.data and L(SC:IsEffectTracked(row.data.key) and "Tracking is on. Click to make this effect optional for %s." or "Tracking is off. Click to require this effect for %s.",L(SC.sv.activeProfile=="trial" and "Trial" or "Dungeon")) end)
                 row.contributors=UI.Button(row,name.."Contributors","",26,20,function()
                     SC:OpenContributorPicker(row.data)
                 end)
@@ -309,11 +314,11 @@ function SC:RefreshMatrix()
             row.icon:SetTexture(visual and visual.icon or "");row.icon:SetHidden(not visual or not visual.icon or visual.icon=="")
             if visual and visual.reference then row.icon:SetHandler("OnMouseEnter",function() UI.ItemTooltip(row.icon,visual,true) end)
             else row.icon:SetHandler("OnMouseEnter",function() UI.Tooltip(row.icon,EffectTooltip(row.data.key)) end) end
-            row.name:SetText(UI.Text(effect.label));UI.Color(row.name,tracked and C.white or C.muted)
-            row.toggle.label:SetText(tracked and "ON" or "OFF");UI.Color(row.toggle.label,tracked and C.green or C.muted)
+            row.name:SetText(UI.Text(L(effect.label)));UI.Color(row.name,tracked and C.white or C.muted)
+            row.toggle.label:SetText(tracked and "✓" or "—");UI.Color(row.toggle.label,tracked and C.green or C.muted)
             if UI.SetButtonSelected then UI.SetButtonSelected(row.toggle,tracked) end
             local status,color=UI.Status(data)
-            if not tracked then status="OPTIONAL";color=C.muted elseif duplicate then status="DUPLICATE";color=C.gold end
+            if not tracked then status=L("OPTIONAL");color=C.muted elseif duplicate then status=L("DUPLICATE");color=C.gold end
             row.status=status;UI.Color(row.marker,color)
             row.contributors.label:SetText(#(data.owners or {})>0 and (duplicate and "×" or "")..#data.owners or "—")
             UI.Color(row.contributors.label,color)

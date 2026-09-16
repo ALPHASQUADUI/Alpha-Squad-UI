@@ -1,6 +1,6 @@
 -- Ąlpha Şquad UI - Support Coverage compact group sharing
 -- Protocol IDs remain provisional; conflicting registration fails closed.
--- Sharing is enabled for a fresh installation and follows Libraries controls.
+-- Sharing starts OFF on a fresh installation and follows Libraries controls.
 
 local SC = AlphaSquadUI and AlphaSquadUI.Modules and AlphaSquadUI.Modules.SupportCoverage
 if not SC then return end
@@ -119,11 +119,23 @@ end
 local function ClassifyPotion(snapshot)
     local potion = snapshot and snapshot.potion
     if not potion or not potion.known then return 0 end
-    local text = Normalize((potion.name or "") .. " " .. (potion.effects or ""))
-    if text:find("heroism", 1, true) then return 4 end
-    if text:find("spell power", 1, true) or text:find("sorcery", 1, true) then return 2 end
-    if text:find("weapon power", 1, true) or text:find("brutality", 1, true) then return 3 end
-    if text:find("health", 1, true) and text:find("magicka", 1, true) and text:find("stamina", 1, true) then return 1 end
+    local function Plain(value)
+        return Normalize(tostring(value or ""):gsub("|c%x%x%x%x%x%x",""):gsub("|r",""):gsub("%^.*$",""))
+    end
+    local text=Plain(potion.effects)
+    local function HasEffect(key)
+        local id=Catalog and Catalog.visualAbilityIds and Catalog.visualAbilityIds[key]
+        if not id or type(GetAbilityName)~="function" then return false end
+        local ok,name=pcall(GetAbilityName,id)
+        name=ok and Plain(name) or ""
+        return name~="" and text:find(name,1,true)~=nil
+    end
+    -- These are description hints, never proof of consumption or group buffs.
+    -- Native names follow the ESO client language, independent of addon UI.
+    if HasEffect("minor_heroism") or HasEffect("major_heroism") then return 4 end
+    if HasEffect("major_sorcery") then return 2 end
+    if HasEffect("major_brutality") then return 3 end
+    if HasEffect("major_fortitude") and HasEffect("major_intellect") and HasEffect("major_endurance") then return 1 end
     return 5
 end
 
@@ -136,12 +148,20 @@ local POTION_LABELS = {
     [5] = "OTHER",
 }
 
-function SC:BuildSharePayload()
+function SC:BuildSharePayload(prepared)
     local s = self.localSnapshot
     if not s then return nil end
 
     local caps = EncodeCapabilities(s.capabilities)
-    local body = self.BuildCodec and self.BuildCodec.Encode(s)
+    local body
+    if self.BuildCodec then
+        -- A requested capture is encoded and validated before any traffic.
+        -- Reuse only that exact local snapshot's body, never a previous capture.
+        if type(prepared)=="table" and prepared.snapshot==s and type(prepared.body)=="string"
+            and #prepared.body>=2 and #prepared.body<=self.BuildCodec.MAX_BYTES then
+            body=prepared.body
+        else body=self.BuildCodec.Encode(s) end
+    end
     if body then caps[4] = (caps[4] or 0) + (self.BuildCodec.Hash(body) % 32767 + 1) * 512 end
     self.share.preparedBuildBody = body
     local sets = {0,0} -- Exact native set identities are sent only in requested builds.
@@ -435,7 +455,7 @@ function SC:InitializeSharing()
     self.share.error=ok and nil or tostring(result)
 end
 
-function SC:ShareLocalSnapshot(reason)
+function SC:ShareLocalSnapshot(reason,prepared)
     if not self.sv or not self.sv.experimentalSharing or not self.sv.shareData or self.inCombat or self.loading then return false end
     if self.share and (self.share.transportPaused or self.share.transportResumeRequired) then return false end
     if self.share and self.share.queueRevokeNeedsGroup and self:IsGrouped() and AlphaSquadUI.Sharing then
@@ -450,7 +470,7 @@ function SC:ShareLocalSnapshot(reason)
     end
     local now=self.NowMs()
     if now-(self.share.lastSendAt or -60000)<1500 then return false end
-    local payload=self:BuildSharePayload()
+    local payload=self:BuildSharePayload(prepared)
     if not payload then return false end
     local ok,sent=pcall(self.share.protocol.Send,self.share.protocol,payload,{isRelevantInCombat=false,replaceQueuedMessages=true})
     if ok and sent==true then

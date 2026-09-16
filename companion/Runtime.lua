@@ -6,6 +6,11 @@ local addon="AlphaSquadBuildShare"
 local heartbeat=addon.."Heartbeat"
 local generation=0
 local Sharing=AlphaSquadBuildShare.Host.Sharing
+local function L(text, ...)
+    local translate=AlphaSquadBuildShare.Host.L
+    if translate then return translate(text, ...) end
+    return select("#", ...) > 0 and string.format(text, ...) or text
+end
 local function CanShare() return SC:GetSharingStatus()=="SHARING" end
 -- A sender has no remote roster. Ignore summaries/responses and retain no peer
 -- builds; only addressed requests and acknowledgments are relevant here.
@@ -15,7 +20,7 @@ function SC:OnDetailData(tag,data)
     if type(data)=="table" and (data.kind==0 or data.kind==3) and SC.sv and SC.sv.enabled
         and not SC.inCombat and not SC.loading and SC:IsGrouped() and CanShare() then return receiveDetails(self,tag,data) end
 end
-local function Print(text) if d then d("Ąlpha Şquad Build Share: "..text) end end
+local function Print(text) if d then d("Ąlpha Şquad Build Share: "..L(text)) end end
 local function Refresh()
     if not SC.sv or not SC.sv.enabled or SC.inCombat or SC.loading or not SC:IsGrouped() or not CanShare() then return end
     if SC.scanDirty or not SC.localSnapshot then
@@ -92,7 +97,7 @@ local function Loaded(_,name)
             local state,reason=SC:GetSharingStatus()
             if state=="SHARING" then
                 Print("Sharing ON. Current group members using compatible sharing can request your equipped items, both skill bars, Champion stars, food, potion, class choices and Werewolf or Vampire status. Protocol IDs are provisional; incompatible registration disables sharing.")
-            else Print("Sharing unavailable — "..tostring(reason or "Update LibGroupBroadcast and reload the UI")..".") end
+            else Print(L("Sharing unavailable — %s.",L(reason or "Update LibGroupBroadcast and reload the UI"))) end
         elseif command=="off" then
             local accepted=SetEnabled(false)
             if accepted then Print("Sharing OFF.")
@@ -100,7 +105,7 @@ local function Loaded(_,name)
             else Print("Sharing OFF locally. Native queue controls are unavailable; update LibGroupBroadcast and reload the UI.") end
         elseif command=="status" or command=="" then
             local state,reason=SC:GetSharingStatus()
-            Print(state..(reason and " — "..reason or "")..". Commands: /asbuildshare on, /asbuildshare off, /asbuildshare status")
+            Print(L(state)..(reason and " — "..L(reason) or "")..". "..L("Commands: /asbuildshare on, /asbuildshare off, /asbuildshare status"))
         else Print("Commands: /asbuildshare on, /asbuildshare off, /asbuildshare status") end
     end
     Register(EVENT_PLAYER_ACTIVATED,function()

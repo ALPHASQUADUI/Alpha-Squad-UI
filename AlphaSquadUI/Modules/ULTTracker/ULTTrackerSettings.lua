@@ -7,6 +7,15 @@ AlphaSquadUI.Modules = AlphaSquadUI.Modules or {}
 local ULT = AlphaSquadUI.Modules.ULTTracker
 if not ULT then return end
 
+local function L(text,...)
+    if AlphaSquadUI.L then return AlphaSquadUI.L(text,...) end
+    return select("#",...)>0 and string.format(text,...) or text
+end
+local function MovePersonalHUD()
+    local layout=AlphaSquadUI.Layout
+    if layout and layout.Start then layout.Start(ULT) end
+end
+
 local COLORS = ULT.COLORS
     or (AlphaSquadUI.Theme and AlphaSquadUI.Theme.colors)
     or {
@@ -78,36 +87,22 @@ function ULT:BuildIntegratedSettingsPage(page,ui)
     local width=LogicalWidth(page)-16;local half=(width-16)/2
     local Label,ReflowLabels=PageLabels(page,ui,C)
     Label(page,"AlphaSquadULTIntegratedTitle","ULT TRACKER",8,2,width,34,"ZoFontWinH2",C.orange)
-    Label(page,"AlphaSquadULTIntegratedSub","Track your Ultimates and the group's readiness. Overload uses your personal HUD.",8,42,width,40)
+    Label(page,"AlphaSquadULTIntegratedSub","Both weapon bars, one compact HUD. The green arrow marks your active bar.",8,42,width,40)
     local general=ui.CreateCard(page,"AlphaSquadULTIntegratedGeneral",8,86,half,216,"PERSONAL HUD",C.orange)
     ui.AddToggleRow(general,"AlphaSquadULTIntegratedVisible","Show personal HUD",42,
         function() return ULT.sv and ULT.sv.visible==true end,function(v) ULT:SetVisible(v) end)
     ui.AddToggleRow(general,"AlphaSquadULTIntegratedMenus","Hide in game menus",82,
         function() return ULT.sv and ULT.sv.hideInMenus==true end,function(v) ULT.sv.hideInMenus=v==true;ULT:ApplyVisibility() end)
-    Label(general,"AlphaSquadULTPlacementHelp","Move HUD adjusts position, size and background.",14,132,half-28,56)
+    ui.CreateButton(general,"AlphaSquadULTMoveHUD","MOVE HUD",14,134,190,36,MovePersonalHUD)
     local tracking=ui.CreateCard(page,"AlphaSquadULTIntegratedTracking",half+24,86,half,216,"BARS & READINESS",C.cyan)
-    local choices={{"auto","AUTO"},{"main","FRONT"},{"back","BACK"},{"both","BOTH"}}
-    local buttons={};local buttonWidth=(half-28-24)/4
-    for index,choice in ipairs(choices) do
-        local mode=choice[1]
-        local button=ui.CreateButton(tracking,"AlphaSquadULTMode"..mode,choice[2],14+(index-1)*(buttonWidth+8),44,buttonWidth,34,function() ULT:SetTrackMode(mode) end)
-        button.help="Auto follows the active native bar. A transformation or temporary bar replaces unavailable weapon cards until it ends. Enabled Overload behavior takes priority over Auto, Front and Back when slotted on either bar. Both restores both weapon cards outside transformations."
-        buttons[mode]=button
-    end
-    ui.RegisterRefresher(function()
-        for mode,button in pairs(buttons) do
-            local selected=ULT.sv and ULT.sv.trackMode==mode
-            button.restingColor=selected and C.panelActive or C.panel
-            SetColor(button.bg,button.restingColor);SetColor(button.label,selected and C.orange or C.white)
-        end
-    end)
-    ui.AddToggleRow(tracking,"AlphaSquadULTIntegratedSound","Standard Ultimate ready sounds",104,
+    ui.AddToggleRow(tracking,"AlphaSquadULTIntegratedSound","Ready sounds",44,
         function() return ULT.sv and ULT.sv.readySound==true end,function(v) ULT.sv.readySound=v==true end)
-    ui.AddToggleRow(tracking,"AlphaSquadULTIntegratedFlash","Highlight standard ready Ultimates",146,
+    ui.AddToggleRow(tracking,"AlphaSquadULTIntegratedFlash","Ready highlight",86,
         function() return ULT.sv and ULT.sv.readyFlash==true end,function(v) ULT.sv.readyFlash=v==true;ULT:Refresh("ready highlight") end)
+    Label(tracking,"AlphaSquadULTBothBarsHelp","Both bars remain visible. The inactive bar is dimmed.",14,132,half-28,50)
     local overload=ui.CreateCard(page,"AlphaSquadULTIntegratedOverload",8,318,half,112,"OVERLOAD",C.gold)
     Label(overload,"AlphaSquadULTOverloadIntro","Reserve warnings and the ready reminder.",14,38,half-220,60)
-    local overloadButton=ui.CreateButton(overload,"AlphaSquadULTOverloadSettings","OVERLOAD SETTINGS",half-194,42,180,38,function() AlphaSquadUI.Settings.OpenPage("ultoverload") end)
+    local overloadButton=ui.CreateButton(overload,"AlphaSquadULTOverloadSettings","SETTINGS",half-194,42,180,38,function() AlphaSquadUI.Settings.OpenPage("ultoverload") end)
     local runtime=ui.CreateCard(page,"AlphaSquadULTIntegratedRuntime",half+24,318,half,244,"CURRENT ULTIMATES",C.green)
     local nativeRows={}
     for index,key in ipairs({"primary","backup"}) do
@@ -130,9 +125,9 @@ function ULT:BuildIntegratedSettingsPage(page,ui)
             local unavailable=key=="backup" and ULT:HasSpecialActiveBar()
             row.icon:SetHidden(unavailable or not bar or bar.abilityId<=0 or bar.icon=="")
             if bar and bar.icon~="" then row.icon:SetTexture(bar.icon) end
-            row.text:SetText(unavailable and "BACK BAR\nUnavailable on the current action bar" or (label.." • "..(bar and bar.name~="" and bar.name or "No Ultimate").."\n"..string.upper(bar and bar.state or "empty")))
+            row.text:SetText(unavailable and L("BACK BAR\nUnavailable on the current action bar") or (L(label).." • "..(bar and bar.name~="" and bar.name or L("No Ultimate")).."\n"..L(string.upper(bar and bar.state or "empty"))))
         end
-        counter:SetText(string.format("ULTIMATE: %d",tonumber(ULT.currentUltimate) or 0))
+        counter:SetText(L("ULTIMATE: %d",tonumber(ULT.currentUltimate) or 0))
     end)
     local group=ui.CreateCard(page,"AlphaSquadULTIntegratedGroup",8,446,half,116,"GROUP ULTIMATES",C.cyan)
     local groupStatus=Label(group,"AlphaSquadULTIntegratedGroupStatus","",180,78,half-194,28)
@@ -143,10 +138,10 @@ function ULT:BuildIntegratedSettingsPage(page,ui)
     ui.CreateButton(group,"AlphaSquadULTIntegratedGroupConfig","CONFIGURE",14,78,150,28,function() if ULT.Group then ULT.Group:OpenConfig() end end)
     ui.RegisterRefresher(function()
         local tracker=ULT.Group
-        if not tracker or not tracker.sv then groupStatus:SetText("Group Ultimate tracking");return end
+        if not tracker or not tracker.sv then groupStatus:SetText(L("Group Ultimate tracking"));return end
         local shared,count=tracker:GetSharingCount()
-        if not tracker.libraryAvailable then groupStatus:SetText("See Libraries for group data.");SetColor(groupStatus,C.red)
-        else groupStatus:SetText(string.format("%d / %d sharing",shared,count));SetColor(groupStatus,C.muted) end
+        if not tracker.libraryAvailable then groupStatus:SetText(L("See Libraries for group data."));SetColor(groupStatus,C.red)
+        else groupStatus:SetText(L("%d / %d sharing",shared,count));SetColor(groupStatus,C.muted) end
     end)
     if ui.RegisterLayout then
         ui.RegisterLayout(page,function(pageWidth)
@@ -168,10 +163,6 @@ function ULT:BuildIntegratedSettingsPage(page,ui)
                 Place(group,page,8,652,cardWidth,124)
                 Place(runtime,page,8,792,cardWidth,236)
                 page.contentHeight=1040
-            end
-            local buttonWidth=(cardWidth-52)/4
-            for index,choice in ipairs(choices) do
-                Place(buttons[choice[1]],tracking,14+(index-1)*(buttonWidth+8),44,buttonWidth,34)
             end
             Place(overloadButton,overload,cardWidth-194,42,180,38)
             ReflowLabels()
@@ -196,12 +187,12 @@ function ULT:BuildOverloadSettingsPage(page,ui)
             function() return ULT.sv and ULT.sv.overload and ULT.sv.overload[key]==true end,
             function(value) if ULT.Overload then ULT.Overload:SetOption(key,value) end end,help)
     end
-    Toggle(behavior,"Enabled","Use Overload behavior","enabled",42,"ON prioritizes slotted Overload on either bar, except in Both mode. OFF uses standard Ultimate behavior. This does not change group sharing.")
-    Toggle(behavior,"PvP","Disable specialized behavior in PvP","disableInPvP",82,"Use standard Ultimate tracking in PvP while retaining your Overload settings for PvE.")
-    Label(behavior,"AlphaSquadOverloadSameLayout","Move HUD adjusts your personal panel.",14,124,half-28,40)
+    Toggle(behavior,"Enabled","Use Overload behavior","enabled",42,"Adds reserve warnings to slotted Overload. Both weapon bars stay visible. Group sharing is unchanged.")
+    Toggle(behavior,"PvP","Disable in PvP","disableInPvP",82,"Use standard Ultimate tracking in PvP while retaining your Overload settings for PvE.")
+    ui.CreateButton(behavior,"AlphaSquadOverloadMoveHUD","MOVE HUD",14,124,190,34,MovePersonalHUD)
     local reserve=ui.CreateCard(page,"AlphaSquadOverloadReserve",half+24,94,half,252,"ULTIMATE RESERVE",C.red)
     Toggle(reserve,"Reserve","Reserve warnings","reserveAlertsEnabled",42,"Warn while active Overload reaches the selected reserve. Use your Ultimate binding to switch it off.")
-    Toggle(reserve,"ReserveSound","Reserve alert sounds","reserveSound",82)
+    Toggle(reserve,"ReserveSound","Warning sounds","reserveSound",82)
     local function Step(parent,id,text,key,y,minimum)
         ui.AddStepperRow(parent,"AlphaSquadOverloadOption"..id,text,y,
             function() return ULT.sv and ULT.sv.overload and ULT.sv.overload[key] or minimum end,
@@ -210,11 +201,11 @@ function ULT:BuildOverloadSettingsPage(page,ui)
     Step(reserve,"Warning","Warning starts","reserveWarningThreshold",126,25)
     Label(reserve,"AlphaSquadOverloadReserveNote","Press your Ultimate binding to stop Overload.",14,176,half-28,62)
     local ready=ui.CreateCard(page,"AlphaSquadOverloadReady",8,282,half,198,"READY REMINDER",C.gold)
-    Toggle(ready,"Ready","Remind when ready to activate","readyReminderEnabled",42)
+    Toggle(ready,"Ready","Ready reminder","readyReminderEnabled",42)
     Toggle(ready,"ReadySound","Reminder sound","readyReminderSound",82)
     Step(ready,"ReadyThreshold","Ready at","readyReminderThreshold",126,100)
     local help=ui.CreateCard(page,"AlphaSquadOverloadHelp",half+24,362,half,118,"HOW IT WORKS",C.cyan)
-    Label(help,"AlphaSquadOverloadHelpText","The native slotted morph supplies the icon and name. Reserve alerts apply only to active Overload; the reminder applies while it is off. Layout previews never play alerts.",14,38,half-28,74)
+    Label(help,"AlphaSquadOverloadHelpText","Gold: active. Green pulse: ready. Red pulse: stop. Use your Ultimate binding to switch Overload off.",14,38,half-28,74)
     if ui.RegisterLayout then
         ui.RegisterLayout(page,function(pageWidth)
             local inner=math.max(280,pageWidth-16)

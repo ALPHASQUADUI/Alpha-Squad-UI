@@ -196,4 +196,29 @@ entry.buildVerified=false;entry.equipment=nil;entry.skills=nil;sharedUlt=nil;SC:
 check(not entry.externalSets,"A superseded LSD report cannot reappear after the newer full build expires")
 constants.active_type_dual=nil;setData=Set(185,5,0,0,nil);callback("group2",false);SC:MergeExternalCapabilities(entry)
 check(not entry.externalSets,"Missing active-type constants cannot turn an invalid state into an active set")
+-- Locale changes format external evidence without translating its identity or remerging data.
+constants.active_type_dual=1
+setData=Set(185,5,0,0,1);callback("group2",false)
+sharedUlt={ult1ID=40223,ult2ID=0,_lastUpdated=now}
+entry=Entry();SC:MergeExternalCapabilities(entry)
+AlphaSquadUI.Theme={colors={}}
+AlphaSquadUI.Preferences={sv={},Initialize=function()end}
+GetCVar=function()return "fr" end
+assert(loadfile("AlphaSquadUI/Core/Localization.lua"))()
+assert(loadfile("AlphaSquadUI/Localization/fr.lua"))()
+assert(loadfile("AlphaSquadUI/Localization/fr_catalog.lua"))()
+AlphaSquadUI.Localization.Initialize()
+assert(loadfile("AlphaSquadUI/Modules/SupportCoverage/SupportCoverageUI.lua"))()
+local french=SC.UI.PlayerSources(entry,"major_force")
+local frenchSet=SC.UI.PlayerSources(entry,"major_courage")
+check(french:find("Ultime partagé : Aggressive Horn (avant)",1,true)
+    and french:find("son utilisation n’a pas été observée",1,true)
+    and frenchSet:find("Set partagé : Spell Power Cure (les deux barres)",1,true),
+    "External source labels, bar names and uncertainty notes localize while native names remain intact")
+local refreshCount=SC.refreshes
+AlphaSquadUI.Localization.SetLanguage("en")
+check(SC.UI.PlayerSources(entry,"major_force"):find("Shared ultimate: Aggressive Horn (front)",1,true)
+    and entry.capabilities.major_force.sourceDetails[source].conditions:find("Last reported Ultimate slot",1,true)
+    and entry.capabilities.major_force.sources[source] and SC.refreshes==refreshCount,
+    "Returning to English preserves canonical source keys and evidence without a scan or network refresh")
 print(string.format("PASS: %d assertions; Lua %s. No ESO-runtime certification.",total,_VERSION))

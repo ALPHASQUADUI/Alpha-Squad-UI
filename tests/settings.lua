@@ -72,6 +72,8 @@ ZO_ComboBox_ObjectFromContainer=function(control) return control.combo end
 SLASH_COMMANDS={}
 AlphaSquadUI={name="AlphaSquadUI",version="3.0.0",website="https://alphasquadeso.com/",discord="https://discord.gg/snDyd23h6N",Modules={}}
 assert(loadfile("AlphaSquadUI/Core/Utils.lua"))()
+assert(loadfile("AlphaSquadUI/Core/Localization.lua"))()
+assert(loadfile("AlphaSquadUI/Localization/fr.lua"))()
 assert(loadfile("AlphaSquadUI/Core/Theme.lua"))()
 assert(loadfile("AlphaSquadUI/Core/Settings.lua"))()
 local Settings=AlphaSquadUI.Settings
@@ -147,7 +149,7 @@ check(Shell.settingsWindow.width==1350 and controls.AlphaSquadLibraryCard1.width
 check(Shell.settingsPages.dashboard.contentHeight<=618 and Shell.settingsPages.community.contentHeight<=618,
     "Dashboard and About fit the desktop single-page canvas")
 GuiRoot:SetDimensions(1280,720);Shell:ApplySettingsGeometry()
-check(controls.AlphaSquadSettingsClose==nil,"Parent settings has no close cross")
+check(controls.AlphaSquadSettingsClose and controls.AlphaSquadSettingsClose.anchor[1]==TOPRIGHT,"Root settings exposes a clear top-right Close control")
 check(Shell.settingsPages.dashboard~=nil,"Dashboard is available independently of modules")
 check(not Shell.settingsNavButtons.overload and not Shell.settingsNavButtons.discord and not controls.AlphaSquadDashboardModule3,
     "Dashboard has two modules; community links share one About page without redundant navigation")
@@ -253,6 +255,75 @@ Shell.directSettingsPanelData.unselectedCallback()
 check(Shell.settingsWindow:IsHidden() and not Settings.AnyExclusiveWindowVisible(),
     "Selecting another native Settings category dismisses a restored raw addon window")
 SCENE_MANAGER=nil
+
+-- The language picker changes existing and hidden controls, retaining geometry
+-- and selected stable IDs without generating duplicate dropdown entries.
+AlphaSquadUI.Preferences={sv={language="auto"},Initialize=function()end}
+Settings.OpenPage("dashboard")
+local language=controls.AlphaSquadLanguageChoice.combo
+Shell:RefreshSettingsWindow()
+check(#language.entries==3 and language.selected.id=="auto","The language picker defaults to the game's language")
+local closeControl=controls.AlphaSquadSettingsClose
+local contentWidth=Shell.settingsPages.dashboard.width
+language.entries[3].callback()
+check(AlphaSquadUI.Localization.GetLanguage()=="fr" and AlphaSquadUI.Preferences.sv.language=="fr",
+    "Selecting French changes and persists addon language without reload")
+check(closeControl==controls.AlphaSquadSettingsClose and closeControl.label.text=="FERMER",
+    "Changing language refreshes the existing shell controls")
+check(Shell.settingsNavButtons.community.label.text==AlphaSquadUI.L("About")
+    and controls.AlphaSquadLibrariesTitle.text==AlphaSquadUI.L("LIBRARIES & SHARING"),
+    "Navigation and hidden settings pages refresh together")
+check(language.selected.id=="fr" and #language.entries==3 and #choice.entries==3,
+    "Localized dropdowns retain stable selection and never duplicate items")
+check(Shell.settingsPages.dashboard.width==contentWidth and controls.AlphaSquadLanguageChoice.width<=contentWidth-28,
+    "Changing language keeps the dropdown inside its responsive card")
+language.entries[2].callback()
+check(closeControl.label.text=="CLOSE" and controls.AlphaSquadLibrariesTitle.text=="LIBRARIES & SHARING",
+    "Switching back to English does not preserve stale French text")
+local languageClient="fr"
+GetCVar=function()return languageClient end
+language.entries[1].callback()
+check(AlphaSquadUI.Localization.GetLanguage()=="fr" and language.selected.id=="auto",
+    "Automatic follows French game language while retaining the Automatic preference")
+languageClient="en";AlphaSquadUI.Localization.SetLanguage("auto")
+check(AlphaSquadUI.Localization.GetLanguage()=="en","Automatic also follows an English game client")
+GetCVar=nil
+
+-- Done returns to the actual native category, even when Move HUD was opened
+-- from a secondary window. Selection is by our exact data identity.
+local nativeShows,nativeSelects=0,0
+local nativeScene={GetName=function()return "hud" end,GetState=function()return SCENE_SHOWN end}
+SCENE_SHOWN=999
+SCENE_MANAGER={GetCurrentScene=function()return nativeScene end,
+    Show=function(_,name)check(name=="gameMenuInGame","Placement returns to native keyboard settings");nativeShows=nativeShows+1 end,
+    AddFragment=function()end,RemoveFragment=function()end}
+KEYBOARD_OPTIONS.ChangePanels=function(_,id)check(id==Shell.directSettingsPanelId,"Native options select only Alpha Squad")end
+local nativeNode={data=Shell.directSettingsPanelData}
+ZO_GameMenu_InGame={gameMenu={navigationTree={
+    ExecuteOnSubTree=function(_,_,visit)visit({data=otherAddon});visit(nativeNode)end,
+    SelectNode=function(_,node)check(node==nativeNode,"Native tree selection uses our exact panel");nativeSelects=nativeSelects+1 end}}}
+ZO_Dialogs_IsShowingDialog=function()return true end
+check(not Settings.ReturnFromLayout({id="settings",page="dashboard"}) and nativeShows==0,"A native dialog suppresses placement return navigation")
+ZO_Dialogs_IsShowingDialog=nil
+check(Settings.ReturnFromLayout({id="builds",page="libraries"}) and nativeShows==1 and Shell.pendingNativePage=="libraries",
+    "A placement return queues the native Alpha settings page instead of a secondary window")
+check(Shell:SelectNativeSettings() and nativeSelects==1 and Shell.activeSettingsPage=="libraries" and Shell.settingsOpenedFromGameMenu,
+    "Native completion selects Alpha and restores the prior internal settings page")
+Shell.pendingNativePage="dashboard";combat=true
+check(not Shell:SelectNativeSettings() and Shell.pendingNativePage==nil and nativeSelects==1,
+    "Combat between Done and native completion consumes the request without reopening")
+combat=false
+SCENE_HIDING=1000
+Shell.pendingNativePage="dashboard"
+Shell:HandleNativeSettingsScene({GetName=function()return "gameMenuInGame" end},SCENE_HIDING)
+check(Shell.pendingNativePage==nil and not Shell:SelectNativeSettings(),
+    "Canceling native settings entry cannot reopen Alpha during a later unrelated menu visit")
+local resumed=0
+SCENE_MANAGER={GetCurrentScene=function()return {GetName=function()return "gameMenuInGame" end}end,
+    RemoveFragment=function()end,ShowBaseScene=function()resumed=resumed+1 end,SetInUIMode=function(_,value)check(value==false,"Close releases the gameplay cursor")end}
+closeControl.handlers.OnMouseUp(nil,MOUSE_BUTTON_INDEX_LEFT,true)
+check(resumed==1 and not Settings.AnyExclusiveWindowVisible(),"Top-right Close leaves settings and resumes gameplay")
+SCENE_MANAGER=nil;ZO_GameMenu_InGame=nil
 
 -- Configuration must retain access to currently shared skills plus saved filters.
 local ULT={COLORS=nil,Group={sv={trackedAbilities={}},ApplyConfigWindowScale=function() end}}

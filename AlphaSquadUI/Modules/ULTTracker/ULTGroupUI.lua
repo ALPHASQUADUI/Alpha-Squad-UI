@@ -8,26 +8,26 @@ if not ULT or not ULT.Group then return end
 
 local Group = ULT.Group
 local EM = EVENT_MANAGER
+local function L(text, ...)
+    if AlphaSquadUI.L then return AlphaSquadUI.L(text, ...) end
+    return select("#", ...) > 0 and string.format(text, ...) or text
+end
 
 local COLORS = ULT.COLORS or {
     bg = {0.010, 0.016, 0.030, 0.96},
     white = {0.95, 0.97, 1.00, 1.00},
     muted = {0.53, 0.62, 0.72, 1.00},
-    orange = {1.00, 0.58, 0.16, 1.00},
     cyan = {0.20, 0.82, 1.00, 1.00},
-    gold = {0.97, 0.78, 0.30, 1.00},
 }
 
 local BASE_WINDOW_W = 312
-local BASE_ROW_H = 36
-local HEADER_H = 22
+local BASE_ROW_H = 32
+local HEADER_H = 0
 local GAP = 4
 Group.layoutName="Group Ultimates"
 Group.layoutBounds={minWidth=240,minHeight=70,maxWidth=1800,maxHeight=1200}
 
-local READY_ORANGE = {1.00, 0.46, 0.05, 1.00}
-local READY_GOLD = {1.00, 0.82, 0.18, 1.00}
-local READY_WHITE = {1.00, 0.98, 0.88, 1.00}
+local READY_GREEN = {0.34, 0.88, 0.48, 1.00}
 
 local function Palette(role,fallback)
     local theme=AlphaSquadUI.Theme
@@ -49,7 +49,8 @@ end
 local function Label(parent, name, font, text, color)
     local label = WINDOW_MANAGER:CreateControl(name, parent, CT_LABEL)
     label:SetFont(font)
-    label:SetText(text or "")
+    label:SetText(L(text or ""))
+    if text and text ~= "" and AlphaSquadUI.Localization then AlphaSquadUI.Localization.Bind(label, text) end
     SetColor(label, color or COLORS.white)
     if AlphaSquadUI.Theme and AlphaSquadUI.Theme.BindColor then AlphaSquadUI.Theme.BindColor(label,color or COLORS.white) end
     label:SetVerticalAlignment(TEXT_ALIGN_CENTER)
@@ -81,7 +82,7 @@ function Group:GetHUDEntries()
             previewEntries[index]={key=name,displayName=name,preview=true,previewState=state,chargePercent=percent,
                 connected=state~="offline",dead=state=="dead",shared=state~="off" and state~="missing",
                 anyReady=state=="ready",unavailable=state=="offline" or state=="dead" or state=="off" or state=="missing",
-                recentlyUsed=state=="used",bestUltimate={id=state=="missing" and 0 or id,name=state=="missing" and "No Ultimate slotted" or nativeName,icon=state=="missing" and EMPTY_ICON or (nativeIcon~="" and nativeIcon or EMPTY_ICON)}}
+                recentlyUsed=state=="used",bestUltimate={id=state=="missing" and 0 or id,name=state=="missing" and L("No Ultimate slotted") or nativeName,icon=state=="missing" and EMPTY_ICON or (nativeIcon~="" and nativeIcon or EMPTY_ICON)}}
         end
     end
     return previewEntries
@@ -167,17 +168,17 @@ local function CreateRow(parent, index)
     row:SetDimensions(BASE_WINDOW_W - 12, BASE_ROW_H)
 
     row.bg = Solid(row, "AlphaSquadULTGroupListRow" .. index .. "BG", Palette("surface"))
-    if AlphaSquadUI.Theme and AlphaSquadUI.Theme.RegisterSurface then AlphaSquadUI.Theme.RegisterSurface(row,row.bg,"tile") end
+    row.bg:SetHidden(true)
 
     row.readyOverlay = WINDOW_MANAGER:CreateControl("AlphaSquadULTGroupListRow" .. index .. "ReadyOverlay", row, CT_TEXTURE)
     row.readyOverlay:SetAnchorFill(row)
     row.readyOverlay:SetBlendMode(TEX_BLEND_MODE_ADD)
-    row.readyOverlay:SetColor(1.00, 0.46, 0.05, 0)
+    row.readyOverlay:SetHidden(true)
 
     row.accent = WINDOW_MANAGER:CreateControl("AlphaSquadULTGroupListRow" .. index .. "Accent", row, CT_TEXTURE)
     row.accent:SetDimensions(4, BASE_ROW_H)
     row.accent:SetAnchor(TOPLEFT, row, TOPLEFT, 0, 0)
-    SetColor(row.accent, COLORS.cyan, 0.28)
+    row.accent:SetHidden(true)
 
     row.iconBorder = WINDOW_MANAGER:CreateControl("AlphaSquadULTGroupListRow" .. index .. "IconBorder", row, CT_TEXTURE)
     row.iconBorder:SetDimensions(32, 32)
@@ -202,6 +203,8 @@ local function CreateRow(parent, index)
     row.percent:SetDimensions(60, BASE_ROW_H)
     row.percent:SetAnchor(RIGHT, row, RIGHT, -8, 0)
     row.percent:SetHorizontalAlignment(TEXT_ALIGN_RIGHT)
+    row.percent:SetMaxLineCount(1)
+    if row.percent.SetWrapMode and TEXT_WRAP_MODE_ELLIPSIS then row.percent:SetWrapMode(TEXT_WRAP_MODE_ELLIPSIS) end
 
     row.progressBG = WINDOW_MANAGER:CreateControl("AlphaSquadULTGroupListRow" .. index .. "ProgressBG", row, CT_TEXTURE)
     row.progressBG:SetDimensions(BASE_WINDOW_W - 64, 2)
@@ -223,7 +226,7 @@ local function CreateRow(parent, index)
         local ultimate=entry.bestUltimate
         local state=entry.previewState or (entry.connected==false and "offline" or entry.dead and "dead" or entry.stale and "stale" or entry.recentlyUsed and "used" or entry.anyReady and "ready" or "charging")
         local states={ready="Ready",charging="Charging",used="Recently spent",offline="Offline",dead="Dead",stale="Update needed",missing="No Ultimate available",off="Sharing off"}
-        tips.ShowText(row,(entry.preview and "Placement example\n" or "")..(entry.displayName or "").."\n"..(ultimate and ultimate.name or "Ultimate unavailable").."\n"..(states[state] or "Unknown"))
+        tips.ShowText(row,(entry.preview and (L("Placement example").."\n") or "")..(entry.displayName or "").."\n"..(ultimate and ultimate.name or L("Ultimate unavailable")).."\n"..L(states[state] or "Unknown"))
     end)
     row:SetHandler("OnMouseExit",function() if AlphaSquadUI.Tooltips then AlphaSquadUI.Tooltips.Hide() end end)
     if AlphaSquadUI.Input and AlphaSquadUI.Input.Register then AlphaSquadUI.Input.Register(row,{label="Group Ultimate"}) end
@@ -239,7 +242,7 @@ function Group:ApplyRowGeometry(row)
     local iconBorderSize = iconSize + 4
     local iconX = 7
     local userX = iconX + iconBorderSize + 8
-    local percentWidth = 66
+    local percentWidth = 74
     local rightPadding = 8
     local userWidth = math.max(1, width - userX - percentWidth - rightPadding - 8)
     local progressWidth = math.max(1, width - userX - 8)
@@ -258,6 +261,7 @@ function Group:ApplyRowGeometry(row)
     row.user:ClearAnchors()
     row.user:SetAnchor(LEFT, row, LEFT, userX, 0)
 
+    row.percent:SetFont("ZoFontGameSmall")
     row.percent:SetDimensions(percentWidth, height)
     row.percent:ClearAnchors()
     row.percent:SetAnchor(RIGHT, row, RIGHT, -rightPadding, 0)
@@ -433,18 +437,6 @@ function Group:ApplyVisibility()
     self.window:SetHidden(hidden)
     if self.SetSafetyUpdateActive then self:SetSafetyUpdateActive(not hidden and not moving) end
 
-    if hidden then
-        self:SetReadyPulseActive(false)
-    else
-        local anyReady = false
-        for _, row in ipairs(self.window.rows or {}) do
-            if not row:IsHidden() and row.ready and not row.recentlyUsed then
-                anyReady = true
-                break
-            end
-        end
-        self:SetReadyPulseActive(anyReady and not moving)
-    end
     if not hidden and self.hudDirty and not self.renderingHUD then self:RefreshHUD() end
 end
 
@@ -474,106 +466,46 @@ function Group:RefreshRow(row, entry)
 
     local percent = tonumber(entry.chargePercent) or 0
     percent = math.min(100, math.max(0, math.floor(percent + 0.5)))
-    if entry.previewState=="missing" then row.percent:SetText("NONE")
-    elseif entry.previewState=="off" then row.percent:SetText("OFF")
-    elseif entry.stale then row.percent:SetText("STALE")
-    elseif entry.recentlyUsed then row.percent:SetText("USED")
-    elseif entry.connected == false then row.percent:SetText("OFFLINE")
-    elseif entry.dead == true then row.percent:SetText("DEAD")
+    if entry.connected == false then row.percent:SetText(L("OFFLINE"))
+    elseif entry.dead == true then row.percent:SetText(L("DEAD"))
+    elseif entry.previewState=="missing" then row.percent:SetText(L("NONE"))
+    elseif entry.previewState=="off" then row.percent:SetText(L("OFF"))
+    elseif entry.stale then row.percent:SetText(L("STALE"))
+    elseif entry.recentlyUsed then row.percent:SetText(L("USED"))
     else row.percent:SetText(tostring(percent) .. "%") end
 
     local progressWidth = row.geometryProgressWidth or math.max(80, self:GetRowWidth() - 52)
     row.progress:SetWidth(math.floor(progressWidth * (percent / 100)))
 
-    row.ready = entry.anyReady == true
-    row.unavailable = entry.unavailable == true
+    row.unavailable = entry.unavailable == true or entry.connected == false or entry.dead == true or entry.stale == true
+    row.ready = entry.anyReady == true and not row.unavailable
     row.recentlyUsed = entry.recentlyUsed == true
 
-    row.readyOverlay:SetColor(1.00, 0.46, 0.05, 0)
-
-    if row.unavailable then
-        row:SetAlpha(0.62)
-        SetColor(row.accent, COLORS.muted, 0.16)
+    if row.unavailable or row.recentlyUsed then
+        row:SetAlpha(0.58)
         SetColor(row.iconBorder, COLORS.muted, 0.18)
-        SetColor(row.percent, COLORS.muted, 0.60)
-        SetColor(row.progress, COLORS.muted, 0.25)
-        SetColor(row.bg,Palette("surface"),0.30)
-    elseif row.recentlyUsed then
-        row:SetAlpha(0.55)
-        SetColor(row.accent, COLORS.muted, 0.16)
-        SetColor(row.iconBorder, COLORS.muted, 0.18)
-        SetColor(row.percent, COLORS.muted, 0.45)
-        SetColor(row.progress, COLORS.muted, 0.25)
-        SetColor(row.bg,Palette("surface"),0.30)
+        SetColor(row.percent, COLORS.muted, 1)
+        SetColor(row.progress, COLORS.muted, 0.35)
     elseif row.ready then
         row:SetAlpha(1)
-        SetColor(row.accent, READY_ORANGE, 1)
-        SetColor(row.iconBorder, READY_GOLD, 1)
-        SetColor(row.percent, READY_WHITE, 1)
-        SetColor(row.progress, READY_GOLD, 1)
-        row.bg:SetColor(0.18, 0.065, 0.010, 0.96)
+        SetColor(row.iconBorder, READY_GREEN, 0.85)
+        SetColor(row.percent, READY_GREEN, 1)
+        SetColor(row.progress, READY_GREEN, 0.90)
     else
-        row:SetAlpha(0.64)
-        SetColor(row.accent, COLORS.cyan, 0.34)
-        SetColor(row.iconBorder, COLORS.cyan, 0.40)
-        SetColor(row.percent, COLORS.white, 0.82)
-        SetColor(row.progress, COLORS.cyan, 0.72)
-        SetColor(row.bg,Palette("surface"),0.72)
+        row:SetAlpha(0.85)
+        SetColor(row.iconBorder, COLORS.muted, 0.26)
+        SetColor(row.percent, COLORS.white, 1)
+        SetColor(row.progress, COLORS.cyan, 0.65)
     end
 
     return row.ready
 end
 
-function Group:SetReadyPulseActive(enabled)
-    enabled = enabled == true and not (AlphaSquadUI.Layout and AlphaSquadUI.Layout.IsMoving(self))
-    if self.readyPulseActive == enabled then return end
-    self.readyPulseActive = enabled
-
-    local updateName = "AlphaSquadUI_ULTGroup_ReadyPulse"
-    if enabled then
-        EM:RegisterForUpdate(updateName, 140, function()
-            if Group and Group.UpdateReadyPulse then Group:UpdateReadyPulse() end
-        end)
-    else
-        EM:UnregisterForUpdate(updateName)
-        self:ResetReadyPulse()
-    end
-end
-
-function Group:UpdateReadyPulse()
-    if not self.window or self.window:IsHidden() then return end
-
-    local t = (GetGameTimeMilliseconds and GetGameTimeMilliseconds() or 0) / 1000
-    local pulse = (math.sin(t * 3.1) + 1) * 0.5
-
-    for _, row in ipairs(self.window.rows or {}) do
-        if not row:IsHidden() and row.ready and not row.recentlyUsed then
-            local overlayAlpha = 0.10 + (pulse * 0.42)
-            local orange = 0.18 + (pulse * 0.24)
-
-            row:SetAlpha(0.92 + (pulse * 0.08))
-            row.readyOverlay:SetColor(1.00, 0.46, 0.05, overlayAlpha)
-            row.bg:SetColor(orange, 0.065 + (pulse * 0.055), 0.008, 0.96)
-            SetColor(row.accent, pulse > 0.50 and READY_WHITE or READY_ORANGE, 1)
-            SetColor(row.iconBorder, pulse > 0.50 and READY_WHITE or READY_GOLD, 1)
-            SetColor(row.percent, READY_WHITE, 1)
-        end
-    end
-end
-
-function Group:ResetReadyPulse()
-    if not self.window then return end
-
-    for _, row in ipairs(self.window.rows or {}) do
-        if not row:IsHidden() and row.ready and not row.recentlyUsed then
-            row:SetAlpha(1)
-            row.readyOverlay:SetColor(1.00, 0.46, 0.05, 0)
-            row.bg:SetColor(0.18, 0.065, 0.010, 0.96)
-            SetColor(row.accent, READY_ORANGE, 1)
-            SetColor(row.iconBorder, READY_GOLD, 1)
-            SetColor(row.percent, READY_WHITE, 1)
-        end
-    end
+-- Shared lifecycle callers may still stop the retired pulse. Group readiness is
+-- now a steady semantic outline/progress fill, with no animation update timer.
+function Group:SetReadyPulseActive()
+    if self.readyPulseActive then EM:UnregisterForUpdate("AlphaSquadUI_ULTGroup_ReadyPulse") end
+    self.readyPulseActive = false
 end
 
 function Group:RefreshHUD()
@@ -603,7 +535,6 @@ function Group:RefreshHUD()
         self.window:SetDimensions(width,height)
         self:ApplyListGeometry()
     end
-    if self.window.title then self.window.title:SetText(PreviewMode(self)~="live" and "GROUP ULT • 12 EXAMPLES" or "GROUP ULTIMATES") end
     for index, row in ipairs(self.window.rows) do
         local entry = entries[index]
         if geometryChanged then
@@ -659,27 +590,9 @@ function Group:CreateHUD()
 
     win.bg = Solid(win, "AlphaSquadULTGroupBG", COLORS.bg)
 
-    local top = WINDOW_MANAGER:CreateControl("AlphaSquadULTGroupTopLine", win, CT_TEXTURE)
-    top:SetAnchor(TOPLEFT, win, TOPLEFT, 0, 0)
-    top:SetAnchor(TOPRIGHT, win, TOPRIGHT, 0, 0)
-    top:SetHeight(2)
-    SetColor(top, COLORS.orange, 0.55)
-
-    win.title=Label(win,"AlphaSquadULTGroupTitle","ZoFontGameSmall","GROUP ULTIMATES",COLORS.orange)
-    win.title:SetDimensions(200,HEADER_H)
-    win.title:SetMaxLineCount(1)
-    win.title:SetAnchor(TOPLEFT,win,TOPLEFT,8,0)
-    if AlphaSquadUI.Theme then
-        AlphaSquadUI.Theme.BindColor(top,"accent",0.55)
-        AlphaSquadUI.Theme.BindColor(win.title,"accent")
-        AlphaSquadUI.Theme.RegisterSurface(win,win.bg,"window")
-    end
-
-    win.dragHint = Label(win, "AlphaSquadULTGroupDragHint", "ZoFontGameSmall", "DRAG", COLORS.gold)
-    win.dragHint:SetDimensions(42, HEADER_H)
-    win.dragHint:SetAnchor(TOPRIGHT, win, TOPRIGHT, -5, 0)
-    win.dragHint:SetHorizontalAlignment(TEXT_ALIGN_RIGHT)
-
+    -- Native icons and thin progress bars remain legible without a panel,
+    -- branding, header strip or theme accent over gameplay.
+    win.bg:SetHidden(true)
     win.empty = Label(win, "AlphaSquadULTGroupEmpty", "ZoFontGameSmall", "", COLORS.muted)
     win.empty:SetDimensions(math.max(100, self:GetListWidth() - 20), 32)
     win.empty:SetAnchor(TOPLEFT, win, TOPLEFT, 10, HEADER_H + 6)
@@ -722,6 +635,14 @@ end
 -- A theme change repaints cached rows only; no roster rebuild or network request.
 if AlphaSquadUI.Theme and AlphaSquadUI.Theme.OnChanged then
     AlphaSquadUI.Theme.OnChanged(function()
+        Group:RefreshHUD()
+        if Group.RefreshConfig then Group:RefreshConfig() end
+    end)
+end
+
+if AlphaSquadUI.Localization and AlphaSquadUI.Localization.RegisterCallback then
+    AlphaSquadUI.Localization.RegisterCallback("ult-group", function()
+        previewEntries, previewMode = nil, nil
         Group:RefreshHUD()
         if Group.RefreshConfig then Group:RefreshConfig() end
     end)

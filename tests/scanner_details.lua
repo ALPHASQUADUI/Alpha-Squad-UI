@@ -19,6 +19,8 @@ AlphaSquadUI={Modules={SupportCoverage=SC}}
 SC.Catalog=nil
 dofile("AlphaSquadUI/Modules/SupportCoverage/SupportCoverageCatalog.lua")
 Catalog.GetLearnedSourceRank=SC.Catalog.GetLearnedSourceRank
+Catalog.championSources=SC.Catalog.championSources
+Catalog.visualAbilityIds=SC.Catalog.visualAbilityIds
 SC.Catalog=Catalog
 local worn,items={},{}
 function GetItemLink(_,slot) if worn[slot]==false then return nil end; return worn[slot] or "" end
@@ -195,4 +197,62 @@ local refreshed=0
 function SC:ScheduleRefresh() refreshed=refreshed+1 end
 SC:OnConsumableUsed(); SC.inCombat=true; SC:OnConsumableUsed()
 check(refreshed==1 and SC.SamplePotionEvidence==nil,"Consumables trigger readiness only, without combat reports")
+
+-- The same committed Champion allocation must score equally in every locale.
+CHAMPION_SKILL_TYPE_NORMAL_SLOTTABLE=1
+function GetChampionSkillMaxPoints() return 50 end
+function GetChampionSkillType() return CHAMPION_SKILL_TYPE_NORMAL_SLOTTABLE end
+function WouldChampionSkillNodeBeUnlocked(_,points) return points>=10 end
+function DoesChampionSkillHaveJumpPoints() return false end
+local stars={championKnown=true,champion={{id=263,name="Enlivening Overflow",pointsKnown=true,points=50}}}
+local englishScore=SC:GetSupportScore({},stars)
+stars.champion[1].name="Débordement vivifiant"
+check(englishScore==3 and SC:GetSupportScore({},stars)==englishScore,"Champion support scoring uses native IDs on French and English clients")
+stars.champion[2]=stars.champion[1]
+check(SC:GetSupportScore({},stars)==3,"Duplicate Champion IDs do not inflate a support score")
+stars.champion[1].points=0
+check(SC:GetSupportScore({},stars)==0,"Unallocated Champion stars do not score as active support")
+stars.champion[1].points=50;stars.championKnown=false
+check(SC:GetSupportScore({},stars)==0,"Unknown Champion slots cannot establish support")
+stars.championKnown=true;stars.champion[1].id=99999;stars.champion[1].name="Enlivening Overflow"
+check(SC:GetSupportScore({},stars)==0,"A familiar display name cannot impersonate a supported Champion ID")
+
+-- Crafted-potion traits use the game client's native translated descriptions.
+ITEMTYPE_POTION=55
+function GetCurrentQuickslot() return 1 end
+function GetSlotItemLink() return "fixture-potion" end
+function GetItemLinkItemType() return ITEMTYPE_POTION end
+function GetItemLinkName() return "Essence de magie" end
+function GetItemLinkItemId() return 999 end
+function GetItemLinkOnUseAbilityInfo() return false end
+local descriptions={"Confère |cffffffHéroïsme mineur|r pendant 47 secondes."}
+local traitReads=0
+function GetItemLinkTraitOnUseAbilityInfo(_,index)
+    traitReads=traitReads+1
+    return descriptions[index]~=nil,descriptions[index]
+end
+local nativeNames={
+    [61708]="Héroïsme mineur^m",[61709]="Héroïsme majeur^m",[61687]="Sorcellerie majeure^f",
+    [61665]="Brutalité majeure^f",[61698]="Fortitude majeure^f",[61707]="Intellect majeur^m",[61705]="Endurance majeure^f",
+}
+function GetAbilityName(id) return nativeNames[id] or "" end
+dofile("AlphaSquadUI/Modules/SupportCoverage/SupportCoverageShare.lua")
+SC.localSnapshot={potion=SC:ScanPotion()}
+check(SC.localSnapshot.potion.known and traitReads==3 and SC.localSnapshot.potion.effects:find("Héroïsme",1,true),
+    "Crafted-potion traits are captured with a bounded native query")
+check(SC:BuildSharePayload().potion==4,"French Heroism is classified from the native effect name")
+descriptions={"Confère Sorcellerie majeure."};SC.localSnapshot.potion=SC:ScanPotion()
+check(SC:BuildSharePayload().potion==2,"French Spell Power keeps the wire category used by English clients")
+descriptions={"Confère Brutalité majeure."};SC.localSnapshot.potion=SC:ScanPotion()
+check(SC:BuildSharePayload().potion==3,"French Weapon Power keeps its stable wire category")
+descriptions={"Confère Fortitude majeure.","Confère Intellect majeur.","Confère Endurance majeure."}
+SC.localSnapshot.potion=SC:ScanPotion()
+check(SC:BuildSharePayload().potion==1,"The three native recovery buffs identify a tri-stat description hint")
+nativeNames[61708]="Minor Heroism";descriptions={"Grants Minor Heroism for 47 seconds."}
+SC.localSnapshot.potion=SC:ScanPotion()
+check(SC:BuildSharePayload().potion==4,"English and French potion effects produce the same wire category")
+nativeNames={};SC.localSnapshot.potion.name="Heroism";SC.localSnapshot.potion.effects=""
+check(SC:BuildSharePayload().potion==5,"An item name alone cannot invent an unavailable potion effect")
+GetItemLinkTraitOnUseAbilityInfo=function() error("Fixture native read unavailable") end
+check(SC:ScanPotion().known,"Unavailable trait descriptions preserve verified potion presence")
 print("Scanner details: "..total.." assertions passed")

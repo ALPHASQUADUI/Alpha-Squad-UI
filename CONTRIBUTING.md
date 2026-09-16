@@ -4,11 +4,11 @@
 
 ## Changes and review
 
-Keep each change focused, explain the user problem and document the resulting behavior. Preserve existing gameplay features and SavedVariables. Follow the maintainer's requested Git scope, use reviewable commits and never merge or publish a release without approval. Interface and gameplay changes require a real ESO check before release; automated checks alone cannot establish rendering, FPS or network coexistence.
+Keep each change focused, explain the user problem and document the resulting behavior. Preserve existing gameplay features and SavedVariables. Follow the maintainer's requested Git scope, use reviewable commits on dev. Create a dev-to-main PR only after maintainer tests and explicit approval/request. The assistant never approves or merges PRs, enables auto-merge or directly updates main; those integration decisions are manual human actions. Publishing a release requires separate authorization. Interface and gameplay changes require a real ESO check before release; automated checks alone cannot establish rendering, FPS or network coexistence.
 
 Update the README, module documentation and changelog when behavior changes. Use English in the addon and public documentation. Keep personal identities, private conversations, credentials and player snapshots out of commits and screenshots.
 
-Use an approved public identity for both author and committer metadata. Maintainer commits prefer the public project address `info@alphasquadeso.com` with the approved aliases `SeRuM1` or `adi684`; the matching GitHub-provided `noreply` identity is also authorized, including when selected automatically by a connector. A `noreply` address is not mandatory. The project-mailbox approval covers only that exact address, not other addresses on the same domain or private identities. Report historical exposures privately using [SECURITY.md](SECURITY.md); do not repeat sensitive values in a public issue or rewrite history as part of an unrelated change. Contributions to the addon are under its [MIT license](LICENSE); native game resources and external libraries retain their respective licenses.
+Use `SeRuM1 <info@alphasquadeso.com>` for new maintainer author and committer metadata. The project mailbox is approved for public use; noreply is not required. That approval covers only this exact address, not a domain-wide exception or private identities. Report historical exposures privately using [SECURITY.md](SECURITY.md); do not repeat sensitive values in a public issue or rewrite history as part of an unrelated change. Contributions to the addon are under its [MIT license](LICENSE); native game resources and external libraries retain their respective licenses.
 
 ## Engineering rules
 

@@ -43,7 +43,9 @@ function ItemTooltip:SetBagItem()error('Remote items must never resolve the view
 function AbilityTooltip:SetAbilityId(id)self.abilityId=id end
 function AbilityTooltip:SetCraftedAbility(id,a,b,c,flags)self.crafted={id,a,b,c,flags} end
 local SC={}
-AlphaSquadUI={Modules={SupportCoverage=SC}}
+AlphaSquadUI={Modules={SupportCoverage=SC},Preferences={sv={language='auto'},Initialize=function()end}}
+function GetCVar()return 'en' end
+assert(loadfile('AlphaSquadUI/Core/Localization.lua'))()
 assert(loadfile('AlphaSquadUI/Core/Tooltips.lua'))()
 local T=AlphaSquadUI.Tooltips
 check(T.ShowText(owner,'Coverage'),'Information tooltip is shown')
@@ -138,4 +140,20 @@ check(InformationTooltip:GetOwner()==otherOwner and not InformationTooltip.hidde
 check(InformationTooltip.scale==1.2 and InformationTooltip.level==15000,
     'Cleanup does not overwrite scaling or layering explicitly changed by a new tooltip owner')
 InformationTooltip.scale=1;InformationTooltip.level=12;InformationTooltip.height=400
+-- A live locale switch hides the old native popup and never translates game data.
+AlphaSquadUI.Localization.Register('fr',{
+    ['Trait: %s']='Trait : %s', ['Equipment']='Équipement',
+    ['Unavailable']='Indisponible', ['No enchantment']='Aucun enchantement',
+})
+T.ShowText(owner,'Open before locale change')
+AlphaSquadUI.Localization.SetLanguage('fr')
+check(T.active==nil and InformationTooltip.hidden,'Language change releases the old native tooltip immediately')
+T.ShowItem(owner,{name='Equipment',traitName='Unavailable',hasEnchant=false})
+local localized=InformationTooltip.lines[1]
+check(localized:find('Trait : Unavailable',1,true) and localized:find('Aucun enchantement',1,true),
+    'Addon-owned fallback labels translate while native trait names remain unchanged')
+check(localized:sub(1,9)=='Equipment','Native item names are not mistaken for dictionary keys')
+AlphaSquadUI.Localization.SetLanguage('en')
+T.ShowItem(owner,{hasEnchant=false})
+check(InformationTooltip.lines[1]:find('No enchantment',1,true),'Switching back restores English fallback text')
 print('Tooltip layering and identities: '..total..' assertions passed')

@@ -235,6 +235,11 @@ function SC:Refresh(reason, readinessOnly)
         self.resumeSharingPending = nil
         if self.ResumeBuildSharing then self:ResumeBuildSharing() end
     end
+    -- Retain the lightweight dirty/lifecycle subscriptions and slow sender
+    -- heartbeat so external native ON and combat/queue recovery still work.
+    -- Native OFF or unavailable transport needs no expensive capture when
+    -- Dashboard tracking is also OFF; leave every dirty flag for the next ON.
+    if not self.sv.enabled and self.GetSharingStatus and self:GetSharingStatus()~="SHARING" then return end
     local shareReason, didScan
     if self.scanDirty and self.ScanLocalPlayer then
         self.localSnapshot = self:ScanLocalPlayer()

@@ -2,9 +2,20 @@
 local SC = AlphaSquadUI and AlphaSquadUI.Modules and AlphaSquadUI.Modules.SupportCoverage
 if not SC then return end
 local Theme = AlphaSquadUI.Theme
-local C = Theme.colors
+-- Gameplay windows use quiet neutral surfaces independently of the dashboard theme.
+local C = {}
+for key,color in pairs(Theme.colors) do C[key]=color end
+C.bg={0.018,0.020,0.024,0.90};C.panel={0.037,0.040,0.045,0.84}
+C.surface={0.028,0.030,0.034,0.70};C.border={0.26,0.28,0.30,0.35}
+C.hover={0.085,0.095,0.105,0.92};C.selected={0.10,0.12,0.13,0.95}
+C.panelActive=C.selected
+local function L(text,...)
+    if AlphaSquadUI.L then return AlphaSquadUI.L(text,...) end
+    return select("#",...)>0 and string.format(text,...) or text
+end
 local UI = {}; SC.UI = UI
 UI.colors = C
+UI.L = L
 
 function UI.Text(value)
     return (tostring(value or ""):gsub("|[cC]%x%x%x%x%x%x", ""):gsub("|[rR]", ""):gsub("|", "||"):gsub("[\r]", ""))
@@ -16,7 +27,16 @@ function UI.BindColor(control,color)
     if Theme.BindColor then Theme.BindColor(control,color) else UI.Color(control,color) end
 end
 function UI.Surface(parent,background,kind)
-    if Theme.RegisterSurface then Theme.RegisterSurface(parent,background,kind) end
+    if background then
+        if DL_BACKGROUND then background:SetDrawLayer(DL_BACKGROUND) end
+        background:SetDrawLevel(0)
+    end
+    -- One subtle divider replaces themed frames, orange accents and header fills.
+    if kind=="window" and not parent.supportDivider then
+        parent.supportDivider=UI.Separator(parent,nil,0,0,1)
+        parent.supportDivider:SetAnchor(TOPRIGHT,parent,TOPRIGHT,0,0)
+        parent.supportDivider:SetMouseEnabled(false)
+    end
 end
 function UI.Separator(parent,name,x,y,width)
     local line=WINDOW_MANAGER:CreateControl(name,parent,CT_TEXTURE)
@@ -32,11 +52,16 @@ function UI.Solid(parent, name, color, dynamic)
 end
 function UI.Label(parent, name, text, font, color)
     local label = WINDOW_MANAGER:CreateControl(name, parent, CT_LABEL)
-    label:SetFont(font or "ZoFontGameSmall"); label:SetText(text or "")
+    label:SetFont(font or "ZoFontGameSmall")
+    if text and text~="" and AlphaSquadUI.Localization and AlphaSquadUI.Localization.Bind then
+        AlphaSquadUI.Localization.Bind(label,text)
+    else label:SetText(text or "") end
+    if label.SetWrapMode then label:SetWrapMode(TEXT_WRAP_MODE_ELLIPSIS) end
     label:SetVerticalAlignment(TEXT_ALIGN_CENTER); UI.BindColor(label, color or C.white)
     return label
 end
 function UI.Tooltip(control, text)
+    text=L(text)
     if AlphaSquadUI.Tooltips then return AlphaSquadUI.Tooltips.ShowText(control,text) end
     if not InformationTooltip or not InitializeTooltip then return end
     InitializeTooltip(InformationTooltip, control, TOPLEFT, 8, 4, TOPRIGHT)
@@ -63,7 +88,7 @@ function UI.Hover(control, text)
     local leave=control.GetHandler and control:GetHandler("OnMouseExit")
     control:SetHandler("OnMouseEnter", function()
         if enter then enter(control) end
-        local value = type(text) == "function" and text() or text
+        local value = type(text) == "function" and text() or L(text)
         if value and value ~= "" then UI.Tooltip(control, value) end
     end)
     control:SetHandler("OnMouseExit", function()
@@ -124,10 +149,7 @@ function UI.ForwardWheel(control,delta)
     end
 end
 function UI.Window(name, title, close)
-    if AlphaSquadUI.Theme.Brand then
-        local section=title:match("UI%s+•%s+(.+)$")
-        title=AlphaSquadUI.Theme.Brand(section)
-    end
+    title=title:match("UI%s+•%s+(.+)$") or title
     local win = WINDOW_MANAGER:CreateTopLevelWindow(name)
     win:SetAnchor(CENTER, GuiRoot, CENTER, 0, 0); win:SetHidden(true)
     win:SetClampedToScreen(true); win:SetDrawTier(DT_HIGH); win:SetDrawLayer(DL_OVERLAY); win:SetDrawLevel(150)
@@ -135,12 +157,7 @@ function UI.Window(name, title, close)
     win:SetMouseEnabled(true); win:SetMovable(true)
     win.bg = UI.Solid(win, name .. "BG", C.bg)
     UI.Surface(win,win.bg,"window")
-    if not Theme.RegisterSurface then
-        local accent = WINDOW_MANAGER:CreateControl(name .. "Accent",win,CT_TEXTURE)
-        accent:SetAnchor(TOPLEFT,win,TOPLEFT,0,0); accent:SetAnchor(TOPRIGHT,win,TOPRIGHT,0,0)
-        accent:SetHeight(2); UI.BindColor(accent,C.accent or C.orange)
-    end
-    win.title=UI.Label(win,name .. "Title",title,"ZoFontWinH2",C.orange)
+    win.title=UI.Label(win,name .. "Title",title,"ZoFontWinH2",C.white)
     win.title:SetAnchor(TOPLEFT,win,TOPLEFT,18,12); win.title:SetHeight(32)
     win.title:SetAnchor(TOPRIGHT,win,TOPRIGHT,-106,12)
     win.subtitle=UI.Label(win,name .. "Subtitle","","ZoFontGameSmall",C.muted)
@@ -192,6 +209,13 @@ function UI.ShowWindow(id,win)
     if not win.hasContentLayout then UI.FitWindow(win) end
     SC:ApplyVisibility()
 end
+-- Translation reads presentation metadata; canonical source names remain cache keys.
+function UI.SourceName(capability,source)
+    local detail=capability and capability.sourceDetails and capability.sourceDetails[source]
+    local presentation=detail and detail.presentation
+    if presentation then return L(presentation.labelKey,presentation.name,L(presentation.barKey)) end
+    return L(source)
+end
 function UI.PlayerSources(player,key)
     local capability=player and player.capabilities and player.capabilities[key]
     local sources={}
@@ -200,50 +224,56 @@ function UI.PlayerSources(player,key)
     end
     table.sort(sources)
     local effect=SC.Catalog.effects[key]
-    local heading=(player and player.displayName or "Unknown player") .. "\n" .. (effect and effect.label or "Support source")
-    if #sources==0 then return heading .. "\nThis player has shared a capability summary only. Open Builds to request exact skills, sets and Class Masteries." end
+    local heading=(player and player.displayName or L("Unknown player")) .. "\n" .. L(effect and effect.label or "Support source")
+    if #sources==0 then return heading .. "\n" .. L("This player has shared a capability summary only. Open Builds to request exact skills, sets and Class Masteries.") end
     local lines={heading}
     for _,source in ipairs(sources) do
-        local detail=SC.Catalog.GetSourceTooltip and SC.Catalog:GetSourceTooltip(key,source)
-        lines[#lines+1]=detail or source
+        local evidence=capability.sourceDetails and capability.sourceDetails[source]
+        local presentation=evidence and evidence.presentation
+        if presentation then
+            lines[#lines+1]=UI.SourceName(capability,source).."\n"..L(presentation.conditionKey).."\n"..L(presentation.noteKey)
+        else
+            local detail=SC.Catalog.GetSourceTooltip and SC.Catalog:GetSourceTooltip(key,source)
+            lines[#lines+1]=L(detail or source)
+        end
     end
     if capability.mainBar or capability.backBar then
-        lines[#lines+1]="Set available on: " .. (capability.mainBar and "front bar" or "")
-            .. (capability.mainBar and capability.backBar and " + " or "") .. (capability.backBar and "back bar" or "")
+        lines[#lines+1]=L("Set available on: %s", (capability.mainBar and L("front bar") or "")
+            .. (capability.mainBar and capability.backBar and " + " or "") .. (capability.backBar and L("back bar") or ""))
     end
     return table.concat(lines,"\n\n")
 end
 function UI.EffectTooltip(key)
     local catalog=SC.Catalog
-    if not catalog then return "Coverage information is unavailable." end
-    local text=catalog:GetEffectTooltip(key)
+    if not catalog then return L("Coverage information is unavailable.") end
+    local text=L(catalog:GetEffectTooltip(key))
     local visual=catalog.GetEffectVisual and catalog:GetEffectVisual(key)
     if visual and visual.isFallback then
-        text=text.."\n\nIcon: native category symbol; an exact effect or item image is unavailable."
+        text=text.."\n\n"..L("Icon: native category symbol; an exact effect or item image is unavailable.")
     elseif visual and visual.iconKind=="source" and visual.sourceName then
-        text=text.."\n\nIcon: "..visual.sourceName..", one of this effect's possible sources."
+        text=text.."\n\n"..L("Icon: %s, one of this effect's possible sources.",visual.sourceName)
     end
     return text
 end
 function UI.Status(row)
     if row.readiness then
-        local status=row.severity=="unknown" and "UNKNOWN" or "CHECK"
+        local status=L(row.severity=="unknown" and "UNKNOWN" or "CHECK")
         return status.." "..tostring(row.count or 1),row.severity=="error" and C.red or C.gold
     end
-    if row.status=="off" or row.optional then return "TRACKING OFF",C.muted end
+    if row.status=="off" or row.optional then return L("TRACKING OFF"),C.muted end
     if row.status=="covered" then
-        if row.partialRecipients then return "LIMITED",C.gold end
-        return "SOURCE",C.green
+        if row.partialRecipients then return L("LIMITED"),C.gold end
+        return L("SOURCE"),C.green
     end
-    if row.unverified or row.status=="unknown" then return "UNKNOWN",C.gold end
-    return "MISSING",C.red
+    if row.unverified or row.status=="unknown" then return L("UNKNOWN"),C.gold end
+    return L("MISSING"),C.red
 end
 function UI.RecipientNotice(row)
     if not row or not row.partialRecipients then return nil end
     local limit,players=tonumber(row.recipientLimit),tonumber(row.groupSize)
-    local text=limit and players and string.format("Some sources reach at most %d recipients per application; this group has %d players.",limit,players)
-        or "Some sources have fewer recipients than the group has players."
-    return text.." Source availability does not prove that every player receives the effect. Multiple providers are not assumed to reach different players."
+    local text=limit and players and L("Some sources reach at most %d recipients per application; this group has %d players.",limit,players)
+        or L("Some sources have fewer recipients than the group has players.")
+    return text.." "..L("Source availability does not prove that every player receives the effect. Multiple providers are not assumed to reach different players.")
 end
 
 SC.layoutName="Support Coverage"
@@ -298,7 +328,7 @@ function SC:ApplyAppearance()
     if self.window.actions then
         local actionWidth=(width-28)/2
         for index,button in ipairs(self.window.actions) do
-            button:ClearAnchors();button:SetAnchor(TOPLEFT,self.window,TOPLEFT,12+(index-1)*(actionWidth+4),91)
+            button:ClearAnchors();button:SetAnchor(TOPLEFT,self.window,TOPLEFT,12+(index-1)*(actionWidth+4),59)
             button:SetWidth(actionWidth)
         end
     end
@@ -372,10 +402,10 @@ function SC:RefreshHUD()
     local rows=self:GetHUDIssues(coverage); local rowHeight=self.Clamp(self.sv.rowHeight or 30,24,48)
     local width,height=self:GetHUDDimensions()
     win:SetDimensions(width,height)
-    win.status:SetText(string.format("%d / %d sources",coverage.coveredCount or 0,coverage.requiredCount or 0))
+    win.status:SetText(L("%d / %d sources",coverage.coveredCount or 0,coverage.requiredCount or 0))
     UI.Color(win.status,coverage.ready and #(coverage.readinessIssues or {})==0 and (coverage.limitedSourceCount or 0)==0 and C.green or C.gold)
-    win.summary:SetText((coverage.profileLabel or "Group preparation") .. "  •  " .. tostring(players) .. " players")
-    win.note:SetText(coverage.preview and "Preview only • sample players and states" or #rows==0 and "No preparation issues to display." or #rows*rowHeight>height-158 and "Scroll for more • Coverage has every source" or "Hover for details • open Coverage for sources")
+    win.summary:SetText(L("%s  •  %d players",L(coverage.profileLabel or "Group preparation"),players))
+    win.note:SetText(L(coverage.preview and "Preview only • sample players and states" or #rows==0 and "No preparation issues to display." or #rows*rowHeight>height-124 and "Scroll for more" or ""))
     for index,data in ipairs(rows) do
         local row=win.list.rows[index]
         if not row then
@@ -394,19 +424,23 @@ function SC:RefreshHUD()
                 if not row.data then return nil end
                 local effect=row.data.effect or {}
                 if row.data.readiness then
-                    return effect.label.."\n\n"..table.concat(row.data.details or {},"\n")
-                        .."\n\nUnknown means unverified, not missing. Open Builds to inspect the reported details."
+                    local details={}
+                    for _,detail in ipairs(row.data.details or {}) do
+                        details[#details+1]=SC.FormatReadinessDetail and SC:FormatReadinessDetail(row.data,detail) or L(detail)
+                    end
+                    return L(effect.label or "Support coverage").."\n\n"..table.concat(details,"\n")
+                        .."\n\n"..L("Unknown means unverified, not missing. Open Builds to inspect the reported details.")
                 end
-                local names={}; for _,player in ipairs(row.data.owners or {}) do names[#names+1]=player.displayName or "Unknown player" end
-                local text=(effect.label or "Support coverage").."\n\n"..(effect.description or "Available build source")
+                local names={}; for _,player in ipairs(row.data.owners or {}) do names[#names+1]=player.displayName or L("Unknown player") end
+                local text=L(effect.label or "Support coverage").."\n\n"..L(effect.description or "Available build source")
                 local visual=SC.Catalog and SC.Catalog.GetEffectVisual and SC.Catalog:GetEffectVisual(row.data.key)
-                if visual and visual.isFallback then text=text.."\n\nIcon: native category symbol; exact artwork is unavailable."
-                elseif visual and visual.iconKind=="source" and visual.sourceName then text=text.."\n\nSource icon: "..visual.sourceName end
+                if visual and visual.isFallback then text=text.."\n\n"..L("Icon: native category symbol; exact artwork is unavailable.")
+                elseif visual and visual.iconKind=="source" and visual.sourceName then text=text.."\n\n"..L("Source icon: %s",visual.sourceName) end
                 local recipients=UI.RecipientNotice(row.data)
-                return (row.data.preview and "Layout preview • sample data only\n\n" or "")..text
-                    .."\n\nSource carriers: "..(#names>0 and table.concat(names,", ") or "Not verified")
+                return (row.data.preview and L("Layout preview • sample data only").."\n\n" or "")..text
+                    .."\n\n"..L("Source carriers: %s",#names>0 and table.concat(names,", ") or L("Not verified"))
                     ..(recipients and "\n\n"..recipients or "")
-                    .."\n\nOpen Coverage for tracking switches, all possible sources and each player's details."
+                    .."\n\n"..L("Open Coverage for tracking switches, all possible sources and each player's details.")
             end)
             win.list.rows[index]=row
         end
@@ -420,9 +454,9 @@ function SC:RefreshHUD()
         local visual=not data.readiness and self.Catalog and self.Catalog.GetEffectVisual and self.Catalog:GetEffectVisual(data.key)
         local icon=visual and visual.icon
         row.icon:SetTexture(icon or "");row.icon:SetHidden(type(icon)~="string" or icon=="")
-        row.name:SetText(UI.Text(data.effect.label))
+        row.name:SetText(UI.Text(L(data.effect.label)))
         local status,color=UI.Status(data)
-        if #(data.duplicatePlayers or {})>1 then status="DUPLICATE " .. #data.duplicatePlayers; color=C.gold end
+        if #(data.duplicatePlayers or {})>1 then status=L("DUPLICATE %d",#data.duplicatePlayers); color=C.gold end
         row.value:SetText(status); UI.Color(row.value,color)
     end
     for index=#rows+1,#win.list.rows do win.list.rows[index]:SetHidden(true); win.list.rows[index].data=nil end
@@ -442,14 +476,14 @@ function SC:CreateHUD()
     if AlphaSquadUI.Settings.ApplyWindowLayer then AlphaSquadUI.Settings.ApplyWindowLayer(win,true) end
     win.bg=UI.Solid(win,"AlphaSquadSupportHUDBG",C.bg)
     UI.Surface(win,win.bg,"window")
-    win.title=UI.Label(win,"AlphaSquadSupportHUDTitle",(AlphaSquadUI.Theme.Brand and AlphaSquadUI.Theme.Brand() or "Ąlpha Şquad UI"),"ZoFontGameBold",C.orange)
-    win.title:SetAnchor(TOPLEFT,win,TOPLEFT,12,8); win.title:SetDimensions(240,24)
+    win.title=UI.Label(win,"AlphaSquadSupportHUDTitle","Coverage","ZoFontGameBold",C.white)
+    win.title:SetAnchor(TOPLEFT,win,TOPLEFT,12,8); win.title:SetDimensions(104,24)
     win.status=UI.Label(win,"AlphaSquadSupportHUDStatus","","ZoFontGameBold")
-    win.status:SetAnchor(TOPLEFT,win,TOPLEFT,12,36); win.status:SetHeight(24)
+    win.status:SetAnchor(TOPLEFT,win,TOPLEFT,122,8); win.status:SetAnchor(TOPRIGHT,win,TOPRIGHT,-46,8); win.status:SetHeight(24); win.status:SetHorizontalAlignment(TEXT_ALIGN_RIGHT)
     win.summary=UI.Label(win,"AlphaSquadSupportHUDSummary","","ZoFontGameSmall",C.muted)
-    win.summary:SetAnchor(TOPLEFT,win,TOPLEFT,12,62); win.summary:SetAnchor(TOPRIGHT,win,TOPRIGHT,-12,62); win.summary:SetHeight(22)
+    win.summary:SetAnchor(TOPLEFT,win,TOPLEFT,12,32); win.summary:SetAnchor(TOPRIGHT,win,TOPRIGHT,-12,32); win.summary:SetHeight(22)
     win.drag=WINDOW_MANAGER:CreateControl("AlphaSquadSupportHUDDrag",win,CT_CONTROL)
-    win.drag:SetAnchor(TOPLEFT,win,TOPLEFT,0,0); win.drag:SetAnchor(TOPRIGHT,win,TOPRIGHT,-40,0); win.drag:SetHeight(84)
+    win.drag:SetAnchor(TOPLEFT,win,TOPLEFT,0,0); win.drag:SetAnchor(TOPRIGHT,win,TOPRIGHT,-40,0); win.drag:SetHeight(54)
     win.drag:SetHandler("OnMouseDown",function(_,b) if b==MOUSE_BUTTON_INDEX_LEFT and not SC.sv.locked then win:StartMoving() end end)
     win.drag:SetHandler("OnMouseUp",function() win:StopMovingOrResizing(); SC:SavePosition() end)
     local close=UI.Button(win,"AlphaSquadSupportHUDClose","×",28,24,function() SC:SetVisible(false) end)
@@ -458,10 +492,10 @@ function SC:CreateHUD()
     win.actions={}
     for index,data in ipairs(actions) do
         local b=UI.Button(win,"AlphaSquadSupportHUDAction" .. index,data[1],88,28,data[2])
-        b:SetAnchor(TOPLEFT,win,TOPLEFT,12+(index-1)*92,91);win.actions[index]=b
+        b:SetAnchor(TOPLEFT,win,TOPLEFT,12+(index-1)*92,59);win.actions[index]=b
     end
     win.list=UI.Scroll(win,"AlphaSquadSupportHUDList")
-    win.list:SetAnchor(TOPLEFT,win,TOPLEFT,12,126); win.list:SetAnchor(BOTTOMRIGHT,win,BOTTOMRIGHT,-8,-30)
+    win.list:SetAnchor(TOPLEFT,win,TOPLEFT,12,94); win.list:SetAnchor(BOTTOMRIGHT,win,BOTTOMRIGHT,-8,-30)
     win.note=UI.Label(win,"AlphaSquadSupportHUDNote","","ZoFontGameSmall",C.muted)
     win.note:SetAnchor(BOTTOMLEFT,win,BOTTOMLEFT,12,-5); win.note:SetAnchor(BOTTOMRIGHT,win,BOTTOMRIGHT,-12,-5); win.note:SetHeight(22)
     if AlphaSquadUI.Layout and AlphaSquadUI.Layout.Attach then AlphaSquadUI.Layout.Attach(self) end
@@ -476,3 +510,14 @@ if Theme.OnChanged then Theme.OnChanged(function()
     if SC.RefreshMatrix then SC:RefreshMatrix() end
     if SC.RefreshInspector then SC:RefreshInspector() end
 end) end
+
+-- Language changes repaint cached controls only; never request peer data or rescan a build.
+if AlphaSquadUI.Localization and AlphaSquadUI.Localization.RegisterCallback then
+    AlphaSquadUI.Localization.RegisterCallback("supportPresentation",function()
+        UI.ClearTooltip()
+        if SC.window and not SC.window:IsHidden() then SC:RefreshHUD() end
+        if SC.RefreshMatrix then SC:RefreshMatrix() end
+        if SC.RefreshInspector then SC:RefreshInspector() end
+        if SC.RefreshContributorPicker then SC:RefreshContributorPicker() end
+    end)
+end

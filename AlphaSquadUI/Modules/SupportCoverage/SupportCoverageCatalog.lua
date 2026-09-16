@@ -953,29 +953,31 @@ local informationalSources={
 for key, sources in pairs(informationalSources) do for _, source in ipairs(sources) do AddProvider(key,source,"conditional") end end
 
 function Catalog:GetEffectTooltip(key)
+    local L=AlphaSquadUI.L or function(text) return text end
     local effect=self.effects[key]
-    if not effect then return "Coverage information is unavailable." end
-    local lines={effect.label, effect.description, "", "Before combat: " .. effect.conditions}
+    if not effect then return L("Coverage information is unavailable.") end
+    local lines={L(effect.label), L(effect.description), "", L("Before combat:") .. " " .. L(effect.conditions)}
     local providers=effect.providers or {}
     if #providers>0 then
-        lines[#lines+1]=""; lines[#lines+1]="Possible sources:"
+        lines[#lines+1]=""; lines[#lines+1]=L("Possible sources:")
         for _, source in ipairs(providers) do
-            lines[#lines+1]="- " .. source.name .. ": " .. source.conditions
+            lines[#lines+1]="- " .. L(source.name) .. ": " .. L(source.conditions)
         end
     end
-    lines[#lines+1]=""; lines[#lines+1]="Duplicates: " .. effect.duplicateRule
-    if effect.personal then lines[#lines+1]="Personal readiness: inspect each player's build." end
-    lines[#lines+1]="Tracking can be enabled or disabled separately for Trial and Dungeon."
+    lines[#lines+1]=""; lines[#lines+1]=L("Duplicates:") .. " " .. L(effect.duplicateRule)
+    if effect.personal then lines[#lines+1]=L("Personal readiness: inspect each player's build.") end
+    lines[#lines+1]=L("Tracking can be enabled or disabled separately for Trial and Dungeon.")
     return table.concat(lines,"\n")
 end
 
 function Catalog:GetSourceTooltip(key, sourceName)
+    local L=AlphaSquadUI.L or function(text) return text end
     local effect=self.effects[key]
-    if not effect then return tostring(sourceName or "Source") end
+    if not effect then return sourceName and tostring(sourceName) or L("Source") end
     for _, source in ipairs(effect.providers or {}) do
-        if Normalize(source.name)==Normalize(sourceName) then return source.name .. "\n" .. source.conditions end
+        if Normalize(source.name)==Normalize(sourceName) then return L(source.name) .. "\n" .. L(source.conditions) end
     end
-    return tostring(sourceName or effect.label) .. "\n" .. effect.description .. "\n" .. effect.conditions
+    return tostring(sourceName or L(effect.label)) .. "\n" .. L(effect.description) .. "\n" .. L(effect.conditions)
 end
 
 

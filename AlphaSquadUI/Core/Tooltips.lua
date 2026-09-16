@@ -1,6 +1,10 @@
 -- Native ESO tooltips, raised above this addon's windows only while in use.
 AlphaSquadUI = AlphaSquadUI or {}
 local T = {}; AlphaSquadUI.Tooltips = T
+local function L(text, ...)
+    if AlphaSquadUI.L then return AlphaSquadUI.L(text, ...) end
+    return select("#", ...) > 0 and string.format(text, ...) or text
+end
 local saved, hooked = {}, setmetatable({}, {__mode="k"})
 
 local function Call(object, method, ...)
@@ -24,7 +28,7 @@ local function OwnScale(control)
     return scale, "SetScale"
 end
 local function Text(value, fallback)
-    if type(value)~="string" or value=="" then return fallback or "" end
+    if type(value)~="string" or value=="" then return fallback and L(fallback) or "" end
     return (value:gsub("%^.*$",""):gsub("|[cC]%x%x%x%x%x%x",""):gsub("|[rR]",""):gsub("|","||"))
 end
 local function Save(control)
@@ -129,31 +133,31 @@ local function Note(tooltip,text)
     if tooltip and tooltip.AddLine then Call(tooltip,"AddLine",text,"ZoFontGameSmall",0.72,0.74,0.78) end
 end
 function T.ShowItem(owner,item,remote)
-    if type(item)~="table" then return T.ShowText(owner,"Equipment information unavailable.") end
+    if type(item)~="table" then return T.ShowText(owner,L("Equipment information unavailable.")) end
     local link=item.link
     if type(link)=="string" and link:find("|H%d+:item:") and ItemTooltip and ItemTooltip.SetLink and Begin(owner,ItemTooltip) then
         -- Never resolve a remote item through this client's bag or equipped slots.
         local ok=pcall(ItemTooltip.SetLink,ItemTooltip,link)
         if ok then
-            if item.reference then Note(ItemTooltip,"Set reference item. This is not a report of the player's equipped trait or enchantment.") end
+            if item.reference then Note(ItemTooltip,L("Set reference item. This is not a report of the player's equipped trait or enchantment.")) end
             if remote==true or item.remote==true then
-                Note(ItemTooltip,"Set counters in this tooltip use your equipment. See this player's set summary for their totals.")
+                Note(ItemTooltip,L("Set counters in this tooltip use your equipment. See this player's set summary for their totals."))
             end
             Finish(ItemTooltip);return true
         end
         T.Hide()
     end
     local lines={Text(item.name,"Equipment"),Text(item.slotName),Text(item.setName),
-        "Trait: "..Text(item.traitName,"Unavailable"),Text(item.traitDescription)}
-    if item.hasEnchant==false then lines[#lines+1]="No enchantment"
+        L("Trait: %s",Text(item.traitName,"Unavailable")),Text(item.traitDescription)}
+    if item.hasEnchant==false then lines[#lines+1]=L("No enchantment")
     elseif item.hasEnchant==true then
-        lines[#lines+1]="Enchantment: "..Text(item.enchantName,"Name unavailable")
+        lines[#lines+1]=L("Enchantment: %s",Text(item.enchantName,"Name unavailable"))
         lines[#lines+1]=Text(item.enchantDescription)
-    else lines[#lines+1]="Enchantment unavailable" end
+    else lines[#lines+1]=L("Enchantment unavailable") end
     return T.ShowText(owner,table.concat(lines,"\n"))
 end
 function T.ShowSkill(owner,skill,remote)
-    if type(skill)~="table" or not Id(skill.id or skill.abilityId) then return T.ShowText(owner,"Skill information unavailable.") end
+    if type(skill)~="table" or not Id(skill.id or skill.abilityId) then return T.ShowText(owner,L("Skill information unavailable.")) end
     local tooltip=AbilityTooltip or SkillTooltip
     local id=skill.id or skill.abilityId
     local craftedId=Id(skill.craftedId or skill.craftedAbilityId)
@@ -161,10 +165,10 @@ function T.ShowSkill(owner,skill,remote)
     local scriptIds={}
     for index=1,3 do scriptIds[index]=Id(type(scripts[index])=="table" and scripts[index].id or scripts[index]) end
     if craftedId and (skill.scriptsKnown~=true or not scriptIds[1] or not scriptIds[2] or not scriptIds[3]) then
-        return T.ShowText(owner,Text(skill.name,"Scribed skill").."\nCommitted scripts unavailable. A different player's scripts are not substituted.")
+        return T.ShowText(owner,Text(skill.name,"Scribed skill").."\n"..L("Committed scripts unavailable. A different player's scripts are not substituted."))
     end
     if craftedId and not (tooltip and tooltip.SetCraftedAbility) then
-        local lines={Text(skill.name,"Scribed skill"),"Committed scripts:"}
+        local lines={Text(skill.name,"Scribed skill"),L("Committed scripts:")}
         for _, script in ipairs(scripts) do lines[#lines+1]=Text(type(script)=="table" and script.name,"Script description unavailable") end
         return T.ShowText(owner,table.concat(lines,"\n"))
     end
@@ -174,7 +178,7 @@ function T.ShowSkill(owner,skill,remote)
             ok=pcall(tooltip.SetCraftedAbility,tooltip,craftedId,scriptIds[1],scriptIds[2],scriptIds[3],0)
         else ok=pcall(tooltip.SetAbilityId,tooltip,id) end
         if ok then
-            if remote==true or skill.remote==true then Note(tooltip,"Ability preview: numbers use your character's stats.") end
+            if remote==true or skill.remote==true then Note(tooltip,L("Ability preview: numbers use your character's stats.")) end
             Finish(tooltip);return true
         end
         T.Hide()
@@ -182,7 +186,7 @@ function T.ShowSkill(owner,skill,remote)
     return T.ShowText(owner,Text(skill.name,"Skill").."\n"..Text(skill.description,"Description unavailable."))
 end
 function T.ShowChampion(owner,star)
-    if type(star)~="table" or not Id(star.id) then return T.ShowText(owner,"Champion star information unavailable.") end
+    if type(star)~="table" or not Id(star.id) then return T.ShowText(owner,L("Champion star information unavailable.")) end
     local sc=AlphaSquadUI.Modules and AlphaSquadUI.Modules.SupportCoverage
     local info=star
     if sc and sc.DescribeChampionSkill then
@@ -190,10 +194,13 @@ function T.ShowChampion(owner,star)
     end
     local lines={Text(info.name,"Champion star")}
     if info.pointsKnown==true and Number(info.points,0,100000) then
-        lines[#lines+1]=tostring(info.points).." points invested • slotted"
+        lines[#lines+1]=L("%s points invested • slotted",tostring(info.points))
         lines[#lines+1]=Text(info.description,"Description unavailable.")
         local bonus=Text(info.currentBonus)
         if bonus~="" then lines[#lines+1]=bonus end
-    else lines[#lines+1]="Points invested unavailable. The star's exact bonus cannot be verified." end
+    else lines[#lines+1]=L("Points invested unavailable. The star's exact bonus cannot be verified.") end
     return T.ShowText(owner,table.concat(lines,"\n\n"))
+end
+if AlphaSquadUI.Localization then
+    AlphaSquadUI.Localization.RegisterCallback("tooltips", function() T.Hide() end)
 end
