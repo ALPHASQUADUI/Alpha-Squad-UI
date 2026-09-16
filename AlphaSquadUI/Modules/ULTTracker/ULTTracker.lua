@@ -689,6 +689,7 @@ function ULT:Initialize()
     self:RegisterSlashCommands()
 
     self.initialized = true
+    if self.NativeUI then self.NativeUI:Initialize() end
     if self.Overload then self.Overload:UpdateRuntime() end
     self:SetSafetyUpdateActive(self.sv.enabled and not self.uiObscured)
 

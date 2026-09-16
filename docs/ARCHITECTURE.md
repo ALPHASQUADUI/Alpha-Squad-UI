@@ -38,6 +38,12 @@ Theme and language selectors each own a private native dropdown, cached on the c
 
 Some audit helpers remain for scanner/evidence compatibility. Their presence does not expose the old expected-build template workflow. Pull history, combat observation, live-report transport and recorded-build planner modules are retired from the runtime.
 
+## Personal Ultimate presentation
+
+The design 2 renderer presents current points/native cost for ordinary slots, with clamped progress and explicit unknown or empty states. Overload shares the same controls and lifecycle but presents remaining points and a reserve marker; its reminder threshold does not become a native ability cost. Resource changes update cached presentation without reanchoring unchanged geometry. Language changes refresh addon-owned state labels from existing data and preserve placement. Special native hotbars remain distinct from the normal front/back pair.
+
+Native Ultimate-button replacement follows personal visibility rather than group tracking or library sharing. It suppresses only the button presentation while the enabled personal HUD is visible in gameplay and releases it on hide, disable, menus, loading or placement. Native slot data and casting remain owned by ESO. Unsupported native controls are left untouched. Saved presentation state is restored only while the replacement still owns it, preserving later external changes. Restoration and coexistence with other action-bar addons require native acceptance in both keyboard and gamepad modes.
+
 ## Support Coverage data flow
 
 Equipment, skill, Champion and mastery changes invalidate the local snapshot. Coalesced scans refresh supported local evidence outside combat. Validated compatible peer snapshots populate a bounded transient group cache. The engine evaluates enabled Trial/Dungeon requirements against that evidence, and reused controls render coverage, providers and detailed builds.

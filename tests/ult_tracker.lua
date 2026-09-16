@@ -60,6 +60,7 @@ local function Window()
 end
 
 assert(loadfile("AlphaSquadUI/Modules/ULTTracker/ULTTracker.lua"))()
+assert(loadfile("AlphaSquadUI/Modules/ULTTracker/ULTNativeUI.lua"))()
 assert(loadfile("AlphaSquadUI/Modules/ULTTracker/ULTTrackerUI.lua"))()
 assert(loadfile("AlphaSquadUI/Modules/ULTTracker/ULTGroup.lua"))()
 assert(loadfile("AlphaSquadUI/Modules/ULTTracker/ULTGroupUI.lua"))()
@@ -316,5 +317,66 @@ GetAbilityName=function() error("Unknown ability") end
 local safeName=Group:GetAbilityMeta(77778)
 check(safeName=="Unknown Ultimate","Unsupported remote IDs cannot crash the HUD through a native metadata getter")
 GetAbilityName=nativeName
+
+-- Exercise the real option setters and scene lifecycle, not only the bridge.
+ZO_ActionBar1 = {}
+local function NativeSlot(alpha, clickable)
+    local control = {alpha=alpha, handlers={}}
+    function control:GetParent() return ZO_ActionBar1 end
+    function control:GetControlAlpha() return self.alpha end
+    function control:SetAlpha(value) self.alpha=value end
+    function control:SetHandler(event, callback, namespace) self.handlers[namespace]=callback end
+    if clickable then
+        control.button={enabled=true}
+        function control.button:IsMouseEnabled() return self.enabled end
+        function control.button:SetMouseEnabled(value) self.enabled=value end
+    end
+    function control:GetNamedChild(name) return name=="Button" and self.button or nil end
+    return control
+end
+ActionButton8, ActionBarTimer8 = NativeSlot(0.8,true), NativeSlot(0.6,false)
+ULT.window, Group.window = Window(), Window()
+ULT.sv.enabled, ULT.sv.visible, ULT.uiObscured, ULT.loading = true, true, false, false
+Group.sv.enabled=true
+-- HUD geometry has its own suite; preserve real visibility and lifecycle calls.
+ULT.RefreshHUD=function(self) self:ApplyVisibility() end
+ULT.NativeUI:Initialize()
+check(ActionButton8.alpha==0 and ActionBarTimer8.alpha==0,
+    "An initialized visible personal HUD replaces both native Ultimate roots")
+ULT:SetVisible(false)
+check(ActionButton8.alpha==0.8 and ActionBarTimer8.alpha==0.6 and ActionButton8.button.enabled,
+    "The personal visibility option immediately restores native presentation and mouse input")
+check(not Group.window:IsHidden() and Group.sv.enabled,
+    "Restoring the native personal slot leaves enabled group tracking visible")
+ULT:SetVisible(true)
+check(ActionButton8.alpha==0 and not ActionButton8.button.enabled,
+    "Re-enabling personal visibility replaces the native slot again")
+ULT:SetEnabled(false)
+check(ActionButton8.alpha==0.8 and ActionBarTimer8.alpha==0.6,
+    "The Dashboard module switch restores both native roots")
+ULT:SetEnabled(true)
+check(ActionButton8.alpha==0,"The Dashboard module switch resumes native replacement")
+local sceneState=SCENE_SHOWN
+HUD_SCENE={GetState=function() return sceneState end}
+HUD_UI_SCENE=nil
+sceneState=-1;ULT:RefreshUIObscured()
+check(ActionButton8.alpha==0.8,"Leaving gameplay releases native presentation through the real scene path")
+sceneState=SCENE_SHOWN;ULT:RefreshUIObscured()
+check(ActionButton8.alpha==0,"Returning to gameplay reapplies native replacement")
+ULT.loading=true;ULT:RefreshUIObscured()
+check(ActionButton8.alpha==0.8,"Loading releases native presentation through the real scene path")
+ULT.loading=false;ULT:RefreshUIObscured()
+check(ActionButton8.alpha==0,"Finishing loading resumes native replacement")
+AlphaSquadUI.Layout={IsMoving=function() return true end}
+ULT:ApplyVisibility()
+check(not ULT.window:IsHidden() and ActionButton8.alpha==0.8,
+    "Placement previews release native presentation even while the personal HUD is visible")
+AlphaSquadUI.Layout=nil
+ULT:ApplyVisibility()
+check(ActionButton8.alpha==0,"Finishing placement resumes native replacement")
+ULT.window=nil
+ULT:SetEnabled(false)
+check(ActionButton8.alpha==0.8 and ActionBarTimer8.alpha==0.6 and ActionButton8.button.enabled,
+    "Disabling still restores native presentation if the replacement window disappears")
 
 print(string.format("PASS: %d assertions; Lua %s. No ESO-runtime certification.", total, _VERSION))

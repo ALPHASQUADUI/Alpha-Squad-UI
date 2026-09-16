@@ -4,9 +4,11 @@ Personal and group Ultimate readiness for **Ąlpha Şquad UI**.
 
 ## Personal view
 
-The personal HUD always shows both weapon-bar Ultimates in a compact horizontal or vertical layout. Each native skill icon has a progress indicator. A green chevron immediately to the left marks the actual active bar; the other icon is dimmed. There is no background, Ultimate name, repeated brand or AUTO/FRONT/BACK/BOTH selector. Native transformation and temporary bars remain conservative: unavailable normal-bar readiness is never presented as a safe action.
+Design 2 shows both normal weapon-bar Ultimates as compact rows, side by side horizontally or stacked vertically. Each row combines a native icon, actual Ultimate points/native cost, a thin progress bar and a concise localized state. The counter preserves values above the cost while the bar clamps at full; an unknown cost remains `current / ?` and an empty slot shows no fabricated value or readiness. A green chevron immediately to the left marks the actual active bar; the other slot is dimmed. There is no background, Ultimate name, repeated brand or AUTO/FRONT/BACK/BOTH selector. Native transformation and temporary bars show the actual special-bar Ultimate without presenting an ordinary bar as active.
 
-Overload remains optional behavior within the same HUD. Its mechanics and manual activation/cancellation remain unchanged. **ACTIVE** is gold, **READY** pulses green and **STOP** pulses red when the reserve policy calls for deactivation. Short progression animation only runs while a visible value is moving; hidden HUDs do not retain presentation timers.
+Overload remains optional behavior within the same HUD. Its counter shows actual remaining Ultimate points, never a fabricated cost from the ready-reminder threshold. The progress bar includes a reserve marker; with the default 400-point reminder and 160-point reserve the marker is at 40% of that scale. **INACTIVE** is neutral, **ACTIVE** gold, **READY** pulses green and **STOP** pulses red when the reserve policy calls for deactivation. French uses **INACTIF**, **ACTIF**, **PRÊT** and **STOP**. Mechanics and manual activation/cancellation remain unchanged. Short progression animation only runs while a visible value is moving; hidden HUDs do not retain presentation timers.
+
+The enabled, visible personal HUD replaces the native Ultimate button visually. Turn **Show personal HUD** OFF, use `/asult hide` or disable ULT Tracker to restore the native slot. Hiding only the personal HUD permits group tracking to continue. Menus, loading and MOVE HUD also release the replacement; normal visible personal tracking reapplies it. Native casting/keybinds, other action buttons and library sharing remain independent.
 
 Addon-owned text follows the Dashboard language selector; native ability names and tooltips follow ESO. The two settings are deliberately separate.
 
@@ -30,7 +32,7 @@ Open **Libraries** for dependency status and **Share group Ultimates**. A new in
 
 Use **MOVE HUD** in the main sidebar or `/asmove` outside combat. Position the personal and group panels against the normal game interface. Use the orientation icon beside the selected Ultimate panel. Personal slots sit side by side horizontally or stack vertically; the orientation stays fixed while resizing. The group horizontal layout uses four columns for up to twelve players, while its vertical layout uses one list. Each orientation keeps its own size. Drag corners to scale proportionally and edges to add space. The placement toolbar controls scale, supported background opacity, fit and reset for the selected panel. Choose **DONE** or press Escape to save, lock and select Alpha Squad in native Settings. Transparent Ultimate HUDs ignore background opacity. Disabled modules stay disabled and normal visibility choices are preserved. Placement defaults to clearly labelled examples even when no abilities are slotted and no group is present. Mixed examples show ready and charging Ultimates, recently spent resources, disabled sharing, missing slots, offline and dead players. The group preview always includes twelve fictional accounts. Ready, Missing, Overload and Live preview modes are available; Live shows only real data. The examples never change the roster, tracking choices, sharing payloads or alert state.
 
-A new personal HUD starts at 300 × 116 logical UI units. Existing saved sizes and bar choices are retained. ESO applies screen and interface scaling once; automatic fitting preserves the requested dimensions, scale and saved position for a larger viewport.
+New personal layouts start at 316 × 48 logical UI units horizontally and 152 × 108 vertically. Existing saved dimensions and placement are retained. ESO applies screen and interface scaling once; automatic fitting preserves the requested dimensions, scale and saved position for a larger viewport.
 
 Sizing and opacity are centralized in MOVE HUD. Group rows keep the height chosen using the twelve-player layout as players enter or leave. The visible panel contracts around the live roster without enlarging the remaining rows; icons stay square. Cross-sync ON shares settings and positions across characters on the same account/server; OFF keeps native character profiles separate. Existing SavedVariables and group selections survive reloads and travel. Dashboard's Ember Classic, Tactical Compact and Obsidian Studio styles update both personal and group panels without changing status meanings.
 
@@ -52,7 +54,6 @@ LibGroupCombatStats owns its shared callbacks and sender timer. Disabling the ma
 | --- | --- |
 | `/asui` or `/alphasquad` | Main settings |
 | `/asult` | ULT settings |
-| `/asult auto`, `/asult main`, `/asult back`, `/asult both` | Select the personal display mode |
 | `/asoverload settings` | Optional Overload behavior settings |
 | `/asult group` | Group Ultimate configuration |
 | `/asmove` | Position all enabled HUD panels |

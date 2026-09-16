@@ -1,6 +1,6 @@
 # ESO acceptance checklist
 
-Version **3.4.1** / **30401**. This checklist is not a record of completed in-game tests. Record current results in the [client acceptance matrix](CLIENT_ACCEPTANCE.md).
+Version **3.5.0** / **30500**. This checklist is not a record of completed in-game tests. Record current results in the [client acceptance matrix](CLIENT_ACCEPTANCE.md).
 
 ## Native Add-Ons menu
 
@@ -140,7 +140,7 @@ These references describe contracts and resources, not completed in-game accepta
 
 The maintainer reported duplicate native `BG` / `Scroll` initialization errors in 3.4.0. The 3.4.1 dropdown fix awaits native retesting; the failed 3.4.0 run does not establish any of the outcomes below.
 
-- Install 3.4.1, reload and open Dashboard with both theme and language selectors present. Open each menu repeatedly, alternate selections, close/reopen settings and reload again. No duplicate-control errors, crossed menu entries or stale translations; popup fills remain opaque and unrelated native menus retain their appearance.
+- Install the current candidate containing the 3.4.1 correction, reload and open Dashboard with both theme and language selectors present. Open each menu repeatedly, alternate selections, close/reopen settings and reload again. No duplicate-control errors, crossed menu entries or stale translations; popup fills remain opaque and unrelated native menus retain their appearance.
 - Start a fresh English client and French client: Automatic selects the matching addon language. Other client locales fall back to English. Switch EN/FR/Automatic without reload on every page and already-open window; reconnect and change character to verify persistence. Native names/tooltips remain in ESO's client language.
 - Test 720p, 1080p and the actual custom UI scale. Inspect long French buttons, dropdowns, tooltips, contributor details and narrow Builds/Coverage layouts. No overlapped actions or clipped essential status.
 - Personal ULT: verify both slots in both orientations, left-side green marker through rapid weapon swaps, dimmed inactive slot, distinct costs, empty slot, unknown cost, transformation/temporary hotbar and recovery. No stale READY after spending.
@@ -149,3 +149,21 @@ The maintainer reported duplicate native `BG` / `Scroll` initialization errors i
 - Compare quiet solo, four-player and twelve-player frame time/memory before and after. Hidden/disabled HUDs stop presentation work. Verify no sharing changes when switching language, theme or visibility.
 
 These checks remain unrecorded until performed in ESO against the exact development commit.
+
+
+## 3.5.0 personal Ultimate acceptance
+
+Run the exact 3.5.0 development commit in ESO. The selected mockup is a design decision, not native test evidence. Keep the 3.4.0 initialization failure and unreported 3.4.1 retest visible in the acceptance record.
+
+- Open both Dashboard selectors repeatedly, then test English, French and Automatic on the matching game clients. Personal HUD states and settings must refresh without duplicate controls, stale text, overflow or a placement reset.
+- Compare horizontal and vertical design 2 with distinct native costs, raw points below/at/above cost, rapid weapon swaps, spending, an empty slot and unavailable cost. A full bar cannot imply readiness before the actual cost; unknown costs stay unknown.
+- Check the green left marker only on the verified active slot and inactive-slot dimming. Test Vampire/Werewolf and other temporary hotbars, then return to ordinary front/back slots.
+- With personal tracking visible, verify only the native Ultimate button presentation is hidden. Cast using the normal Ultimate binding; other action buttons, hotbar updates and combat input must remain native.
+- Turn **Show personal HUD** OFF/ON, use `/asult hide`/`show` and disable/re-enable ULT Tracker. Native presentation must return whenever personal replacement is not active. Repeat with group tracking ON and confirm its HUD and sharing choices remain independent.
+- Open settings, inventory and other native menus; travel/loading; enter/leave MOVE HUD using Done, Escape, combat and interrupted scene transitions. Verify restoration, no duplicate button on return and no hidden native slot stranded by cancellation.
+- Repeat visual replacement and restoration in keyboard/gamepad mode, switching modes both in gameplay and menus. Repeat with installed action-bar addons and record their versions; their other controls and presentation choices must survive release.
+- Exercise Overload inactive, active gold, ready green pulse and reserve red pulse for all morphs, in both orientations and languages. The counter shows remaining points, not points divided by the reminder threshold as an ability cost. The reserve marker follows the configured threshold; a resource spend updates immediately.
+- Toggle Overload behavior OFF, check PvP suppression and change warning/reminder settings. No automatic activation/cancellation, alert during loading/placement or animation retained while hidden.
+- Check old saved sizes, new compact defaults, minimum sizes, viewport fitting, reload and Cross-sync changes. Existing placement survives; native visibility follows the current profile and personal visibility option.
+
+Record measured frame time and memory separately from functional acceptance. Successful automated checks do not establish in-game rendering, zero overhead or compatibility with every action-bar addon.

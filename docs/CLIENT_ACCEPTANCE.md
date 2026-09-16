@@ -2,16 +2,17 @@
 
 This checklist records behavior that automated Lua and packaging checks cannot establish. No row is passed until someone runs it in ESO on the stated versions. Never substitute a mock result for a native result.
 
-## 3.4.1 native retest pending
+## 3.5.0 native acceptance pending
 
 The maintainer tested development build 3.4.0 and reported duplicate native `BG` and `Scroll` controls during Dashboard initialization at `Core/Theme.lua:105`, reached through the language selector. This is a recorded native failure, not acceptance of the interface. The earlier single-dropdown mock did not model ESO's global child-name registry and missed this collision.
 
-Version 3.4.1 assigns each private dropdown a unique addon-prefixed root and adds multiple-dropdown naming regressions. Native retesting remains pending. Run the [3.4.1 interface route](SUPPORT_COVERAGE_TESTING.md#341-interface-acceptance) against the delivered commit, starting with a reload and repeated use of both theme and language selectors, then both client languages, manual override, both Ultimate slots, Overload, Move HUD, native settings return and realistic UI scales. No automated result passes these native checks or authorizes a PR or release.
+Version 3.4.1 assigns each private dropdown a unique addon-prefixed root and adds multiple-dropdown naming regressions; no native retest has been reported. Version 3.5.0 retains the correction and implements the selected personal HUD with reversible native Ultimate-slot replacement. Run the [3.5.0 personal Ultimate route](SUPPORT_COVERAGE_TESTING.md#350-personal-ultimate-acceptance), then the retained [3.4 interface route](SUPPORT_COVERAGE_TESTING.md#341-interface-acceptance) against the delivered commit. No automated result passes these native checks or authorizes a PR or release.
 
 | Development build | Native evidence | Status |
 | --- | --- | --- |
 | 3.4.0 | Maintainer-reported duplicate `BG` / `Scroll` errors during Dashboard creation | Failed initialization |
 | 3.4.1 | Hotfix awaiting the maintainer's ESO retest | Not recorded |
+| 3.5.0 | Personal Ultimate design 2 and native-slot replacement awaiting ESO acceptance | Not recorded |
 
 ## Historical maintainer acceptance for 3.3.1
 
@@ -27,7 +28,7 @@ Record the Alpha Squad UI and companion versions, ESO API/build, library version
 
 | Scenario | Expected result | Native result |
 | --- | --- | --- |
-| Reload, open Dashboard, alternate theme and language selectors, then reopen settings | Both native menus populate and select independently; no duplicate controls, stale language choices or transparent popup text | Not recorded for 3.4.1 |
+| Reload, open Dashboard, alternate theme and language selectors, then reopen settings | Both native menus populate and select independently; no duplicate controls, stale language choices or transparent popup text | Not recorded for 3.5.0 |
 | Open with the gameplay keybind, then close | Cursor is usable immediately and returns to the prior gameplay state | Not recorded |
 | Open Group configuration, Coverage and Builds; close each | The previous addon window returns; combat/loading never reopens it | Not recorded |
 | Read an item, skill and Champion tooltip for 15 seconds | Unchanged refreshes preserve the tooltip; changing the player replaces its content | Not recorded |
@@ -43,6 +44,21 @@ Record the Alpha Squad UI and companion versions, ESO API/build, library version
 | Disable native LGB sending, then ask companion status | The status explains the actual block instead of falsely claiming active sharing | Not recorded |
 | Slot/use both Overload morphs and Werewolf/Vampire Ultimates | Personal native bar, icon, cost and active state agree with the game | Not recorded |
 | Run a 12-player group with multiple sharing addons | Record latency, retries and frame-time comparison; packet loss remains bounded | Not recorded |
+
+## Personal Ultimate design 2 acceptance
+
+| Scenario | Expected result | Native result |
+| --- | --- | --- |
+| Compare both normal slots in horizontal/vertical layouts | Native icons, actual points/native costs, bounded progress, green active marker and dimmed other slot remain readable | Not recorded |
+| Spend, recharge, exceed cost, clear a slot and encounter an unknown cost | No stale READY or clipped counter; raw points remain accurate; unknown/empty states do not invent readiness | Not recorded |
+| Use a transformation or temporary native bar, then return | Actual special-bar Ultimate appears without a false normal-bar marker; normal pair returns afterward | Not recorded |
+| Enable personal tracking, hide/show it, disable/re-enable the module | Native Ultimate button is visually replaced only while the personal HUD is enabled and visible; casting/keybind still works | Not recorded |
+| Hide personal HUD with group tracking ON | Native Ultimate button returns; group HUD and sharing keep their chosen state | Not recorded |
+| Enter settings, inventory, loading and MOVE HUD, then return | Replacement releases cleanly, no stranded hidden native slot, no placement example used as live state | Not recorded |
+| Switch keyboard/gamepad modes, including with menus open | Correct native button presentation and restoration in each mode; no change to other action buttons | Not recorded |
+| Test with each installed action-bar addon | Record versions and ordering; no lost button, stale alpha or unrelated action-bar change after release | Not recorded |
+| Change English/French/Automatic and Cross-sync while tracking | Labels update, explicit language follows its saved choice, placement persists and native visibility follows the current personal option | Not recorded |
+| Use all Overload morphs and optional behavior OFF | Actual remaining points, reserve tick and neutral/gold/green/red states agree with the configured thresholds; no automatic cast or cancellation | Not recorded |
 
 ## Performance comparison
 

@@ -87,10 +87,11 @@ function ULT:BuildIntegratedSettingsPage(page,ui)
     local width=LogicalWidth(page)-16;local half=(width-16)/2
     local Label,ReflowLabels=PageLabels(page,ui,C)
     Label(page,"AlphaSquadULTIntegratedTitle","ULT TRACKER",8,2,width,34,"ZoFontWinH2",C.orange)
-    Label(page,"AlphaSquadULTIntegratedSub","Both weapon bars, one compact HUD. The green arrow marks your active bar.",8,42,width,40)
+    Label(page,"AlphaSquadULTIntegratedSub","Current points, native cost and progress. The green arrow marks your active bar.",8,42,width,40)
     local general=ui.CreateCard(page,"AlphaSquadULTIntegratedGeneral",8,86,half,216,"PERSONAL HUD",C.orange)
     ui.AddToggleRow(general,"AlphaSquadULTIntegratedVisible","Show personal HUD",42,
-        function() return ULT.sv and ULT.sv.visible==true end,function(v) ULT:SetVisible(v) end)
+        function() return ULT.sv and ULT.sv.visible==true end,function(v) ULT:SetVisible(v) end,
+        "Replaces the game's Ultimate display while this HUD is visible. Turn OFF to restore the native display. Your Ultimate binding stays unchanged.")
     ui.AddToggleRow(general,"AlphaSquadULTIntegratedMenus","Hide in game menus",82,
         function() return ULT.sv and ULT.sv.hideInMenus==true end,function(v) ULT.sv.hideInMenus=v==true;ULT:ApplyVisibility() end)
     ui.CreateButton(general,"AlphaSquadULTMoveHUD","MOVE HUD",14,134,190,36,MovePersonalHUD)
@@ -99,7 +100,7 @@ function ULT:BuildIntegratedSettingsPage(page,ui)
         function() return ULT.sv and ULT.sv.readySound==true end,function(v) ULT.sv.readySound=v==true end)
     ui.AddToggleRow(tracking,"AlphaSquadULTIntegratedFlash","Ready highlight",86,
         function() return ULT.sv and ULT.sv.readyFlash==true end,function(v) ULT.sv.readyFlash=v==true;ULT:Refresh("ready highlight") end)
-    Label(tracking,"AlphaSquadULTBothBarsHelp","Both bars remain visible. The inactive bar is dimmed.",14,132,half-28,50)
+    Label(tracking,"AlphaSquadULTBothBarsHelp","One shared Ultimate pool. Each bar keeps its own cost.",14,132,half-28,50)
     local overload=ui.CreateCard(page,"AlphaSquadULTIntegratedOverload",8,318,half,112,"OVERLOAD",C.gold)
     Label(overload,"AlphaSquadULTOverloadIntro","Reserve warnings and the ready reminder.",14,38,half-220,60)
     local overloadButton=ui.CreateButton(overload,"AlphaSquadULTOverloadSettings","SETTINGS",half-194,42,180,38,function() AlphaSquadUI.Settings.OpenPage("ultoverload") end)
@@ -123,9 +124,11 @@ function ULT:BuildIntegratedSettingsPage(page,ui)
         for key,row in pairs(nativeRows) do
             local bar=ULT:GetLiveBar(key);local label=bar and bar.label=="ACTIVE BAR" and "ACTIVE BAR" or (key=="primary" and "FRONT" or "BACK")
             local unavailable=key=="backup" and ULT:HasSpecialActiveBar()
+            local state=bar and bar.state or "empty"
+            if state=="off" then state="inactive" end
             row.icon:SetHidden(unavailable or not bar or bar.abilityId<=0 or bar.icon=="")
             if bar and bar.icon~="" then row.icon:SetTexture(bar.icon) end
-            row.text:SetText(unavailable and L("BACK BAR\nUnavailable on the current action bar") or (L(label).." • "..(bar and bar.name~="" and bar.name or L("No Ultimate")).."\n"..L(string.upper(bar and bar.state or "empty"))))
+            row.text:SetText(unavailable and L("BACK BAR\nUnavailable on the current action bar") or (L(label).." • "..(bar and bar.name~="" and bar.name or L("No Ultimate")).."\n"..L(string.upper(state))))
         end
         counter:SetText(L("ULTIMATE: %d",tonumber(ULT.currentUltimate) or 0))
     end)
@@ -193,17 +196,18 @@ function ULT:BuildOverloadSettingsPage(page,ui)
     local reserve=ui.CreateCard(page,"AlphaSquadOverloadReserve",half+24,94,half,252,"ULTIMATE RESERVE",C.red)
     Toggle(reserve,"Reserve","Reserve warnings","reserveAlertsEnabled",42,"Warn while active Overload reaches the selected reserve. Use your Ultimate binding to switch it off.")
     Toggle(reserve,"ReserveSound","Warning sounds","reserveSound",82)
-    local function Step(parent,id,text,key,y,minimum)
+    local function Step(parent,id,text,key,y,minimum,help)
         ui.AddStepperRow(parent,"AlphaSquadOverloadOption"..id,text,y,
             function() return ULT.sv and ULT.sv.overload and ULT.sv.overload[key] or minimum end,
-            function(value) if ULT.Overload then ULT.Overload:SetOption(key,value) end end,5,minimum,500,"",C.gold)
+            function(value) if ULT.Overload then ULT.Overload:SetOption(key,value) end end,5,minimum,500,"",C.gold,help)
     end
     Step(reserve,"Warning","Warning starts","reserveWarningThreshold",126,25)
     Label(reserve,"AlphaSquadOverloadReserveNote","Press your Ultimate binding to stop Overload.",14,176,half-28,62)
     local ready=ui.CreateCard(page,"AlphaSquadOverloadReady",8,282,half,198,"READY REMINDER",C.gold)
     Toggle(ready,"Ready","Ready reminder","readyReminderEnabled",42)
     Toggle(ready,"ReadySound","Reminder sound","readyReminderSound",82)
-    Step(ready,"ReadyThreshold","Ready at","readyReminderThreshold",126,100)
+    Step(ready,"ReadyThreshold","Ready at","readyReminderThreshold",126,100,
+        "The reminder is a target, not the ability cost. The marker shows the reserve warning threshold.")
     local help=ui.CreateCard(page,"AlphaSquadOverloadHelp",half+24,362,half,118,"HOW IT WORKS",C.cyan)
     Label(help,"AlphaSquadOverloadHelpText","Gold: active. Green pulse: ready. Red pulse: stop. Use your Ultimate binding to switch Overload off.",14,38,half-28,74)
     if ui.RegisterLayout then

@@ -2,6 +2,7 @@
 AlphaSquadUI.Localization.Register("fr", {
     ["READY"] = "PRÊT",
     ["ACTIVE"] = "ACTIF",
+    ["INACTIVE"] = "INACTIF",
     ["STOP"] = "STOP",
     ["EMPTY"] = "VIDE",
     ["OFF"] = "NON",
@@ -467,6 +468,10 @@ AlphaSquadUI.Localization.Register("fr", {
     ["BEHAVIOR"] = "COMPORTEMENT",
     ["Both bars remain visible. The inactive bar is dimmed."] = "Deux barres visibles. La barre inactive est estompée.",
     ["Both weapon bars, one compact HUD. The green arrow marks your active bar."] = "Deux barres, un HUD compact. La flèche verte indique la barre active.",
+    ["Current points, native cost and progress. The green arrow marks your active bar."] = "Points disponibles, coût et progression. La flèche verte indique la barre active.",
+    ["One shared Ultimate pool. Each bar keeps its own cost."] = "Une réserve commune. Un coût propre à chaque ultime.",
+    ["Replaces the game's Ultimate display while this HUD is visible. Turn OFF to restore the native display. Your Ultimate binding stays unchanged."] = "Remplace l’affichage d’ultime du jeu lorsque ce HUD est visible. Désactivez-le pour retrouver l’affichage natif. La touche d’ultime reste inchangée.",
+    ["The reminder is a target, not the ability cost. The marker shows the reserve warning threshold."] = "Le rappel est un objectif, pas le coût de la compétence. Le repère indique le seuil d’alerte de réserve.",
     ["CURRENT ULTIMATES"] = "ULTIMES ACTUELS",
     ["Enabled"] = "Activé",
     ["Gold: active. Green pulse: ready. Red pulse: stop. Use your Ultimate binding to switch Overload off."] = "Doré : actif. Vert clignotant : prêt. Rouge clignotant : arrêter. Désactivez Surcharge avec votre touche d’ultime.",

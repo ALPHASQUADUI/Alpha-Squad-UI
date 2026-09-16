@@ -13,11 +13,13 @@ local function Control(name,parent)
  function c:GetScale() return self.scale end
  function c:GetLeft() return self.x end
  function c:GetTop() return self.y end
- function c:SetAnchor(_,_,_,x,y) self.x=x or 0;self.y=y or 0 end
+ function c:SetAnchor(point,relative,relativePoint,x,y) self.anchor={point,relative,relativePoint};self.x=x or 0;self.y=y or 0 end
  function c:SetHidden(value) self.hidden=value==true end
  function c:IsHidden() return self.hidden end
- function c:SetText(value) self.text=value end
- function c:SetTexture(value) self.texture=value end
+ function c:SetText(value) self.textWrites=(self.textWrites or 0)+1;self.text=value end
+ function c:SetTexture(value) self.textureWrites=(self.textureWrites or 0)+1;self.texture=value end
+ function c:SetMaxLineCount(value) self.maxLines=value end
+ function c:SetWrapMode(value) self.wrapMode=value end
  function c:SetAlpha(value) self.alpha=value end
  function c:SetColor(r,g,b,a) self.color={r,g,b,a} end
  function c:SetHandler(name,fn) self.handlers[name]=fn end
@@ -26,6 +28,7 @@ local function Control(name,parent)
  return c
 end
 GuiRoot=Control("GuiRoot");GuiRoot:SetDimensions(1920,1080)
+TEXT_WRAP_MODE_ELLIPSIS=1
 local windows=0
 WINDOW_MANAGER={CreateControl=function(_,name,parent) return Control(name,parent) end,
  CreateTopLevelWindow=function(_,name) windows=windows+1;return Control(name,GuiRoot) end}
@@ -54,6 +57,10 @@ local attached=0
 AlphaSquadUI={Modules={},Settings={},Layout={IsMoving=function() return false end,
  GetDimensions=function(module,w,h) return module.sv.hudWidth or w,module.sv.hudHeight or h end,
  GetScale=function(module) return module.sv.scale/100 end,Attach=function() attached=attached+1 end}}
+AlphaSquadUI.Preferences={sv={language="en"},Initialize=function() end,
+ Open=function(_,name,namespace,defaults) return ZO_SavedVars:NewAccountWide(name,1,namespace,defaults) end}
+assert(loadfile("AlphaSquadUI/Core/Localization.lua"))()
+assert(loadfile("AlphaSquadUI/Localization/fr.lua"))()
 assert(loadfile("AlphaSquadUI/Modules/ULTTracker/ULTTracker.lua"))()
 assert(loadfile("AlphaSquadUI/Modules/ULTTracker/ULTOverload.lua"))()
 assert(loadfile("AlphaSquadUI/Modules/ULTTracker/ULTTrackerUI.lua"))()
@@ -61,7 +68,24 @@ local ULT=AlphaSquadUI.Modules.ULTTracker
 ULT:Initialize();ULT.uiObscured=false;ULT:Refresh("initial")
 check(windows==1 and attached==1,"ULT and specialized Overload create and attach exactly one personal HUD")
 check(not ULT.window.cards.primary:IsHidden() and not ULT.window.cards.backup:IsHidden(),"Both native weapon ultimates remain visible even with Overload on the other bar")
-check(ULT.window.width==152 and ULT.window.height==80,"A fresh horizontal HUD uses compact icon-sized bounds")
+check(ULT.window.width==316 and ULT.window.height==48,"Design 2 starts with two compact horizontal minirows")
+local first=ULT.window.cards.primary
+check(first.icon.width==40 and first.valueLabel.x>first.iconBorder.x+first.iconBorder.width,
+    "The approved minirow puts its numeric value to the right of a native 40px icon")
+check(first.valueLabel.text=="110 / 100" and ULT.window.cards.backup.valueLabel.text=="110",
+    "Ordinary Ultimates show the actual pool and native cost; Overload shows only the raw pool")
+check(first.valueLabel.x+first.valueLabel.width<=first.width and first.statusLabel.y+first.statusLabel.height<=first.height,
+    "Default numeric and status columns remain inside the row")
+check(first.valueLabel.maxLines==1 and first.valueLabel.wrapMode==TEXT_WRAP_MODE_ELLIPSIS
+    and first.statusLabel.maxLines==1 and first.statusLabel.wrapMode==TEXT_WRAP_MODE_ELLIPSIS,
+    "Both text lines are bounded even with long translations or unusual native values")
+local overloadCard=ULT.window.cards.backup
+check(not overloadCard.reserveMarker.hidden and math.abs(overloadCard.reserveMarker.x-overloadCard.progressBG.width*0.4)<0.001,
+    "The Overload reserve tick marks 160 of the configured 400-point reminder")
+ULT.sv.hudWidth=152;ULT.sv.hudHeight=80;ULT:RefreshHUD()
+check(ULT.window.width==316 and first.valueLabel.width>=86 and first.statusLabel.width>=86,
+    "A saved narrow legacy layout expands to readable numeric and localized status columns")
+ULT.sv.hudWidth=nil;ULT.sv.hudHeight=nil;ULT:RefreshHUD()
 check(not ULT.window.bg and not ULT.window.brand and not ULT.window.cards.primary.nameLabel,"The gameplay HUD has no panel background, branding or skill names")
 check(not ULT.window.cards.primary.activeArrow.hidden and ULT.window.cards.backup.activeArrow.hidden,"The green arrow identifies the active native weapon bar")
 check(ULT.window.cards.primary.alpha==1 and ULT.window.cards.backup.alpha==0.52,"The inactive weapon icon is visibly dimmed")
@@ -79,6 +103,7 @@ ULT.sv.hudWidth=400;ULT.sv.hudHeight=300;ULT:RefreshHUD()
 check(ULT.window.cards.primary.x<ULT.window.cards.backup.x and ULT.window.height==300,"Narrowing the horizontal template never switches orientation or doubles its height")
 ULT:SetLayoutOrientation("vertical")
 check(ULT.window.cards.primary.y<ULT.window.cards.backup.y and ULT.window.cards.primary.x==ULT.window.cards.backup.x,"The explicit vertical template stacks both cards")
+check(ULT.window.width==152 and ULT.window.height==108,"The vertical default retains two compact minirows")
 ULT.sv.hudWidth=224;ULT.sv.hudHeight=410;ULT:RefreshHUD()
 ULT:SetLayoutOrientation("horizontal")
 ULT:SetLayoutOrientation("vertical")
@@ -86,6 +111,8 @@ check(ULT.window.width==224 and ULT.window.height==410,"Each orientation restore
 for _,card in pairs(ULT.window.cards) do
  check(card.icon.width==card.icon.height and card.iconBorder.width==card.iconBorder.height,"Resize preserves square native icons and frames")
  check(card.progress.width<=card.progressBG.width,"Progress remains inside its resized background")
+ check(card.icon.width<=52 and card.valueLabel.x+card.valueLabel.width<=card.width,
+     "Growing a row preserves compact icons and bounded right-side text")
 end
 check(ULT.sv.x==originalX and ULT.sv.y==originalY,"Bar-mode and dimension changes preserve the shared anchor")
 ULT.sv.scale=125;ULT:ApplyAppearance()
@@ -139,7 +166,10 @@ check(ULT.window.cards.primary.icon.texture=="native/40223.dds","Preview icons r
 ULT:SetLayoutPreview("missing")
 check(ULT.window.cards.primary.statusLabel.text=="EMPTY" and not ULT.window.cards.primary.icon.hidden,"Missing-slot preview uses the native empty frame with a readable state")
 ULT:SetLayoutPreview("overload")
-check(ULT.window.cards.primary.statusLabel.text=="ACTIVE" and ULT.window.cards.backup.statusLabel.text=="OFF","Both Overload states can be positioned without changing the slotted abilities")
+check(ULT.window.cards.primary.statusLabel.text=="ACTIVE" and ULT.window.cards.backup.statusLabel.text=="READY",
+    "Overload preview pairs an active specialization with an available ordinary Ultimate")
+check(ULT.window.cards.primary.valueLabel.text=="300" and ULT.window.cards.backup.valueLabel.text=="300 / 250",
+    "Overload previews use the same shared Ultimate pool without contradictory specialization states")
 check(ULT.bars.primary==livePrimary and ULT.bars.backup==liveBackup and ULT.currentUltimate==livePower,"Examples never replace native live bars or resource values")
 ULT:SetLayoutPreview("live")
 check(ULT:GetHUDBar("primary")==livePrimary,"Live preview uses the real bar without mutating it")
@@ -175,7 +205,12 @@ local primary=ULT.bars.primary
 primary.abilityId=101;primary.cost=100;primary.state="charging";primary.overload=false;primary.activeBar=true
 ULT.currentUltimate=20;ULT:RefreshHUD()
 local card=ULT.window.cards.primary
-check(card.statusLabel.text=="20%" and card.progressValue==0.2,"Charging shows native progress without an ability name")
+check(card.valueLabel.text=="20 / 100" and card.statusLabel.text=="" and card.progressValue==0.2,
+    "Charging shows the exact reserve and native cost with a thin progress bar")
+local numberWrites,statusWrites,textureWrites=card.valueLabel.textWrites,card.statusLabel.textWrites,card.icon.textureWrites
+ULT:RefreshHUD()
+check(card.valueLabel.textWrites==numberWrites and card.statusLabel.textWrites==statusWrites and card.icon.textureWrites==textureWrites,
+    "Identical resource refreshes do not rewrite native text or skill textures")
 ULT.currentUltimate=60;ULT:RefreshHUD()
 check(ULT.progressRunning and ULT.window.handlers.OnUpdate~=nil and card.progressValue==0.2,"Only a rising charging value starts the short interpolation")
 now=now+90;ULT:UpdateProgressAnimation()
@@ -185,16 +220,71 @@ check(card.progressValue==0.6 and not ULT.progressRunning and ULT.window.handler
 ULT.currentUltimate=80;ULT:RefreshHUD();ULT:SetVisible(false)
 check(not ULT.progressRunning and ULT.window.handlers.OnUpdate==nil,"Hiding the HUD immediately stops interpolation")
 ULT:SetVisible(true);primary.state="charging";ULT.currentUltimate=99.9;ULT:RefreshHUD()
-check(card.statusLabel.text=="99%","Charging cannot round to READY or 100 percent early")
+check(card.valueLabel.text=="99 / 100" and card.statusLabel.text=="","Charging cannot round to READY or the full activation cost early")
 primary.cost=0;primary.state="unknown";ULT:RefreshHUD()
-check(card.statusLabel.text=="?" and card.progressValue==0,"Unknown cost cannot produce inferred readiness or progress")
+check(card.valueLabel.text=="99 / ?" and card.statusLabel.text=="?" and card.progressValue==0,"Unknown cost cannot produce inferred readiness or progress")
+primary.cost=100;primary.state="ready";ULT.currentUltimate=250;ULT:RefreshHUD()
+check(card.valueLabel.text=="250 / 100" and card.progressValue==1,
+    "Ready progress saturates while the real pool remains visible above the activation cost")
+primary.abilityId=0;primary.state="empty";ULT:RefreshHUD()
+check(card.valueLabel.text=="—" and card.progressValue==0 and card.reserveMarker.hidden,
+    "An empty native slot displays a dash without invented progress or reserve marker")
+primary.abilityId=101
 primary.overload=true;primary.overloadState="active";primary.cost=25;ULT:RefreshHUD()
 check(card.statusLabel.text=="ACTIVE" and card.statusLabel.color[1]>card.statusLabel.color[2] and card.statusLabel.color[2]>card.statusLabel.color[3],"Active Overload uses gold status")
+check(card.valueLabel.text=="250" and card.progressValue==0.625,
+    "Overload progression uses its reminder scale without presenting it as an ability cost")
+ULT.sv.overload.readyReminderThreshold=500;ULT:RefreshHUD()
+check(card.progressValue==0.5 and math.abs(card.reserveMarker.x-card.progressBG.width*160/500)<0.001,
+    "Changing the Overload reminder immediately updates both fill and reserve marker")
+ULT.sv.overload.reserveAlertsEnabled=false;ULT:RefreshHUD()
+check(card.reserveMarker.hidden,"Disabling reserve alerts removes the otherwise misleading warning tick")
+ULT.sv.overload.reserveAlertsEnabled=true;ULT.sv.overload.reserveWarningThreshold=500;ULT.sv.overload.readyReminderThreshold=400;ULT:RefreshHUD()
+check(card.reserveMarker.hidden,"A reserve beyond the displayed scale cannot create an out-of-bounds tick")
+ULT.sv.overload.reserveWarningThreshold=160
 primary.overloadState="ready";ULT:RefreshHUD();ULT:UpdateReadyPulse()
 check(card.statusLabel.text=="READY" and card.statusLabel.color[2]>card.statusLabel.color[1] and card.readyGlow.color[2]>card.readyGlow.color[1],"Ready Overload blinks green")
 primary.overloadState="warning";ULT:RefreshHUD();ULT:UpdateReadyPulse()
 check(card.statusLabel.text=="STOP" and card.statusLabel.color[1]>card.statusLabel.color[2] and card.readyGlow.color[1]>card.readyGlow.color[2],"Low-reserve Overload blinks red with an action-oriented status")
+primary.overloadState="off";ULT:RefreshHUD()
+check(AlphaSquadUI.Localization.SetLanguage("fr") and card.statusLabel.text=="INACTIF",
+    "The real language selector immediately translates the contextual Overload inactive status")
+primary.overloadState="active";ULT:RefreshHUD()
+check(card.statusLabel.text=="ACTIF" and card.valueLabel.text=="250",
+    "French status changes preserve the shared numeric reserve")
+primary.overloadState="ready";ULT:RefreshHUD()
+check(card.statusLabel.text=="PRÊT","French readiness uses the existing localized status")
+check(AlphaSquadUI.Localization.SetLanguage("en") and card.statusLabel.text=="READY",
+    "Switching back to English repaints the current state without a resource event")
+ULT:UpdateReadyPulse();ULT:ResetPulseVisuals()
+check(card.statusLabel.alpha==1 and card.readyGlow.color[4]==0 and card.iconBorder.color[4]==0.9,
+    "Resetting pulses restores baseline opacity and frame color even when readiness is unchanged")
+ULT:SetVisible(false)
+local hiddenStatusWrites=card.statusLabel.textWrites
+check(AlphaSquadUI.Localization.SetLanguage("fr") and ULT.hudDirty and card.statusLabel.textWrites==hiddenStatusWrites,
+    "A language change while hidden defers native text writes")
+ULT:SetVisible(true)
+check(card.statusLabel.text=="PRÊT" and not ULT.hudDirty and card.statusLabel.alpha==1 and card.iconBorder.color[4]==0.9,
+    "Reopening the HUD immediately shows the selected language and current native state")
+AlphaSquadUI.Localization.SetLanguage("en")
 primary.overload=false
+primary.cost=100;primary.state="ready"
+local backup=ULT.bars.backup
+backup.overload=false;backup.cost=250;backup.state="charging"
+ULT.currentUltimate=200;ULT:RefreshHUD()
+check(card.valueLabel.text=="200 / 100" and ULT.window.cards.backup.valueLabel.text=="200 / 250"
+    and card.progressTarget==1 and ULT.window.cards.backup.progressTarget==0.8,
+    "Both weapon rows share one raw pool while retaining their independent native activation costs")
+primary.state="used";ULT.currentUltimate=0;ULT:RefreshHUD()
+check(card.statusLabel.text=="USED" and card.valueLabel.text=="0 / 100" and card.progressValue==0,
+    "Spending an ordinary Ultimate immediately clears its fill and shows the used state")
+activeCategory=3
+ULT.specialBar={abilityId=777,icon="native/temporary.dds",cost=80,state="charging",activeBar=true}
+ULT.currentUltimate=60;ULT:RefreshHUD()
+check(card.valueLabel.text=="60 / 80" and card.icon.texture=="native/temporary.dds" and ULT.window.cards.backup:IsHidden(),
+    "A native temporary hotbar replaces both inaccessible weapon slots with its own live Ultimate")
+activeCategory=HOTBAR_CATEGORY_PRIMARY;ULT.specialBar=nil;ULT:RefreshHUD()
+check(not ULT.window.cards.backup:IsHidden(),"Returning from a temporary bar restores both normal rows")
 for _,scale in ipairs({60,180}) do
     ULT.initialized=false
     ZO_SavedVars.NewAccountWide=function(_,name,_,_,defaults)

@@ -5,6 +5,7 @@ local ASUI = AlphaSquadUI
 local ULT = ASUI.Modules.ULTTracker
 if not ULT then return end
 local BAR_KEYS = {"primary", "backup"}
+local CARD_WIDTH,CARD_HEIGHT,CARD_GAP=152,48,12
 local COLORS = {
     white={0.95,0.97,1,1}, muted={0.65,0.68,0.72,1},
     cyan={0.56,0.74,0.79,1}, green={0.25,0.88,0.38,1},
@@ -21,6 +22,15 @@ local function Texture(name,parent,width,height,color)
     local control=WINDOW_MANAGER:CreateControl(name,parent,CT_TEXTURE)
     control:SetDimensions(width,height)
     if color then Color(control,color) end
+    return control
+end
+local function Label(name,parent)
+    local control=WINDOW_MANAGER:CreateControl(name,parent,CT_LABEL)
+    control:SetFont("ZoFontGameSmall")
+    control:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
+    control:SetVerticalAlignment(TEXT_ALIGN_CENTER)
+    control:SetMaxLineCount(1)
+    if control.SetWrapMode and TEXT_WRAP_MODE_ELLIPSIS then control:SetWrapMode(TEXT_WRAP_MODE_ELLIPSIS) end
     return control
 end
 local function CreateCard(parent,key)
@@ -47,12 +57,12 @@ local function CreateCard(parent,key)
     card.progressBG=Texture(prefix.."_ProgressBG",card,52,3,{0.06,0.07,0.08,0.65})
     card.progress=Texture(prefix.."_Progress",card,0,3,COLORS.cyan)
     card.progress:SetAnchor(LEFT,card.progressBG,LEFT,0,0)
-    card.statusLabel=WINDOW_MANAGER:CreateControl(prefix.."_Status",card,CT_LABEL)
-    card.statusLabel:SetFont("ZoFontGameSmall")
-    card.statusLabel:SetHorizontalAlignment(TEXT_ALIGN_CENTER)
-    card.statusLabel:SetVerticalAlignment(TEXT_ALIGN_CENTER)
-    card.statusLabel:SetMaxLineCount(1)
-    if card.statusLabel.SetWrapMode and TEXT_WRAP_MODE_ELLIPSIS then card.statusLabel:SetWrapMode(TEXT_WRAP_MODE_ELLIPSIS) end
+    card.reserveMarker=Texture(prefix.."_Reserve",card.progressBG,1,7,COLORS.white)
+    card.reserveMarker:SetDrawLayer(DL_OVERLAY)
+    card.reserveMarker:SetHidden(true)
+    card.valueLabel=Label(prefix.."_Value",card)
+    Color(card.valueLabel,COLORS.white)
+    card.statusLabel=Label(prefix.."_Status",card)
     card:SetMouseEnabled(true)
     card:SetHandler("OnMouseEnter",function()
         local bar=ULT:GetHUDBar(key)
@@ -65,7 +75,7 @@ local function CreateCard(parent,key)
     return card
 end
 ULT.layoutName="Personal Ultimate"
-ULT.layoutBounds={minWidth=148,minHeight=80,maxWidth=1800,maxHeight=1000}
+ULT.layoutBounds={minWidth=CARD_WIDTH*2+CARD_GAP,minHeight=CARD_HEIGHT,maxWidth=1800,maxHeight=1000}
 ULT.layoutBackground=false
 local EMPTY_ICON="EsoUI/Art/ActionBar/abilityFrame64_up.dds"
 local previewBars,previewMode
@@ -85,14 +95,17 @@ function ULT:GetHUDBar(key)
         previewMode=mode;previewBars={}
         for index,barKey in ipairs({"primary","backup"}) do
             -- Resolve identity through ESO. These examples never enter the live bars.
-            local id=mode=="overload" and 30366 or (index==1 and 40223 or 122174)
+            local overload=mode=="overload" and index==1
+            local id=overload and 30366 or (index==1 and 40223 or 122174)
             local state=mode=="missing" and "empty" or (mode=="ready" and "ready" or (index==1 and "ready" or "charging"))
+            if mode=="overload" then state=overload and "active" or "ready" end
             local name=GetAbilityName and GetAbilityName(id) or "Ultimate"
             local icon=GetAbilityIcon and GetAbilityIcon(id) or EMPTY_ICON
             previewBars[barKey]={key=barKey,label=index==1 and "FRONT BAR" or "BACK BAR",abilityId=state=="empty" and 0 or id,
-                name=name,icon=icon~="" and icon or EMPTY_ICON,cost=250,value=state=="ready" and 250 or 142,
+                name=name,icon=icon~="" and icon or EMPTY_ICON,cost=index==1 and 200 or 250,
+                value=mode=="overload" and 300 or (mode=="ready" and 250 or 200),
                 ready=state=="ready",state=state,activeBar=index==1,preview=true,
-                overload=mode=="overload",overloadState=index==1 and "active" or "off"}
+                overload=overload,overloadState=overload and "active" or nil}
         end
     end
     return previewBars[key]
@@ -117,15 +130,15 @@ function ULT:SetLayoutOrientation(orientation)
     return true
 end
 function ULT:GetWindowWidth()
-    return self:GetLayoutOrientation()=="vertical" and 72 or 152
+    return self:GetLayoutOrientation()=="vertical" and CARD_WIDTH or CARD_WIDTH*2+CARD_GAP
 end
 function ULT:ApplyLayout()
     if not self.window or not self.sv then return end
     local count=self:ShouldTrackBar("backup") and 2 or 1
     local vertical=self:GetLayoutOrientation()=="vertical"
-    local gap=8
-    self.layoutBounds.minWidth=vertical and 72 or count*72+(count-1)*gap
-    self.layoutBounds.minHeight=vertical and count*80+(count-1)*gap or 80
+    local gap=CARD_GAP
+    self.layoutBounds.minWidth=vertical and CARD_WIDTH or count*CARD_WIDTH+(count-1)*gap
+    self.layoutBounds.minHeight=vertical and count*CARD_HEIGHT+(count-1)*gap or CARD_HEIGHT
     local width,height=self.layoutBounds.minWidth,self.layoutBounds.minHeight
     local layout=ASUI.Layout
     if layout and layout.GetDimensions then width,height=layout.GetDimensions(self,width,height)
@@ -147,18 +160,23 @@ function ULT:ApplyLayout()
                 card:ClearAnchors()
                 card:SetAnchor(TOPLEFT,self.window,TOPLEFT,vertical and 0 or (index-1)*(cardW+gap),vertical and (index-1)*(cardH+gap) or 0)
                 card:SetDimensions(cardW,cardH)
-                local icon=math.max(40,math.min(96,cardW-20,cardH-28))
-                local left=(cardW-icon+16)/2
-                local top=math.max(0,(cardH-icon-28)/2)
-                card.iconBorder:ClearAnchors();card.iconBorder:SetAnchor(TOPLEFT,card,TOPLEFT,left-1,top)
+                local icon=math.max(40,math.min(52,cardW-112,cardH-8))
+                local top=math.max(0,(cardH-icon-2)/2)
+                local detailLeft=icon+26
+                local detailWidth=cardW-detailLeft
+                card.iconBorder:ClearAnchors();card.iconBorder:SetAnchor(TOPLEFT,card,TOPLEFT,16,top)
                 card.iconBorder:SetDimensions(icon+2,icon+2)
                 card.icon:SetDimensions(icon,icon);card.readyGlow:SetDimensions(icon+4,icon+4)
                 card.activeArrow:ClearAnchors();card.activeArrow:SetAnchor(RIGHT,card.iconBorder,LEFT,-4,0)
-                card.progressBG:ClearAnchors();card.progressBG:SetAnchor(TOPLEFT,card.iconBorder,BOTTOMLEFT,1,3)
-                card.progressBG:SetWidth(icon);card.progressWidth=icon
-                card.progress:SetWidth((card.progressValue or 0)*icon)
-                card.statusLabel:ClearAnchors();card.statusLabel:SetAnchor(TOP,card.progressBG,BOTTOM,0,1)
-                card.statusLabel:SetDimensions(math.max(56,icon),19)
+                local detailTop=(cardH-43)/2
+                card.valueLabel:ClearAnchors();card.valueLabel:SetAnchor(TOPLEFT,card,TOPLEFT,detailLeft,detailTop)
+                card.valueLabel:SetDimensions(detailWidth,19)
+                card.progressBG:ClearAnchors();card.progressBG:SetAnchor(TOPLEFT,card,TOPLEFT,detailLeft,detailTop+21)
+                card.progressBG:SetWidth(detailWidth);card.progressWidth=detailWidth
+                card.progress:SetWidth((card.progressValue or 0)*detailWidth)
+                card.reserveMarkerPosition=nil
+                card.statusLabel:ClearAnchors();card.statusLabel:SetAnchor(TOPLEFT,card,TOPLEFT,detailLeft,detailTop+25)
+                card.statusLabel:SetDimensions(detailWidth,18)
             end
         end
         self:ApplyAppearance()
@@ -278,7 +296,10 @@ function ULT:UpdateLockState()
 end
 
 function ULT:ApplyVisibility()
-    if not self.window or not self.sv then return end
+    if not self.window or not self.sv then
+        if self.NativeUI then self.NativeUI:Restore() end
+        return
+    end
 
     local settingsVisible = self.settingsWindow and not self.settingsWindow:IsHidden() or false
     local sharedSettings = AlphaSquadUI and AlphaSquadUI.Settings and AlphaSquadUI.Settings.mainWindow
@@ -305,6 +326,7 @@ function ULT:ApplyVisibility()
     else
         self:SetFlashUpdate(self:NeedsPulse() and not moving)
     end
+    if self.NativeUI then self.NativeUI:Refresh() end
 
     if self.Group and self.Group.ApplyVisibility then
         self.Group:ApplyVisibility()
@@ -345,7 +367,8 @@ function ULT:RefreshCard(card,bar)
     local state=empty and "empty" or (bar.overload and bar.overloadState or bar.state or "unknown")
     local value=math.max(0,tonumber(bar.value or self.currentUltimate) or 0)
     local denominator=bar.cost or 0
-    if bar.overload then denominator=self.sv.overload and self.sv.overload.readyReminderThreshold or 400 end
+    local overloadConfig=self.sv.overload
+    if bar.overload then denominator=overloadConfig and overloadConfig.readyReminderThreshold or 400 end
     local progress=denominator>0 and math.max(0,math.min(1,value/denominator)) or 0
     if empty then progress=0 end
     local color,text=COLORS.cyan,"?"
@@ -354,18 +377,42 @@ function ULT:RefreshCard(card,bar)
     elseif state=="active" then color,text=COLORS.gold,L("ACTIVE")
     elseif state=="used" then color,text=COLORS.muted,L("USED")
     elseif state=="empty" then color,text=COLORS.muted,L("EMPTY")
-    elseif state=="off" then color,text=COLORS.muted,L("OFF")
-    elseif state=="charging" and denominator>0 then text=tostring(math.min(99,math.floor(progress*100))).."%" end
+    elseif state=="off" then color,text=COLORS.muted,L("INACTIVE")
+    elseif state=="charging" and denominator>0 then text="" end
+    local number
+    if empty then number="—"
+    elseif bar.overload then number=tostring(math.floor(value))
+    else number=string.format("%d / %s",math.floor(value),denominator>0 and tostring(math.ceil(denominator)) or "?") end
+    if card.numberText~=number then card.numberText=number;card.valueLabel:SetText(number) end
+    if card.statusText~=text then card.statusText=text;card.statusLabel:SetText(text) end
+    -- A reserve tick is an Overload warning threshold, never an activation cost.
+    local reserve=bar.overload and overloadConfig and overloadConfig.reserveAlertsEnabled
+        and overloadConfig.reserveWarningThreshold or nil
+    local markerVisible=not empty and type(reserve)=="number" and denominator>0 and reserve>=0 and reserve<=denominator
+    if card.reserveMarkerVisible~=markerVisible then
+        card.reserveMarkerVisible=markerVisible;card.reserveMarker:SetHidden(not markerVisible)
+    end
+    if markerVisible then
+        local position=(card.progressWidth or 0)*reserve/denominator
+        if card.reserveMarkerPosition~=position then
+            card.reserveMarkerPosition=position
+            card.reserveMarker:ClearAnchors();card.reserveMarker:SetAnchor(CENTER,card.progressBG,LEFT,position,0)
+        end
+    end
     -- The active indicator always describes the native hotbar, never READY.
-    card.activeArrow:SetHidden(not bar.activeBar)
-    card:SetAlpha(bar.activeBar and 1 or 0.52)
-    card.icon:SetTexture(not empty and bar.icon and bar.icon~="" and bar.icon or EMPTY_ICON)
-    card.icon:SetAlpha(empty and 0.45 or 1)
-    card.statusLabel:SetText(text);Color(card.statusLabel,color)
-    Color(card.iconBorder,color,state=="ready" and 0.9 or 0.65)
-    Color(card.progress,color)
-    card.readyGlow:SetColor(0,0,0,0)
-    card.statusLabel:SetAlpha(1)
+    local active=bar.activeBar==true
+    if card.activeBar~=active then
+        card.activeBar=active;card.activeArrow:SetHidden(not active);card:SetAlpha(active and 1 or 0.52)
+    end
+    local texture=not empty and bar.icon and bar.icon~="" and bar.icon or EMPTY_ICON
+    if card.iconTexture~=texture then card.iconTexture=texture;card.icon:SetTexture(texture) end
+    if card.empty~=empty then card.empty=empty;card.icon:SetAlpha(empty and 0.45 or 1) end
+    if card.presentationState~=state then
+        card.presentationState=state
+        Color(card.statusLabel,color);Color(card.iconBorder,color,state=="ready" and 0.9 or 0.65)
+        Color(card.progress,color)
+        card.readyGlow:SetColor(0,0,0,0);card.statusLabel:SetAlpha(1)
+    end
     self:SetCardProgress(card,bar,progress,state)
 end
 function ULT:RefreshHUD()
@@ -401,13 +448,14 @@ function ULT:ResetPulseVisuals()
     if not self.window or not self.window.cards then return end
     for _,card in pairs(self.window.cards) do
         card.readyGlow:SetColor(0,0,0,0);card.statusLabel:SetAlpha(1)
+        card.presentationState=nil
     end
     if self.initialized then self:RefreshHUD() end
 end
 function ULT:CreateHUD()
     local win=WINDOW_MANAGER:CreateTopLevelWindow("AlphaSquadULTTrackerWindow")
     self.window=win;self.layoutSignature=nil
-    win:SetDimensions(self:GetWindowWidth(),80)
+    win:SetDimensions(self:GetWindowWidth(),CARD_HEIGHT)
     win:SetClampedToScreen(true);win:SetMovable(true);win:SetMouseEnabled(true)
     win:SetDrawTier(DT_HIGH);win:SetDrawLayer(DL_OVERLAY);win:SetDrawLevel(90)
     if ASUI.Settings and ASUI.Settings.ApplyWindowLayer then ASUI.Settings.ApplyWindowLayer(win,true) end

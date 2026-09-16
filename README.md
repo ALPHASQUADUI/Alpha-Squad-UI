@@ -2,7 +2,7 @@
 
 A modular **The Elder Scrolls Online** addon by **@SeRuM1** for group preparation, visual build inspection and Ultimate tracking.
 
-Version **3.4.1** is a development hotfix for the Dashboard `BG` / `Scroll` initialization errors reported in 3.4.0. Native ESO retesting and formal reservation/coexistence validation of the build transport remain outstanding; development pushes do not publish a release.
+Version **3.5.0** is a development candidate implementing the selected personal Ultimate design: native icons, point counters, thin progress bars and reversible replacement of the native Ultimate slot. Native ESO retesting and formal reservation/coexistence validation of the build transport remain outstanding; development pushes do not publish a release.
 
 [Website](https://alphasquadeso.com/) · [Releases](https://github.com/ALPHASQUADUI/Alpha-Squad-UI/releases) · [Changelog](CHANGELOG.md) · [Downloads and installation](releases/README.md) · [Security](SECURITY.md) · [Current development audit](docs/AUDIT_3.4.0.md)
 
@@ -29,7 +29,11 @@ Settings adapt their cards and navigation to the available screen width while pr
 
 Dashboard offers **Automatic**, **English** and **French**. Automatic follows the game language; the explicit choice is saved account-wide and updates addon windows without reloading. Game-supplied names and native tooltip descriptions stay in the client language; the selector does not change ESO itself or translate player names.
 
-The personal HUD always shows both weapon-bar Ultimates. Native skill icons and a compact progress indicator replace the old background, Ultimate names and repeated headers. A green chevron immediately left of the active slot identifies the current weapon bar; the other slot is dimmed. No AUTO/FRONT/BACK/BOTH selector is needed. Special bars retain conservative native state handling. Optional Overload uses gold **ACTIVE**, pulsing green **READY** and pulsing red **STOP**; it never activates or cancels a skill for you.
+The selected personal HUD shows both normal weapon-bar Ultimates as compact rows, placed side by side or stacked. Each native icon has a current-points/native-cost counter, a thin progress bar and a short localized state. Raw points remain visible above the cost; the bar stops at full. Unknown costs show **?**, and empty slots never claim readiness. A green chevron immediately left of the active slot identifies the current weapon bar; the other slot is dimmed. The HUD has no background, Ultimate names or repeated headers, and no AUTO/FRONT/BACK/BOTH selector. Special bars show their actual native Ultimate without falsely marking a normal weapon bar active.
+
+Optional Overload shows actual remaining Ultimate points and a reserve marker. Its ready reminder is not an activation cost. **INACTIVE** is neutral, **ACTIVE** gold, **READY** pulses green and **STOP** pulses red; the addon never activates or cancels a skill for you. The French states are **INACTIF**, **ACTIF**, **PRÊT** and **STOP**.
+
+While the enabled personal HUD is visible in gameplay, its display replaces the native Ultimate button visually. Turn **Show personal HUD** OFF, hide the personal tracker or disable ULT Tracker to restore the game's slot. Group tracking can remain enabled when personal visibility is OFF. Menus, loading and MOVE HUD also release the replacement. The Ultimate keybind still casts normally; other action buttons and sharing preferences are unchanged.
 
 ## Choose your style
 
@@ -136,7 +140,9 @@ The personal Ultimate HUD handles normal Ultimates and optional Overload behavio
 
 - Both weapon-bar slots remain visible in either horizontal or vertical orientation.
 - A green marker identifies the verified active bar; the inactive slot is dimmed.
-- Overload status appears in the same compact view, without hiding the other weapon slot.
+- Normal slots show actual Ultimate points, their verified native cost and a clamped progress bar.
+- Overload shows remaining points and a reserve marker in the same compact view.
+- The native Ultimate slot returns whenever the personal replacement is disabled or hidden.
 
 The former AUTO/FRONT/BACK/BOTH selectors are retired. **ULT Tracker → OVERLOAD SETTINGS** controls reserve warnings, the ready reminder and the PvP preference. Turn **Use Overload behavior** OFF to retain standard Ultimate tracking. **Warning starts** sets the low-reserve alert threshold. Alerts do not stop Overload: activation and stopping stay under your control through your Ultimate binding. Automatic cancellation and its obsolete settings have been removed.
 
@@ -164,6 +170,6 @@ Open **About** for the Alpha Squad website, ESOUI, release notes and the **JOIN 
 
 Shared snapshots are bounded reports from compatible senders, not proof against a modified client. Invalid or contradictory equipment data cannot certify a complete build, and unknown fields remain unknown. The addon never executes received code or automatically equips items, consumes potions or posts group messages.
 
-See the [3.4.1 development notes](releases/3.4.1.md), [architecture](docs/ARCHITECTURE.md), [performance](docs/PERFORMANCE.md), [client acceptance](docs/CLIENT_ACCEPTANCE.md) and [contributing](CONTRIBUTING.md) for technical details. Screenshots and bug reports should omit private chats, unrelated account information and SavedVariables containing group data.
+See the [3.5.0 development notes](releases/3.5.0.md), [architecture](docs/ARCHITECTURE.md), [performance](docs/PERFORMANCE.md), [client acceptance](docs/CLIENT_ACCEPTANCE.md) and [contributing](CONTRIBUTING.md) for technical details. Screenshots and bug reports should omit private chats, unrelated account information and SavedVariables containing group data.
 
 The addon code is available under the [MIT license](LICENSE). ESO artwork and third-party libraries retain their respective ownership and licenses.

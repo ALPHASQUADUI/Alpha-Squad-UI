@@ -17,6 +17,8 @@ Dashboard theme and language selectors allocate one uniquely named native dropdo
 
 ## Personal ULT and Overload
 
+Design 2 reuses the existing two slot views for icons, numeric counters, thin progress bars and localized states. Raw points and native costs remain data; only the visual fill clamps to its range. Overload reserve and reminder presentation uses the same resource state, not an extra scanner or HUD. Language changes refresh presentation without a build scan or placement reset. Native Ultimate-button replacement follows the existing personal visibility lifecycle and does not alter the game's casting path. Native keyboard/gamepad coexistence and frame time remain unmeasured until client acceptance.
+
 Native events drive shared personal slot/resource changes and relevant Overload effects. A single 1.5-second fallback refresh runs only while the personal tracker is enabled, visible and unobscured. READY, reserve and reminder animation runs only while visible and needed. Overload uses the same HUD, resource state and lifecycle; it has no separate recovery heartbeat.
 
 The optional Overload effect subscription is filtered to the player and relevant morphs. Cached slot/effect state handles presentation; layout checks do not rescan skills. Placement and loading suppress alerts. Overload no longer calls effect cancellation APIs or maintains auto-stop state.

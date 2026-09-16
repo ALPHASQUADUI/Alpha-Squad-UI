@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.5.0 — Personal Ultimate design 2
+
+Implemented the selected transparent personal HUD with native icons, current Ultimate/native-cost counters, thin progress bars and compact localized states in horizontal and vertical layouts. Raw points remain accurate above the native cost; unknown costs and special bars remain conservative. Overload uses remaining points and a reserve marker, with neutral inactive, gold active, green ready and red stop states. The reminder threshold is not displayed as a skill cost.
+
+The visible personal replacement now hides only the native Ultimate button presentation. Disabling or hiding personal tracking, menus, loading and MOVE HUD restore it while native casting and other action buttons remain intact. Personal visibility is independent of group tracking and sharing. English/French changes refresh the HUD without resetting placement. Existing saved dimensions remain supported; new layouts use compact design 2 defaults.
+
+Native acceptance remains pending, including the retained 3.4.1 dropdown fix, gamepad presentation and action-bar addon coexistence. This cycle remains on `dev`, without a PR or public release. See [development notes](releases/3.5.0.md).
+
 ## 3.4.1 — Development hotfix
 
 Corrected the native Dashboard initialization failure reported in 3.4.0: theme and language dropdowns now receive distinct named roots, preventing duplicate `BG` and `Scroll` controls. Existing private dropdowns are reused without modifying ESO's shared menu. Regression coverage models native child-name registration with multiple dropdowns. The hotfix still requires native ESO retesting; this dev cycle authorizes no PR or release. See [development notes](releases/3.4.1.md).
