@@ -114,6 +114,24 @@ local function ReadSkills(r,version)
             craftedAbilityId=r:uint(2147483647),lineId=r:uint(2147483647),scriptsKnown=r:flag(),scripts={}}
         if skill.craftedAbilityId==0 then skill.craftedAbilityId=nil end
         if skill.lineId==0 then skill.lineId=nil end
+        -- A reported line is a claim, not the definition of the reported ability.
+        -- Only public identity lookups may establish a remote skill's line; never
+        -- query the inspecting player's purchased skills or active class lines.
+        skill.declaredLineId,skill.lineId=skill.lineId,nil
+        skill.lineIdentityEvidence="UNRESOLVED"
+        if not skill.craftedAbilityId and id>0 then
+            local skillType,lineIndex=Call(GetSpecificSkillAbilityKeysByAbilityId,id)
+            local nativeLine=skillType and lineIndex and Call(GetSkillLineId,skillType,lineIndex)
+            if type(nativeLine)=="number" and nativeLine>0 and nativeLine<=2147483647 and nativeLine%1==0 then
+                if skill.declaredLineId and skill.declaredLineId~=nativeLine then
+                    skill.lineIdentityEvidence="CONTRADICTORY"
+                else
+                    skill.lineId=nativeLine
+                    skill.lineIdentityEvidence="NATIVE_DEFINITION"
+                    skill.lineName=Call(GetSkillLineNameById,nativeLine)
+                end
+            end
+        end
         local scriptCount=r:uint(3)
         local scriptSlots={SCRIBING_SLOT_PRIMARY,SCRIBING_SLOT_SECONDARY,SCRIBING_SLOT_TERTIARY}
         local seenScripts={}

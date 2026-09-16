@@ -137,10 +137,15 @@ function SC:RefreshInspector()
     local details,status
     if player and self.GetPlayerBuildDetails then details,status=self:GetPlayerBuildDetails(PlayerKey(player))
     elseif player and player.unitTag=="player" then details=self.localSnapshot end
-    if self.inspectorRequestKey==PlayerKey(player) and self.inspectorRequestError and not details then status=self.inspectorRequestError end
+    local requestError=self.inspectorRequestKey==PlayerKey(player) and self.inspectorRequestError or nil
+    if requestError then status=requestError end
     local subtitle=player and (Text(player.displayName).."  •  "..ClassName(player)..(player.connected==false and "  •  Offline" or "")) or "Select a player from the group list."
-    if details then subtitle=subtitle.."\n"..(player and player.unitTag=="player" and "Your equipped build" or "Shared build snapshot • refresh after changes")
-    elseif player then subtitle=subtitle.."\nPartial information • request a compatible shared build for exact equipment and skill slots" end
+    if details then subtitle=subtitle.."\n"..(requestError or (player and player.unitTag=="player" and "Your equipped build" or "Shared build snapshot • refresh after changes"))
+    elseif player then
+        -- Keep transfer progress and failures visible even when another library
+        -- already supplies set rows, which hide the sheet's empty-state label.
+        subtitle=subtitle.."\n"..Text(status,"Partial information • request a compatible shared build for exact equipment and skill slots")
+    end
     win.subtitle:SetText((UI.Text(subtitle):gsub("@SeRuM1",function() return AlphaSquadUI.Theme.authorText or "@SeRuM1" end)))
     win.footer:SetText("Hover equipment, skills and Champion stars for their details. ? = unavailable • — = empty. Set headline = highest bar total; FRONT / BACK = exact set pieces.")
     self.BuildView.Bind(win.buildSheet,player,details,status)

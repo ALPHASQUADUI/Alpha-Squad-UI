@@ -113,8 +113,14 @@ local function Fire(event,...)
     fn(event,...)
 end
 Fire(EVENT_ADD_ON_LOADED,"AlphaSquadBuildShare")
-check(SC.sv.enabled and SC.sv.experimentalSharing,"Fresh companion installs enable sharing")
+check(not SC.sv.enabled and not SC.sv.experimentalSharing and not SC.sv.shareData,"Fresh companion installs require explicit sharing consent")
+check(not native[507] and not native[510],"Fresh OFF is applied to both owned native protocols")
 check(next(updates)==nil,"Solo companion has no update loop")
+Fire(EVENT_PLAYER_ACTIVATED)
+check(printed[#printed]:find('Sharing starts OFF',1,true),"First activation explains the explicit consent command")
+local beforeRepeat=#printed
+Fire(EVENT_PLAYER_ACTIVATED)
+check(#printed==beforeRepeat,"Consent explanation is shown once without repeated chat messages")
 SLASH_COMMANDS['/asbuildshare']('on')
 check(SC.sv.enabled and SC.share.available,"Explicit consent enables compatible transport")
 check(native[507] and native[510] and SC:GetSharingStatus()=="SHARING","Companion ON applies the two native Allow Sending controls")
@@ -146,7 +152,17 @@ updates.AlphaSquadBuildShareHeartbeat.fn()
 check(captures==0 and readiness==2,'Unchanged companion heartbeats reuse the current equipment capture')
 Fire(EVENT_ACTION_SLOTS_ALL_HOTBARS_UPDATED);Fire(EVENT_SKILL_BUILD_SELECTION_UPDATED);FlushCaptures()
 check(captures==1 and not SC.scanDirty,'Multiple build events coalesce into one native capture')
+queued={{id=510,data={private='queued summary'}},{id=507,data={private='queued build'}},{id=20,data={unrelated=true}}}
+native[20]=true;SC.share.mayHaveQueuedBuildData=true
 Fire(EVENT_PLAYER_COMBAT_STATE,true)
+local combatSent=Broadcast()
+local unrelatedCombat=0
+for _,entry in ipairs(combatSent) do
+    check(not entry.data.private,'Combat transition revokes queued private frames before the native broadcast boundary')
+    if entry.id==20 then unrelatedCombat=unrelatedCombat+1 end
+end
+check(unrelatedCombat==1 and native[507] and native[510],
+    'Successful combat pause keeps native consent and unrelated traffic unchanged')
 local statusNative,statusReads=SC.GetSharingStatus,0
 SC.GetSharingStatus=function(self)statusReads=statusReads+1;return statusNative(self)end
 for _=1,20 do events['AlphaSquadBuildShare:'..EVENT_EFFECT_CHANGED](EVENT_EFFECT_CHANGED,0,0,0,'player') end
@@ -219,8 +235,13 @@ sent=Broadcast()
 for _,entry in ipairs(sent) do
     if entry.id~=20 then check(not entry.data.private and entry.data.version==0,"New-group activation clears previous-group queued builds before enabling transport") end
 end
-check(native[507] and native[510] and not SC.share.queueRevokeNeedsGroup and SC:GetSharingStatus()=="SHARING",
-    "The pending companion choice resumes in the new group without a second user command")
+check(not native[507] and not native[510] and SC.share.transportResumeRequired and SC:GetSharingStatus()=="LOCAL",
+    "A failed lifecycle queue revocation never automatically overrides a later native OFF")
+SLASH_COMMANDS['/asbuildshare']('status')
+check(printed[#printed]:find('Choose ON to retry safely',1,true),"A blocked sender explains the explicit safe retry")
+SLASH_COMMANDS['/asbuildshare']('on')
+check(native[507] and native[510] and not SC.share.queueRevokeNeedsGroup and not SC.share.transportResumeRequired,
+    "An explicit companion ON revokes old data before restoring native sharing")
 native[507]=false
 optionsUnavailable=true;AlphaSquadBuildShare.Host.Sharing.nativeControls={}
 SLASH_COMMANDS['/asbuildshare']('on')
@@ -244,10 +265,49 @@ check(not SC.sv.enabled and not native[507] and not native[510] and next(updates
 saved=nil;events={};updates={};later={};protocols={};optionsUnavailable=true
 LoadCompanion();SC=AlphaSquadBuildShare.Host.Modules.SupportCoverage
 Fire(EVENT_ADD_ON_LOADED,"AlphaSquadBuildShare")
-check(SC:GetSharingStatus()=="LOCAL" and SC.sv.nativeSharingPending==true,"Missing startup controls leave fresh consent pending and display no false ON")
+check(SC:GetSharingStatus()=="LOCAL" and SC.sv.nativeSharingPending==false,"Missing startup controls retain fresh OFF and display no false ON")
 optionsUnavailable=false;Fire(EVENT_PLAYER_ACTIVATED)
-check(SC:GetSharingStatus()=="SHARING" and SC.sv.nativeSharingPending==nil and native[507] and native[510],
-    "First activation completes fresh sharing setup once native controls become available")
+check(SC:GetSharingStatus()=="LOCAL" and SC.sv.nativeSharingPending==nil and not native[507] and not native[510] and next(updates)==nil,
+    "First activation completes fresh OFF once native controls become available without sharing")
+-- Old accepted sender preferences stay intact, but never override native OFF.
+saved={enabled=true,shareData=true,experimentalSharing=true};events={};updates={};later={};protocols={}
+native[507]=false;native[510]=true
+LoadCompanion();SC=AlphaSquadBuildShare.Host.Modules.SupportCoverage
+Fire(EVENT_ADD_ON_LOADED,"AlphaSquadBuildShare");Fire(EVENT_PLAYER_ACTIVATED)
+check(SC.sv.enabled and not native[507] and native[510] and SC:GetSharingStatus()=="LOCAL",
+    "Legacy accepted ON preserves an existing native OFF during migration")
+saved={enabled=true,shareData=true,experimentalSharing=true};events={};updates={};later={};protocols={}
+native[507]=true;native[510]=true
+LoadCompanion();SC=AlphaSquadBuildShare.Host.Modules.SupportCoverage
+Fire(EVENT_ADD_ON_LOADED,"AlphaSquadBuildShare");Fire(EVENT_PLAYER_ACTIVATED)
+check(SC.sv.enabled and SC:GetSharingStatus()=="SHARING" and updates.AlphaSquadBuildShareHeartbeat,
+    "Legacy accepted ON with native ON survives the default-policy update")
+queued={{id=507,data={private='must not survive a failed pause'}}}
+SC.share.mayHaveQueuedBuildData=true;rejectSend=true
+Fire(EVENT_PLAYER_COMBAT_STATE,true)
+check(not native[507] and not native[510] and SC.share.transportResumeRequired and SC.sv.enabled,
+    'A failed combat revocation blocks owned native protocols without deleting accepted consent')
+rejectSend=false;Fire(EVENT_PLAYER_COMBAT_STATE,false)
+check(not native[507] and not native[510] and not SC.share.queueRevokeFailed,
+    'Combat end clears old queued data but cannot silently override a native OFF')
+Fire(EVENT_PLAYER_ACTIVATED)
+check(not native[507] and not native[510] and next(updates)==nil,
+    'Activation cannot bypass the explicit resume required after failed revocation')
+-- Failed explicit ON may leave a pending preference; reloading must not turn
+-- that into authorization to override the native OFF chosen while blocked.
+rejectSend=true;SC.share.queueRevokeFailed=true;SLASH_COMMANDS['/asbuildshare']('on')
+check(SC.sv.nativeSharingPending==true and SC.sv.buildSharingResumeRequired==true,
+    'A blocked explicit request persists its separate manual-resume requirement')
+rejectSend=false;saved=SC.sv;events={};updates={};later={};protocols={};queued={}
+LoadCompanion();SC=AlphaSquadBuildShare.Host.Modules.SupportCoverage
+Fire(EVENT_ADD_ON_LOADED,'AlphaSquadBuildShare');Fire(EVENT_PLAYER_ACTIVATED)
+check(not native[507] and not native[510] and SC.share.transportResumeRequired and next(updates)==nil,
+    'Reload preserves native OFF and the manual-resume requirement despite a pending ON preference')
+SLASH_COMMANDS['/asbuildshare']('on')
+check(native[507] and native[510] and not SC.share.transportPaused and not SC.share.transportResumeRequired
+    and not SC.sv.buildSharingResumeRequired and SC:GetSharingStatus()=='SHARING',
+    'Explicit safe retry resumes the companion after a failed pause and clears the persistent block')
+for _,entry in ipairs(Broadcast()) do check(not entry.data.private,'Retry never broadcasts the pre-pause private frame') end
 -- Co-installing both addons must never register duplicate protocol handlers.
 AlphaSquadUI={Modules={SupportCoverage={}}}
 events={};LoadCompanion()

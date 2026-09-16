@@ -280,13 +280,15 @@ function SC:ScanPoisons()
     return result
 end
 
-function SC:RefreshReadinessFacts()
+function SC:RefreshReadinessFacts(alreadyScanned)
     if not self.localSnapshot then return false end
-    self.localSnapshot.food = self:ScanFood("player")
-    self.localSnapshot.potion = self:ScanPotion()
-    self.localSnapshot.mundus = self:ScanMundus()
-    self.localSnapshot.dead = Try(IsUnitDead, "player") == true
-    self.localSnapshot.connected = self:IsOnline("player")
+    if not alreadyScanned then
+        self.localSnapshot.food = self:ScanFood("player")
+        self.localSnapshot.potion = self:ScanPotion()
+        self.localSnapshot.mundus = self:ScanMundus()
+        self.localSnapshot.dead = Try(IsUnitDead, "player") == true
+        self.localSnapshot.connected = self:IsOnline("player")
+    end
     self.localSnapshot.readinessAt = self.NowMs()
     local food=self.localSnapshot.food or {};local potion=self.localSnapshot.potion or {}
     local mundus=self.localSnapshot.mundus or {}
@@ -297,10 +299,16 @@ function SC:RefreshReadinessFacts()
         potionSignature,table.concat(mundus.ids or {},",")},"|")
     local changed=self.lastReadinessSignature~=nil and self.lastReadinessSignature~=signature
     self.lastReadinessSignature=signature
-    return changed
+    -- Time/count/status updates change the local presentation, but a moving
+    -- timer must not trigger another build broadcast or detail fingerprint.
+    local presentation=table.concat({signature,tostring(food.timeEnds),tostring(potion.count),
+        tostring(self.localSnapshot.dead),tostring(self.localSnapshot.connected)},"|")
+    local displayChanged=self.lastReadinessPresentationSignature~=nil and self.lastReadinessPresentationSignature~=presentation
+    self.lastReadinessPresentationSignature=presentation
+    return changed,displayChanged
 end
 
 function SC:OnConsumableUsed()
     -- Refresh readiness once after the item event; there are no consumption reports.
-    if self.ScheduleRefresh and not self.inCombat then self:ScheduleRefresh("consumable used", 250) end
+    if self.ScheduleRefresh and not self.inCombat then self:ScheduleRefresh("consumable used", 250, true) end
 end

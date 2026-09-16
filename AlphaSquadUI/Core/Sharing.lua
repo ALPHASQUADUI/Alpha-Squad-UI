@@ -13,6 +13,11 @@ local function Call(object,method,...)
     local ok,value=pcall(object[method],object,...);if ok then return value end
 end
 local function Preference() local p=ASUI.Preferences;if p then p.Initialize();return p.sv end end
+local function SaveBuildPause(value)
+    local sc=ASUI.Modules.SupportCoverage
+    local saved=Preference() or sc and sc.sv
+    if saved then saved.buildSharingResumeRequired=value or nil end
+end
 local function Value(control)
     local ok,value=pcall(control.getFunc)
     if ok and type(value)=="boolean" then return value end
@@ -98,6 +103,12 @@ function S.GetStatus(kind)
         if not sc or not sc.sv or not sc.share then
             return false,sc and sc.share and sc.share.error or "Build transport unavailable.",false
         end
+        if sc.share.transportResumeRequired then
+            if anyEnabled then
+                return false,sc.share.controlError or "Native build sending could not be paused. Reload the UI before sharing again.",false
+            end
+            return false,"Build sharing is paused because queued data could not be cleared. Choose ON to retry safely.",true
+        end
         if not sc.sv.shareData or not sc.sv.experimentalSharing then
             if sc.share.controlError then
                 if anyEnabled or sc.share.queueRevokeFailed then return false,sc.share.controlError,not anyEnabled end
@@ -129,11 +140,32 @@ local function SetProtocols(kind,enabled)
         local ok=pcall(manager.SetProtocolEnabled,manager,id,enabled)
         if not ok or Call(protocol,"IsEnabled")~=enabled then accepted=false end
     end
-    if not accepted then
+    if not accepted and enabled then
         for id,value in pairs(previous) do pcall(manager.SetProtocolEnabled,manager,id,value) end
     end
     -- Native LGB prunes disabled messages immediately before broadcasting.
     return accepted
+end
+-- Used only when a queue cannot be revoked at a lifecycle boundary. Consent
+-- remains unchanged; only our native protocols are blocked. A later external
+-- OFF is indistinguishable from this OFF through LGB's supported API, so never
+-- restore an old ON automatically. The next explicit ON performs revocation.
+function S.SuspendBuildTransport()
+    local sc=ASUI.Modules.SupportCoverage
+    if not sc or not sc.share then return false end
+    sc.share.transportResumeRequired=true
+    SaveBuildPause(true)
+    if S.nativeControls.builds==false then S.nativeControls.builds=nil end
+    local accepted=SetProtocols("builds",false)
+    if not accepted then
+        sc.share.controlError="Queued build data could not be cleared and native controls are unavailable. Reload the UI before sharing again."
+        S.errors.builds=sc.share.controlError
+    end
+    return accepted
+end
+function S.RestoreBuildTransport()
+    local sc=ASUI.Modules.SupportCoverage
+    return sc and sc.share and not sc.share.transportResumeRequired or false
 end
 function S.SetEnabled(kind,enabled)
     local definition=definitions[kind]
@@ -153,6 +185,10 @@ function S.SetEnabled(kind,enabled)
     end
     local accepted=SetProtocols(kind,enabled and revoked)
     if not revoked then accepted=false end
+    if kind=="builds" and sc and sc.share then
+        if accepted then sc.share.transportResumeRequired=nil;SaveBuildPause(false)
+        elseif not revoked then sc.share.transportResumeRequired=true;SaveBuildPause(true) end
+    end
     if prefs then
         prefs[definition.preference]=enabled
         prefs[definition.preference.."Pending"]=not accepted and enabled or nil
@@ -171,16 +207,15 @@ function S.SetEnabled(kind,enabled)
             if sc.ResetSharingState then sc:ResetSharingState("Sharing disabled")
             elseif sc.ResetBuildDetailState then sc:ResetBuildDetailState() end
         end
+        if enabled and accepted and sc.ResumeBuildSharing then sc:ResumeBuildSharing() end
         if sc.UpdateRuntime then sc:UpdateRuntime() end
         if sc.MarkScanDirty then sc:MarkScanDirty("sharing changed") end
     end
     return accepted,S.errors[kind]
 end
 function S.StartUltimateSender()
-    local prefs=Preference()
-    local _,_,available=S.GetStatus("ultimate")
-    if available and not S.IsEnabled("ultimate") then return false end
-    if not available and prefs and prefs.ultimateSharing==false then return false end
+    local enabled,_,available=S.GetStatus("ultimate")
+    if not available or not enabled then return false end
     if S.ultimateSender then return true end
     if not LibGroupCombatStats or type(LibGroupCombatStats.RegisterAddon)~="function" then return false end
     local ok,result=pcall(LibGroupCombatStats.RegisterAddon,"AlphaSquadUIUltimateSender",{"ULT"})
@@ -190,26 +225,50 @@ end
 function S.Initialize()
     local prefs=Preference()
     if not prefs then return end
-    -- One account-wide installation/migration step: configure the three owned
-    -- sharing categories, including libraries installed before Alpha Squad UI.
-    -- Saved Alpha Squad ON/OFF choices take priority over the new ON default.
+    local sc=ASUI.Modules.SupportCoverage
+    if prefs.buildSharingResumeRequired and sc and sc.share then sc.share.transportResumeRequired=true end
+    -- New categories require an explicit ON. Existing preferences and native
+    -- OFF choices survive upgrades; only an explicit pending action may turn
+    -- a native protocol ON during a retry.
     local initializeDefaults=prefs.sharingDefaultsVersion~=1
     if initializeDefaults then prefs.sharingDefaultsVersion=1 end
     for _,kind in ipairs({"builds","ultimate","sets"}) do
         if S.nativeControls[kind]==false then S.nativeControls[kind]=nil end
         local definition=definitions[kind]
         local pending=prefs[definition.preference.."Pending"]
-        if initializeDefaults then
-            local enabled=prefs[definition.preference]
-            if type(enabled)~="boolean" then enabled=true end
-            S.SetEnabled(kind,enabled)
+        local enabled=prefs[definition.preference]
+        if kind=="builds" and type(enabled)~="boolean" then
+            local sc=ASUI.Modules.SupportCoverage
+            if sc and sc.sv and sc.sv.shareData==true and sc.sv.experimentalSharing==true then
+                -- Older profiles stored accepted build consent in the module.
+                -- Fresh module defaults are OFF, so this cannot opt in a new install.
+                enabled=true;prefs[definition.preference]=true
+            end
+        end
+        if type(enabled)~="boolean" then
+            S.SetEnabled(kind,false)
         elseif type(pending)=="boolean" then
-            S.SetEnabled(kind,pending)
+            local sc=ASUI.Modules.SupportCoverage
+            if not (kind=="builds" and sc and sc.share and sc.share.transportResumeRequired) then
+                S.SetEnabled(kind,pending)
+            end
+        elseif initializeDefaults then
+            if not enabled then S.SetEnabled(kind,false)
+            elseif kind=="builds" then
+                local sc=ASUI.Modules.SupportCoverage
+                if sc and sc.sv then
+                    sc.sv.shareData=true;sc.sv.experimentalSharing=true
+                    sc:InitializeSharing()
+                end
+            end
         else
             -- After setup, the actual native setting is authoritative. A later
             -- OFF in either interface must survive reloads and zone changes.
-            local enabled,_,available=S.GetStatus(kind)
-            if available then prefs[definition.preference]=enabled end
+            local actual,_,available=S.GetStatus(kind)
+            local sc=ASUI.Modules.SupportCoverage
+            if available and not (kind=="builds" and sc and sc.share and sc.share.transportResumeRequired) then
+                prefs[definition.preference]=actual
+            end
         end
     end
     S.StartUltimateSender()

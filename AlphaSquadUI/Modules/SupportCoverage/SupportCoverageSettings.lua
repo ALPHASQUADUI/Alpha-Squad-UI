@@ -68,8 +68,8 @@ function SC:BuildIntegratedSettingsPage(page,ui)
     end
     ui.RegisterRefresher(function()
         local coverage=SC.coverage or {}
-        status:SetText(string.format("%d / %d covered  •  %d missing  •  %d players with limited data",coverage.coveredCount or 0,coverage.requiredCount or 0,coverage.missingCount or 0,coverage.limitedPlayers or 0))
-        UI.Color(status,coverage.ready and C.green or C.gold)
+        status:SetText(string.format("%d / %d sources  •  %d missing  •  %d unknown",coverage.coveredCount or 0,coverage.requiredCount or 0,coverage.confirmedMissingCount or 0,coverage.unknownCount or 0))
+        UI.Color(status,coverage.ready and #(coverage.readinessIssues or {})==0 and (coverage.limitedSourceCount or 0)==0 and C.green or C.gold)
     end)
 end
 
@@ -113,6 +113,8 @@ local function ContributorTooltip(data)
     local lines={data.effect and data.effect.label or Catalog.effects[data.key].label}
     local status=UI.Status(data)
     lines[#lines+1]=status.." • "..#owners.." known contributor"..(#owners==1 and "" or "s")
+    local recipients=UI.RecipientNotice and UI.RecipientNotice(data)
+    if recipients then lines[#lines+1]=recipients end
     -- Every contributor remains visible on hover even when twelve players duplicate a source.
     for _,player in ipairs(owners) do
         local capability=player.capabilities and player.capabilities[data.key]
@@ -224,7 +226,7 @@ function SC:CreateMatrixWindow()
     win.legend.title=UI.Label(win.legend,"AlphaSquadCoverageLegendTitle","STATUS","ZoFontGameBold",C.accent or C.orange)
     win.legend.title:SetAnchor(TOPLEFT,win.legend,TOPLEFT,10,5);win.legend.title:SetHeight(24)
     win.legend.rows={}
-    for index,data in ipairs({{"Covered",C.green},{"Missing",C.red},{"Unknown / duplicate",C.gold},{"Optional",C.muted}}) do
+    for index,data in ipairs({{"Source available",C.green},{"Missing",C.red},{"Unknown / limited / duplicate",C.gold},{"Optional",C.muted}}) do
         local marker=WINDOW_MANAGER:CreateControl("AlphaSquadCoverageLegendMarker"..index,win.legend,CT_TEXTURE)
         marker:SetAnchor(TOPLEFT,win.legend,TOPLEFT,10,36+(index-1)*32);marker:SetDimensions(12,12);UI.Color(marker,data[2])
         local label=UI.Label(win.legend,"AlphaSquadCoverageLegendLabel"..index,data[1],"ZoFontGameSmall",C.white)
@@ -240,7 +242,7 @@ function SC:RefreshMatrix()
     win:SetDimensions(layout.width,layout.height);win:SetScale(math.max(0.1,math.min(1,(GuiRoot:GetWidth()-24)/layout.width,(GuiRoot:GetHeight()-24)/layout.height)))
     win.list:SetDimensions(layout.width-36,layout.height-198)
     local coverage=self.coverage or {}
-    win.subtitle:SetText(string.format("%s  •  %d / %d covered  •  %d missing  •  %d players with limited data",coverage.profileLabel or "Group preparation",coverage.coveredCount or 0,coverage.requiredCount or 0,coverage.missingCount or 0,coverage.limitedPlayers or 0))
+    win.subtitle:SetText(string.format("%s  •  %d / %d sources  •  %d missing  •  %d unknown",coverage.profileLabel or "Group preparation",coverage.coveredCount or 0,coverage.requiredCount or 0,coverage.confirmedMissingCount or 0,coverage.unknownCount or 0))
     if UI.SetButtonSelected then
         UI.SetButtonSelected(win.trial,self.sv.activeProfile=="trial");UI.SetButtonSelected(win.dungeon,self.sv.activeProfile=="dungeon")
         for key,button in pairs(win.filterButtons) do UI.SetButtonSelected(button,(self.matrixFilter or "ALL")==key) end

@@ -63,6 +63,24 @@ slots[4].actionType=ACTION_TYPE_ITEM;U:Refresh("non ability slot")
 check(U:GetHUDBar("primary").abilityId==0 and U:GetHUDBar("primary").state=="empty","An item action ID cannot be interpreted as an Ultimate ability")
 active=HOTBAR_CATEGORY_BACKUP;U:Refresh("normal restored")
 check(U.specialBar==nil and U:GetHUDBar("primary")==U.bars.primary and U:ShouldTrackBar("backup"),"Leaving a special bar restores the original Both layout and data")
+local metadataReads=0
+local slotName,slotTexture=GetSlotName,GetSlotTexture
+GetSlotName=function(...) metadataReads=metadataReads+1;return slotName(...) end
+GetSlotTexture=function(...) metadataReads=metadataReads+1;return slotTexture(...) end
+slots[1].cost=240
+U:Refresh("power",220)
+check(metadataReads==0 and U.bars.primary.cost==240 and not U.bars.primary.ready,
+    "Resource ticks reuse presentation metadata but still read changed native Ultimate costs")
+slots[1].remaining=5000;U:Refresh("power",250)
+check(metadataReads==0 and U.bars.primary.state=="active",
+    "Cached presentation never caches the native remaining-effect state")
+slots[1].id=106;slots[1].icon="native/new-morph.dds";U:Refresh("power",250)
+check(metadataReads==2 and U.bars.primary.abilityId==106 and U.bars.primary.icon==slots[1].icon,
+    "A new native morph invalidates cached identity even during a resource tick")
+slots[1].icon="native/new-style.dds";U:Refresh("safety")
+check(U.bars.primary.icon==slots[1].icon,
+    "The recovery refresh observes a changed native style with an unchanged ability ID")
+GetSlotName,GetSlotTexture=slotName,slotTexture
 U:RegisterEvents();local before=#queued
 local effect=events.AlphaSquadUI_ULTTracker_SlotEffect
 effect(nil,HOTBAR_CATEGORY_PRIMARY,3)

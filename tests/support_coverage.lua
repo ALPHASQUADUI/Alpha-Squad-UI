@@ -127,7 +127,7 @@ SC:Refresh('still loading')
 check(SC.localSnapshot==nil,'An initial refresh cannot capture uncommitted loading-screen equipment')
 events.AlphaSquadUI_SupportCoverage_Activated.fn()
 -- Execute startup's deferred bootstrap once before measuring individual events.
--- Sharing now defaults ON and intentionally schedules one initial build scan.
+-- Tracking initializes a local preparation scan without enabling sharing.
 local startupIndex=1
 while startupIndex<=#later do
     assert(startupIndex<=64,'Startup cannot create an unbounded deferred queue')
@@ -136,8 +136,8 @@ end
 later={}
 check(SC.initialized,'Initialization works without optional libraries')
 check(SC.sv.activeProfile=='trial','New installs default to trial preparation')
-check(SC.sv.shareData and SC.sv.experimentalSharing,'Fresh installation enables the build-sharing preference')
-check(AlphaSquadUI.Preferences.sv.buildSharing==true and AlphaSquadUI.Preferences.sv.sharingDefaultsVersion==1,'Bootstrap records the account-wide sharing default once')
+check(not SC.sv.shareData and not SC.sv.experimentalSharing,'Fresh installation leaves build sharing off until explicit consent')
+check(AlphaSquadUI.Preferences.sv.buildSharing==false and AlphaSquadUI.Preferences.sv.sharingDefaultsVersion==1,'Bootstrap records the account-wide sharing default once')
 check(SC.share and SC.share.available==false and SC.share.protocol==nil,'Missing optional transport cannot be mistaken for active exchange')
 check(SC.sv.enabled and SC.sv.visible and SC.sv.locked,'Fresh tracking is enabled while normal gameplay remains locked')
 check(not SC.StartPull and not SC.FinalizePull,'Pull collection is absent from runtime')
@@ -150,6 +150,31 @@ check(SC.coverage.unknownCount>0,'Incomplete roster has explicit unknown source 
 check(SC.coverage.readinessUnknownCount>0,'Unavailable food and glyph checks are unknown')
 check(SC.coverage.coveredCount+SC.coverage.missingCount==SC.coverage.requiredCount,'All selected requirements are evaluated')
 check(type(SLASH_COMMANDS['/assupport'])=='function','Support commands are registered')
+
+-- Reuse an already-scanned snapshot while keeping local-only changes visible.
+local savedSnapshot,savedReadiness,savedPresentation=SC.localSnapshot,SC.lastReadinessSignature,SC.lastReadinessPresentationSignature
+local savedFoodScan,savedPotionScan,savedMundusScan=SC.ScanFood,SC.ScanPotion,SC.ScanMundus
+local readinessScans=0
+local function CountReadinessScan() readinessScans=readinessScans+1;return {} end
+SC.ScanFood,SC.ScanPotion,SC.ScanMundus=CountReadinessScan,CountReadinessScan,CountReadinessScan
+SC.localSnapshot={food={verified=true,active=true,abilityId=1,timeEnds=100},
+    potion={known=true,link='same potion',count=10},mundus={ids={1}},dead=false,connected=true}
+SC.lastReadinessSignature=nil;SC.lastReadinessPresentationSignature=nil
+SC:RefreshReadinessFacts(true)
+check(readinessScans==0,'A complete scan is not repeated immediately by the readiness step')
+SC.localSnapshot.food.timeEnds=200
+local wireChanged,displayChanged=SC:RefreshReadinessFacts(true)
+check(not wireChanged and displayChanged,'Refreshing the same food duration updates local display without new sharing')
+SC.localSnapshot.potion.count=9
+wireChanged,displayChanged=SC:RefreshReadinessFacts(true)
+check(not wireChanged and displayChanged,'A potion stack count change updates local display without a capability broadcast')
+SC.localSnapshot.dead=true
+wireChanged,displayChanged=SC:RefreshReadinessFacts(true)
+check(not wireChanged and displayChanged,'Local life state remains a presentation invalidation')
+wireChanged,displayChanged=SC:RefreshReadinessFacts(true)
+check(not wireChanged and not displayChanged,'Unchanged readiness does not invalidate presentation')
+SC.localSnapshot=savedSnapshot;SC.lastReadinessSignature=savedReadiness;SC.lastReadinessPresentationSignature=savedPresentation
+SC.ScanFood,SC.ScanPotion,SC.ScanMundus=savedFoodScan,savedPotionScan,savedMundusScan
 
 -- Each context persists its own tracking switches, including false.
 SC:SetEffectTracking('major_courage',false)
@@ -249,6 +274,69 @@ check(coverage.readinessUnknownCount>0,'Unreadable food remains unknown')
 SC.sv.checkFoodPresence=false
 check(#SC:EvaluateCoverage('food off').foodMissing==0,'Food check can be disabled')
 SC.sv.checkFoodPresence=true
+
+-- Preparation warnings remain visible when every selected source is available.
+-- Grouping by check keeps a twelve-player roster from flooding the compact HUD.
+local savedRequirements=SC.Catalog.GetRequirements
+local savedProblems,savedGlyphCheck=SC.sv.problemsOnly,SC.sv.checkMissingGlyphs
+SC.Catalog.GetRequirements=function() return {'major_courage'} end
+SC.sv.problemsOnly=true;SC.sv.checkMissingGlyphs=true
+local foodPlayer=Player('@FoodCheck','Spell Power Cure')
+foodPlayer.food={verified=true,active=false}
+foodPlayer.equipment.glyphs.armorMissing=1
+local unknownPlayer=Player('@UnknownCheck','Unused');unknownPlayer.capabilities={}
+unknownPlayer.capabilitiesComplete=false
+unknownPlayer.food={verified=false};unknownPlayer.equipment.glyphs={verified=false}
+local offlinePlayer=Player('@OfflineCheck','Unused');offlinePlayer.capabilities={};offlinePlayer.connected=false
+local deadPlayer=Player('@DeadCheck','Unused');deadPlayer.capabilities={};deadPlayer.dead=true
+SC.roster={foodPlayer,unknownPlayer,offlinePlayer,deadPlayer}
+coverage=SC:EvaluateCoverage('preparation visibility')
+local hudIssues=SC:GetHUDIssues(coverage)
+check(coverage.coveredCount==1 and coverage.requiredCount==1 and not coverage.ready,
+    'Available sources do not erase failed preparation checks')
+check(#coverage.readinessIssues==3 and #hudIssues==3,'Readiness warnings occupy at most one row per check')
+SC:RefreshHUD()
+check(SC.window.status.text=='1 / 1 sources' and SC.window.note.text~='No preparation issues to display.',
+    'The rendered HUD exposes preparation warnings even with every selected source available')
+local detailText=''
+for _,row in ipairs(hudIssues) do
+    check(row.readiness and row.count==2,'Known and unknown players are grouped without dropping either warning')
+    detailText=detailText..table.concat(row.details,'\n')
+end
+for _,message in ipairs({'@FoodCheck - no food','@UnknownCheck - food unverified','@FoodCheck - missing 1 armor glyph',
+    '@UnknownCheck - armor glyphs unverified','@OfflineCheck - offline','@DeadCheck - dead'}) do
+    check(detailText:find(message,1,true),'Grouped hover retains the actionable player detail: '..message)
+end
+SC.sv.checkFoodPresence=false;SC.sv.checkMissingGlyphs=false
+SC.roster={foodPlayer,unknownPlayer}
+coverage=SC:EvaluateCoverage('optional readiness checks')
+check(#coverage.readinessIssues==0 and #SC:GetHUDIssues(coverage)==0,'Disabled food/glyph checks add no HUD rows')
+SC.sv.checkFoodPresence=true
+SC.roster={unknownPlayer}
+coverage=SC:EvaluateCoverage('unverified preparation')
+check(SC.UI.Status(coverage.readinessIssues[1])=='UNKNOWN 1','Unknown food has a distinct status instead of a missing-food accusation')
+check(coverage.confirmedMissingCount==0 and coverage.unknownCount==1,'Unreported source stays unknown instead of confirmed missing')
+
+SC.Catalog.GetRequirements=function() return {'powerful_assault'} end
+SC.sv.checkFoodPresence=false
+SC.roster={}
+for index=1,12 do
+    local player=Player('@Limited'..index,'Unused');player.capabilities={};SC.roster[index]=player
+end
+SC.roster[1].capabilities.powerful_assault={sources={['Powerful Assault']=true}}
+coverage=SC:EvaluateCoverage('recipient capacity')
+local limited=coverage.entries[1]
+check(limited.status=='covered' and limited.partialRecipients and coverage.limitedSourceCount==1,
+    'Source availability and limited recipient capacity remain separate facts')
+check(#SC:GetHUDIssues(coverage)==1 and SC.UI.Status(limited)=='LIMITED','A limited source remains visible in issues-only mode')
+check(SC.UI.RecipientNotice(limited):find('6 recipients',1,true) and SC.UI.RecipientNotice(limited):find('12 players',1,true),
+    'Recipient notice gives the per-application limit without inventing full-group coverage')
+SC.roster={SC.roster[1]}
+coverage=SC:EvaluateCoverage('small group capacity')
+check(not coverage.entries[1].partialRecipients and SC.UI.Status(coverage.entries[1])=='SOURCE',
+    'A sufficient recipient limit does not produce a limited-capacity warning')
+SC.Catalog.GetRequirements=savedRequirements
+SC.sv.problemsOnly=savedProblems;SC.sv.checkMissingGlyphs=savedGlyphCheck;SC.sv.checkFoodPresence=true
 
 -- A summary that expires must not leave private equipment/skills visible.
 groupSize=2;now=100000

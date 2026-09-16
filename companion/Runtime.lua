@@ -60,8 +60,13 @@ local function SetEnabled(value)
 end
 local function InitializeSharing()
     SC:InitializeSharing()
-    if not SC.sv.nativeSharingInitialized then SetEnabled(SC.sv.enabled)
-    elseif type(SC.sv.nativeSharingPending)=="boolean" then SetEnabled(SC.sv.nativeSharingPending) end
+    if not SC.sv.nativeSharingInitialized then
+        -- Retain a previous accepted ON without overwriting a native OFF.
+        if SC.sv.enabled then SC.sv.nativeSharingInitialized=true
+        else SetEnabled(false) end
+    elseif type(SC.sv.nativeSharingPending)=="boolean" and not SC.share.transportResumeRequired then
+        SetEnabled(SC.sv.nativeSharingPending)
+    end
 end
 local function Register(event,callback)
     if event then EM:RegisterForEvent(addon,event,callback) end
@@ -69,17 +74,20 @@ end
 local function Loaded(_,name)
     if name~=addon then return end
     EM:UnregisterForEvent(addon,EVENT_ADD_ON_LOADED)
-    local defaults={enabled=true,shareData=true,experimentalSharing=true}
+    local defaults={enabled=false,shareData=false,experimentalSharing=false}
     SC.sv=ZO_SavedVars:NewAccountWide("AlphaSquadBuildShareSavedVariables",1,GetWorldName and GetWorldName(),defaults)
     SC.sv.enabled=SC.sv.enabled==true
     SC.sv.shareData=SC.sv.enabled
     SC.sv.experimentalSharing=SC.sv.enabled
+    if SC.sv.buildSharingResumeRequired then SC.share.transportResumeRequired=true end
     SC.inCombat=IsUnitInCombat("player")==true
     SC.scanDirty=true
     SC.loading=true -- First capture waits for the initial PLAYER_ACTIVATED.
+    local explainConsent=not SC.sv.nativeSharingInitialized and not SC.sv.enabled
     SLASH_COMMANDS["/asbuildshare"]=function(text)
         local command=tostring(text or ""):lower():match("^%s*(.-)%s*$")
         if command=="on" then
+            explainConsent=false
             SetEnabled(true)
             local state,reason=SC:GetSharingStatus()
             if state=="SHARING" then
@@ -98,22 +106,33 @@ local function Loaded(_,name)
     Register(EVENT_PLAYER_ACTIVATED,function()
         SC.loading=false
         SC.inCombat=IsUnitInCombat("player")==true
-        InitializeSharing();Reset();ScheduleCapture(true)
+        InitializeSharing()
+        if SC.ResumeBuildSharing and not SC.inCombat then SC:ResumeBuildSharing() end
+        Reset();ScheduleCapture(true)
+        if explainConsent then
+            explainConsent=false
+            Print("Sharing starts OFF. Use /asbuildshare on to let current group members request your equipped items, both skill bars, Champion stars, consumables and class choices. Use /asbuildshare off to revoke consent.")
+        end
     end)
     Register(EVENT_PLAYER_DEACTIVATED,function()
         SC.loading=true
+        if SC.PauseBuildSharing then SC:PauseBuildSharing("Loading started") end
         Reset()
     end)
     Register(EVENT_PLAYER_COMBAT_STATE,function(_,combat)
         SC.inCombat=combat==true
-        if SC.inCombat then SC:CancelBuildDetailTransfer("Combat started") end
+        if SC.inCombat then
+            if SC.PauseBuildSharing then SC:PauseBuildSharing("Combat started") else SC:CancelBuildDetailTransfer("Combat started") end
+        elseif SC.ResumeBuildSharing then SC:ResumeBuildSharing() end
         UpdateHeartbeat()
         if not SC.inCombat then ScheduleCapture() end
     end)
     local function GroupChanged()
+        if SC.PauseBuildSharing then SC:PauseBuildSharing("Group changed") end
         if SC:IsGrouped() and type(SC.sv.nativeSharingPending)=="boolean" then InitializeSharing() end
         if not SC:IsGrouped() then Reset()
         elseif SC.PrunePeerSharingData then SC:PrunePeerSharingData() end
+        if SC:IsGrouped() and not SC.inCombat and not SC.loading and SC.ResumeBuildSharing then SC:ResumeBuildSharing() end
         UpdateHeartbeat();ScheduleCapture()
     end
     Register(EVENT_GROUP_MEMBER_JOINED,GroupChanged)

@@ -6,6 +6,8 @@
 
 Read the existing implementation and the maintainer's current request before editing. Work only within the explicitly authorized Git scope. Preserve unrelated changes. Do not create a pull request, merge, tag or public release until requested and the required client validation is complete. Do not update a protected release ref as part of development.
 
+Prefer `SeRuM1 <info@alphasquadeso.com>` for maintainer commits in this project. The maintainer explicitly approves this public project mailbox and also authorizes the matching public GitHub `noreply` identity when a connector selects it automatically. Neither address is mandatory when the other approved identity is used. Do not substitute a personal address; verify the author and committer identity before publishing through an external connection.
+
 ## Product and evidence
 
 - Keep the interface and public documentation in English, concise and understandable.
@@ -32,7 +34,9 @@ Preserve the existing SavedVariables namespaces. Cross-sync defaults to existing
 
 Use optional libraries defensively. Verify the native option section and protocol identity before changing matching library settings; reject ambiguous duplicate sections or controls. Never modify unrelated protocols, force-enable installed addon files or unregister another library's shared callbacks. A missing/incompatible library must degrade safely without a retry storm.
 
-Active build transport IDs **507/510** are provisional. Initialize supported sharing ON once for a fresh installation; preserve existing OFF choices, show actual native library state and mark missing/incompatible controls unavailable. Do not publish stable public sharing with these IDs until formally reserved and coexistence-validated. Legacy **508/509** are retired.
+Active build transport IDs **507/510** are provisional. New installations require an explicit sharing choice and start OFF; preserve existing saved choices and native OFF states, show actual native library state and mark missing/incompatible controls unavailable. Do not publish stable public sharing with these IDs until formally reserved and coexistence-validated. Legacy **508/509** are retired.
+
+Development uses `dev`; never infer release authorization from a development push. Public release requires a separately authorized manual operation from reviewed `main`, completed native acceptance and reserved/coexistence-validated transport IDs. Versioned policy files describe required administration work; they do not apply GitHub settings by themselves.
 
 ## Validation and delivery
 

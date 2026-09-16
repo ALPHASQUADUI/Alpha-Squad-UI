@@ -6,7 +6,7 @@ local ASUI = AlphaSquadUI
 
 ASUI.name = "AlphaSquadUI"
 ASUI.displayName = "Ąlpha Şquad UI"
-ASUI.version = "3.3.0"
+ASUI.version = "3.3.1"
 ASUI.author = "@SeRuM1"
 ASUI.website = "https://alphasquadeso.com/"
 ASUI.discord = "https://discord.gg/snDyd23h6N"

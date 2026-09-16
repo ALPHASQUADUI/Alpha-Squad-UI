@@ -19,8 +19,14 @@ function GetAbilityIcon(id)
 end
 function GetSpecificSkillAbilityKeysByAbilityId(id)
     if id==700002 then return SKILL_TYPE_CLASS,2,10,0,nativeRank end
+    if id==900001 then return SKILL_TYPE_CLASS,9001,1,0,1 end
+    if id==900002 then return SKILL_TYPE_CLASS,9002,1,0,1 end
 end
-function GetSkillLineId() return nativeLine end
+function GetSkillLineId(_,lineIndex)
+    if lineIndex==9001 then return 35 end
+    if lineIndex==9002 then return 44 end
+    return nativeLine
+end
 function IsSkillAbilityPassive() return nativePassive end
 dofile('AlphaSquadUI/Modules/SupportCoverage/SupportCoverageCatalog.lua')
 dofile('AlphaSquadUI/Modules/SupportCoverage/SupportCoverageBuild.lua')
@@ -136,4 +142,33 @@ for _,grimoire in pairs(C.scribingGrimoires) do
         end
     end
 end
+-- Shared line claims cannot override an ability's resolvable native definition.
+-- These are synthetic identity fixtures, not a claim about a live ESO ability.
+local lineSnapshot={classId=1,equipment={complete=false,slots={},setList={}},
+    skills={known=true,primary={{slot=3,abilityId=900001,boundAbilityId=900001,rank=1,lineId=44}},backup={}},
+    masteries={known=true,eligible=true,selected={{id=263587,rank=1}},learnedIds={[45215]=2}}}
+local mismatched=Roundtrip(lineSnapshot)
+check(mismatched.skills.primary[1].declaredLineId==44 and mismatched.skills.primary[1].lineId==nil
+    and mismatched.skills.primary[1].lineIdentityEvidence=='CONTRADICTORY','Conflicting declared line stays distinct from native identity')
+check(not mismatched.capabilities.minor_sorcery and not mismatched.capabilities.bright_harbinger,
+    'A contradictory line cannot activate a learned passive or its mastery trigger')
+lineSnapshot.skills.primary[1].abilityId=900002;lineSnapshot.skills.primary[1].boundAbilityId=900002
+local matching=Roundtrip(lineSnapshot)
+check(matching.skills.primary[1].lineId==44 and matching.skills.primary[1].lineIdentityEvidence=='NATIVE_DEFINITION',
+    'A matching native line is retained independently of viewer purchases')
+check(matching.capabilities.minor_sorcery and matching.capabilities.bright_harbinger,
+    'Verified remote line permits the declared learned passive and mastery prerequisites')
+lineSnapshot.skills.primary[1].lineId=nil
+local withoutClaim=Roundtrip(lineSnapshot)
+check(withoutClaim.skills.primary[1].lineId==44 and withoutClaim.skills.primary[1].declaredLineId==nil,
+    'An omitted line can be resolved from the public native ability definition')
+lineSnapshot.skills.primary[1].lineId=44
+local savedIdentity=GetSpecificSkillAbilityKeysByAbilityId
+GetSpecificSkillAbilityKeysByAbilityId=nil
+local unresolved=Roundtrip(lineSnapshot)
+check(unresolved.skills.primary[1].lineId==nil and unresolved.skills.primary[1].declaredLineId==44
+    and unresolved.skills.primary[1].lineIdentityEvidence=='UNRESOLVED','Missing definition API preserves the claim without promoting it')
+check(not unresolved.capabilities.minor_sorcery and not unresolved.capabilities.bright_harbinger,
+    'Unavailable remote line definitions stay unknown instead of using the viewer build')
+GetSpecificSkillAbilityKeysByAbilityId=savedIdentity
 print('Source roundtrips: '..assertions..' assertions passed')

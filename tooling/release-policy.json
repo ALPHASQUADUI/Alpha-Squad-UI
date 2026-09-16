@@ -1,6 +1,11 @@
 {
   "repository": "ALPHASQUADUI/Alpha-Squad-UI",
-  "source_branch": "support-coverage",
-  "version": "3.3.0",
-  "publish": true
+  "source_branch": "main",
+  "version": "3.3.1",
+  "publish": false,
+  "release_environment": "release",
+  "environment_review_configured": false,
+  "protocol_ids_reserved": false,
+  "protocol_coexistence_validated": false,
+  "native_acceptance_complete": false
 }

@@ -2,6 +2,8 @@
 
 A modular **The Elder Scrolls Online** addon by **@SeRuM1** for group preparation, visual build inspection and Ultimate tracking.
 
+Version **3.3.1** is a development validation build. Native ESO acceptance and formal reservation/coexistence validation of the build transport remain outstanding; development pushes do not publish a release.
+
 [Website](https://alphasquadeso.com/) · [Releases](https://github.com/ALPHASQUADUI/Alpha-Squad-UI/releases) · [Changelog](CHANGELOG.md) · [Downloads and installation](releases/README.md) · [Security](SECURITY.md)
 
 ## Get started
@@ -9,7 +11,7 @@ A modular **The Elder Scrolls Online** addon by **@SeRuM1** for group preparatio
 1. Install the `AlphaSquadUI` folder in ESO's `live/AddOns` directory and enable it in the Add-Ons menu.
 2. Open **Settings → Ąlpha Şquad UI** in keyboard or gamepad mode, or use `/asui`.
 3. In **Dashboard**, choose **ULT Tracker** and **Support Coverage**, then pick an **Interface Style**. Tracking starts enabled; you can switch either module off.
-4. Open **Libraries** to check dependencies and sharing. New installations configure supported sharing **ON** automatically; saved OFF choices are preserved.
+4. Open **Libraries** to check dependencies and sharing. New installations start sharing **OFF**. Enable only the categories you want to share with your current group; existing saved choices are preserved.
 5. Use **MOVE HUD** to arrange your panels. Drag to move, drag a corner to resize, then choose **DONE**. Horizontal/vertical layouts and example states help you place panels while solo.
 6. Open **Support Coverage → Builds** or **Coverage** to prepare your group.
 
@@ -80,7 +82,7 @@ Tooltips appear above addon windows. For a shared skill, stat-dependent preview 
 
 Choose **Trial** or **Dungeon**, then review **Buffs**, **Debuffs**, **Group Sets** and **Group Mythics** on one page. Larger categories use multiple compact columns, with no scrolling or pagination. Each effect has native artwork, an ON/OFF switch, a status color and a contributor count. When an effect has no verified dedicated image, a native category symbol keeps the tile visible and its tooltip explains the fallback. **All**, **Missing** and **Duplicates** filter the page.
 
-Hover an effect name for its full description, sources and conditions. Hover its contributor count for **every known provider**, their exact reported source names and bar availability. A duplicate shows **×** beside the count. Click the count to inspect a provider; when several players contribute, choose the player first. Green means covered, red missing, gold unknown or duplicate, and grey optional.
+Hover an effect name for its full description, sources and conditions. Hover its contributor count for **every known provider**, their exact reported source names and bar availability. A duplicate shows **×** beside the count. Click the count to inspect a provider; when several players contribute, choose the player first. Green means a source is available, red missing, gold unknown, limited or duplicate, and grey optional. Readiness issues remain visible even when every selected source is available.
 
 Coverage means a qualifying build source is available before combat. Range, target caps, casts and proc conditions still apply. The addon does not claim that an effect is currently active, and it does not collect pull reports or uptime history. Food and potion checks are integrated into Builds.
 
@@ -92,7 +94,7 @@ In the in-game **Add-Ons** menu, expand **Ąlpha Şquad UI** to see all seven li
 
 | Library | Purpose | Required setup |
 | --- | --- | --- |
-| [LibGroupBroadcast](https://www.esoui.com/downloads/info1337-LibGroupBroadcast.html) | Compatible full-build exchange | Install with LibAddonMenu-2.0 38+ and LibDebugLogger. **Share equipped build** starts ON on new installations; participating clients need a compatible sender. |
+| [LibGroupBroadcast](https://www.esoui.com/downloads/info1337-LibGroupBroadcast.html) | Compatible full-build exchange | Install with LibAddonMenu-2.0 38+ and LibDebugLogger. **Share equipped build** starts OFF on new installations; enable it explicitly on participating clients. |
 | [LibGroupCombatStats](https://www.esoui.com/downloads/info4024-LibGroupCombatStats.html) | Group Ultimate data | Install with LibCombat and LibGroupBroadcast. **Share group Ultimates** controls its matching library protocols. |
 | [LibSetDetection v5+](https://www.esoui.com/downloads/info3338-LibSetDetection.html) | Shared sets and per-bar counts | Install on both ends with LibGroupBroadcast. **Share equipped sets** controls its matching protocol; existing incognito choices are respected. |
 | [LibFoodDrinkBuff](https://www.esoui.com/downloads/info1902-LibFoodDrinkBuff.html) | Recognition of observable food/drink effects | Install and enable. No additional setup is needed. |
@@ -100,7 +102,7 @@ In the in-game **Add-Ons** menu, expand **Ąlpha Şquad UI** to see all seven li
 | [LibAddonMenu-2.0](https://www.esoui.com/downloads/info7-LibAddonMenu-2.0.html) | Library settings | Version 38 or newer for LibGroupBroadcast. |
 | [LibDebugLogger](https://www.esoui.com/downloads/info2275-LibDebugLogger.html) | Dependency of LibGroupBroadcast | Install and enable; normal use needs no extra logging configuration. |
 
-Fresh installations configure **Share equipped build**, **Share group Ultimates** and **Share equipped sets** ON once, when their required libraries are available. Existing saved ON/OFF choices take priority. A missing dependency remains visibly unavailable; installing it and reloading allows pending setup to finish.
+Fresh installations leave **Share equipped build**, **Share group Ultimates** and **Share equipped sets** OFF until you choose otherwise. Existing saved ON/OFF choices are preserved; a pre-existing native OFF is not automatically replaced by a new ON default. Missing dependencies remain visibly unavailable. Each switch controls only its verified matching library protocols.
 
 The displayed switch follows the actual matching library setting. Clicking ON/OFF updates that setting directly and keeps you on the Alpha Squad Libraries page. Later changes made in either interface are respected. Module switches and Cross-sync do not revoke or reset sharing.
 
@@ -120,7 +122,7 @@ ESOUI, website and Minion links use ESO's native confirmation dialog, which appe
 | Alpha Squad UI with sharing enabled | Supported equipment, skills, Champion allocation, masteries and readiness snapshot |
 | **AlphaSquadBuildShare** companion | The same supported build format without installing the tracking UI suite |
 
-The companion needs LibGroupBroadcast and its dependencies. Use `/asbuildshare on`, `/asbuildshare off` and `/asbuildshare status`. It starts ON on a new installation, preserves an existing OFF setting and yields to the full suite when both are installed. Its status follows the actual native sending controls; unavailable controls explain the block. Installing a transport library alone cannot expose another player's complete build. The companion shares build snapshots; live group Ultimate charge requires a compatible LibGroupCombatStats sender.
+The companion needs LibGroupBroadcast and its dependencies. Use `/asbuildshare on`, `/asbuildshare off` and `/asbuildshare status`. It starts OFF on a new installation, preserves existing saved choices and yields to the full suite when both are installed. Its status follows the actual native sending controls; unavailable controls explain the block. Installing a transport library alone cannot expose another player's complete build. The companion shares build snapshots; live group Ultimate charge requires a compatible LibGroupCombatStats sender.
 
 ## Ultimate tracking
 
@@ -156,6 +158,6 @@ Open **About** for the Alpha Squad website, ESOUI, release notes and the **JOIN 
 
 Shared snapshots are bounded reports from compatible senders, not proof against a modified client. Invalid or contradictory equipment data cannot certify a complete build, and unknown fields remain unknown. The addon never executes received code or automatically equips items, consumes potions or posts group messages.
 
-See the [release notes](releases/3.3.0.md), [architecture](docs/ARCHITECTURE.md), [performance](docs/PERFORMANCE.md), [client acceptance](docs/CLIENT_ACCEPTANCE.md) and [contributing](CONTRIBUTING.md) for technical details. Screenshots and bug reports should omit private chats, unrelated account information and SavedVariables containing group data.
+See the [3.3.1 development notes](releases/3.3.1.md), [architecture](docs/ARCHITECTURE.md), [performance](docs/PERFORMANCE.md), [client acceptance](docs/CLIENT_ACCEPTANCE.md) and [contributing](CONTRIBUTING.md) for technical details. Screenshots and bug reports should omit private chats, unrelated account information and SavedVariables containing group data.
 
 The addon code is available under the [MIT license](LICENSE). ESO artwork and third-party libraries retain their respective ownership and licenses.

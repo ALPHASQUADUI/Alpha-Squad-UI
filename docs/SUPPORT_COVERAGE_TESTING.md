@@ -1,6 +1,6 @@
 # ESO acceptance checklist
 
-Version **3.3.0** / **30300**. This checklist is not a record of completed in-game tests. Record current results in the [client acceptance matrix](CLIENT_ACCEPTANCE.md).
+Version **3.3.1** / **30301**. This checklist is not a record of completed in-game tests. Record current results in the [client acceptance matrix](CLIENT_ACCEPTANCE.md).
 
 ## Native Add-Ons menu
 
@@ -24,13 +24,13 @@ The validator runs every regression suite under Lua 5.1 and Lua 5.4, checks synt
 
 Use the [installation instructions](../releases/README.md). Record the commit, ESO API version, addon/library versions and relevant screenshots for each finding. Close ESO and back up existing addon folders and SavedVariables before updating. Keep private chats, unrelated accounts and raw group snapshots out of reports.
 
-Check a fresh installation separately from migrated preferences. Fresh supported sharing starts ON once; a saved OFF choice must survive installation, reload, character changes and travel. Verify actual native library switches as well as the Alpha Squad display.
+Check a fresh installation separately from migrated preferences. Fresh supported sharing starts OFF and requires an explicit choice; saved ON/OFF choices must survive installation, reload, character changes and travel. A pre-existing native OFF must not be silently enabled. Verify actual native library switches as well as the Alpha Squad display.
 
 ## Settings, sharing and placement
 
 | Check | Required outcome |
 | --- | --- |
-| Fresh settings | All tracking modules start enabled; supported sharing categories initialize ON when their dependencies are available |
+| Fresh settings | All tracking modules start enabled; supported sharing categories stay OFF until explicitly enabled, including when dependencies are installed later |
 | Existing preferences | Saved module, sharing, layout and visibility choices remain intact; an explicit OFF is never reset by routine activation |
 | Libraries truth | ON/OFF matches the real native setting; missing/incompatible controls show unavailable, not a guessed ON |
 | Sharing switches | Toggle each category in Alpha Squad without navigating away; verify only its matching native settings change |

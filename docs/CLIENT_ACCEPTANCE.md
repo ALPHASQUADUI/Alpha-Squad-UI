@@ -28,6 +28,17 @@ Record the Alpha Squad UI and companion versions, ESO API/build, library version
 
 ## Performance comparison
 
+For 3.3.1 also exercise these corrected boundaries; no outcome is recorded until a native run is performed:
+
+- Fresh full-suite and companion installs remain OFF until an explicit sharing choice; an upgrade keeps stored ON/OFF and does not silently replace a native OFF.
+- Open settings, enter combat, open another native menu, then leave combat. The addon must not reacquire input over that menu. Repeat across loading and via slash commands.
+- Begin a build transfer, then enter combat or leave the group. Check actual transport output, not only local UI cancellation, and verify unrelated library traffic remains intact.
+- Interrupt a transfer after its first fragment, close Builds and wait beyond its inactivity deadline. Requesting again must not inherit abandoned state.
+- Keep partial shared sets visible while requesting unavailable build details. Progress or the reason for failure must remain visible.
+- Supply all selected effect sources while one player has no verified food. The HUD must still identify preparation issues; unknown data must not be labelled missing.
+- Verify a limited source in a twelve-player group. Source availability must not imply all twelve players receive the effect.
+- Inspect a learned passive from another class with known and unavailable native skill-line resolution. Unknown definitions must not use the viewer's learned skills.
+
 Compare the same scene and group with tracking ON and OFF while leaving sharing unchanged. Record frame-time distribution rather than a single FPS value, addon memory before/after repeated openings, and whether callbacks stop when their feature is hidden. Repeat after a loading transition. Do not publish a claim of zero resource cost.
 
 ## Evidence and follow-up

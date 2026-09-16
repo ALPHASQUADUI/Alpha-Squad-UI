@@ -35,10 +35,12 @@ end}
 assert(loadfile('AlphaSquadUI/Core/Sharing.lua'))()
 local S=AlphaSquadUI.Sharing
 S.Initialize()
-check(S.IsEnabled('builds') and S.IsEnabled('ultimate') and S.IsEnabled('sets'),'Installing Alpha Squad turns its preinstalled native sharing categories ON without an internal table')
-check(registrations==1 and opens==0,'Defaults start only one Ultimate sender without opening any settings')
-check(prefs.sharingDefaultsVersion==1 and sc.sv.experimentalSharing and prefs.buildSharing,'The one-time bootstrap replaces an old implicit experimental OFF with sharing ON')
+check(not S.IsEnabled('builds') and not S.IsEnabled('ultimate') and not S.IsEnabled('sets'),'Fresh installs preserve preinstalled native OFF and require explicit opt-in')
+check(registrations==0 and opens==0,'Fresh OFF starts no Ultimate sender and opens no settings')
+check(prefs.sharingDefaultsVersion==1 and not sc.sv.experimentalSharing and prefs.buildSharing==false,'New build consent defaults OFF')
 check(LibAddonMenu2.RegisterOptionControls==originalRegister,'Temporary options capture is always restored')
+check(S.SetEnabled('ultimate',true) and S.SetEnabled('sets',true) and S.SetEnabled('builds',true),'Explicit choices enable only the supported sharing categories')
+check(registrations==1 and opens==0,'Explicit Ultimate consent starts exactly one sender without navigation')
 check(S.SetEnabled('ultimate',false) and not values[20] and not values[21],'OFF updates both real Ultimate Allow Sending settings')
 check(not S.IsEnabled('ultimate') and prefs.ultimateSharing==false,'Displayed OFF reflects the native library settings')
 check(values[40] and values[507] and values[510] and not values[22],'Unrelated set/build/DPS settings are preserved')
@@ -89,10 +91,56 @@ prefs.buildSharing=false;prefs.ultimateSharing=false;prefs.setsSharing=true
 CALLBACK_MANAGER.FireCallbacks=function()LibAddonMenu2:RegisterOptionControls('LibGroupBroadcastOptions',optionTables)end
 values[20],values[21],values[507],values[510]=true,true,true,true
 S.Initialize()
-check(not values[20] and not values[21] and not values[507] and not values[510] and values[40],
-    'One-time bridge repair applies saved explicit Alpha OFF choices instead of resetting them')
+check(not values[20] and not values[21] and not values[507] and not values[510] and not values[40],
+    'One-time bridge repair preserves saved explicit Alpha OFF and an existing native OFF')
 check(not sc.sv.shareData and not sc.sv.experimentalSharing and prefs.sharingDefaultsVersion==1,
     'Build consent and the account migration marker match the repaired native choice')
+-- A saved local ON does not authorize overriding a subsequent native OFF.
+prefs.sharingDefaultsVersion=nil;prefs.buildSharing=true;prefs.ultimateSharing=true;prefs.setsSharing=true
+prefs.buildSharingPending=nil;prefs.ultimateSharingPending=nil;prefs.setsSharingPending=nil
+values[20],values[21],values[40],values[507],values[510]=false,true,false,false,true
+S.Initialize()
+check(not values[20] and values[21] and not values[40] and not values[507] and values[510],
+    'A legacy saved ON preserves each preexisting native OFF, including a paired partial OFF')
+check(prefs.buildSharing and sc.sv.shareData and sc.sv.experimentalSharing,
+    'Preserving a native OFF does not silently delete the accepted local build preference')
+-- A saved ON whose native category remains ON keeps working across upgrades.
+prefs.sharingDefaultsVersion=nil
+values[20],values[21],values[40],values[507],values[510]=true,true,true,true,true
+S.Initialize()
+check(S.IsEnabled('builds') and S.IsEnabled('ultimate') and S.IsEnabled('sets'),
+    'A saved ON with native ON remains enabled across migration')
+prefs.sharingDefaultsVersion=nil;prefs.buildSharing=nil;sc.sv.shareData=true;sc.sv.experimentalSharing=true
+S.Initialize()
+check(prefs.buildSharing==true and S.IsEnabled('builds'),
+    'Accepted build consent in an older module profile migrates without a silent reset')
+-- Unavailable/unknown native controls must not start a fresh Ultimate sender.
+prefs.sharingDefaultsVersion=nil;prefs.buildSharing=nil;prefs.ultimateSharing=nil;prefs.setsSharing=nil
+sc.sv.shareData=false;sc.sv.experimentalSharing=false
+S.nativeControls={};S.ultimateSender=nil
+local beforeMissing=registrations
+local nativeCallbacks=CALLBACK_MANAGER.FireCallbacks
+CALLBACK_MANAGER.FireCallbacks=function()end
+S.Initialize()
+check(registrations==beforeMissing and prefs.ultimateSharing==false and prefs.buildSharing==false and prefs.setsSharing==false,
+    'Unknown native settings preserve new OFF preferences and cannot start a sender')
+CALLBACK_MANAGER.FireCallbacks=nativeCallbacks;S.Initialize()
+check(not values[20] and not values[21] and not values[40] and not values[507] and not values[510],
+    'Deferred fresh OFF applies when native controls become available, without unsolicited ON')
+local combatLibrary,setLibrary=LibGroupCombatStats,LibSetDetection
+LibGroupCombatStats=nil;LibSetDetection=nil;S.nativeControls={}
+prefs.ultimateSharing=nil;prefs.setsSharing=nil;S.Initialize()
+check(not S.StartUltimateSender() and prefs.ultimateSharing==false and prefs.setsSharing==false,
+    'Missing optional libraries never infer consent or register a sender')
+LibGroupCombatStats= combatLibrary;LibSetDetection=setLibrary;S.nativeControls={};S.Initialize()
+prefs.buildSharing=true;prefs.buildSharingPending=true;prefs.buildSharingResumeRequired=true
+sc.sv.shareData=true;sc.sv.experimentalSharing=true;sc.share.transportResumeRequired=nil
+assert(loadfile('AlphaSquadUI/Core/Sharing.lua'))();S=AlphaSquadUI.Sharing
+S.Initialize()
+check(sc.share.transportResumeRequired and prefs.buildSharing and not values[507] and not values[510],
+    'Reload restores the persisted manual-resume requirement before a pending ON can override native OFF')
+check(S.SetEnabled('builds',true) and not prefs.buildSharingResumeRequired and not sc.share.transportResumeRequired,
+    'A successful explicit full-addon ON clears the saved manual-resume requirement')
 
 -- Actual transport code: request failures, membership churn and identity bounds.
 local now,scans=10000,0
@@ -164,8 +212,11 @@ fullSharing.SetEnabled('builds',false);fullSharing.SetEnabled('builds',true)
 check(not values[507] and not values[510] and sc.share.queueRevokeNeedsGroup,
     'Full-addon rapid solo OFF -> ON leaves both native protocols blocked')
 sharingGrouped=true;now=now+1600
-check(sc:ShareLocalSnapshot('new group') and values[507] and values[510] and not sc.share.queueRevokeNeedsGroup,
-    'The next grouped full-addon publication resolves deferred revocation and restores sharing')
+check(not sc:ShareLocalSnapshot('new group') and not values[507] and not values[510],
+    'A grouped publication never silently restores native ON after failed queue revocation')
+check(fullSharing.SetEnabled('builds',true) and sc:ShareLocalSnapshot('explicit new group consent')
+    and values[507] and values[510] and not sc.share.queueRevokeNeedsGroup,
+    'An explicit grouped ON resolves deferred revocation before publishing a fresh build')
 for _,frame in ipairs(pendingFrames) do check(not frame.previousGroup,'No previous-group private frame survives full-addon reactivation') end
 -- Neutral version-zero fragments are ignored without entering a response flow.
 sc:OnDetailData('group2',{version=0,kind=0,revision=0,checksum=0,body=''})
@@ -182,4 +233,14 @@ values[507]=false
 local corrected,correctedReason,correctedAvailable=fullSharing.GetStatus('builds')
 check(not corrected and correctedAvailable and correctedReason==nil and not sc.share.controlError,
     'A corrected native OFF clears an obsolete error without enabling sharing')
+fullSharing.SetEnabled('builds',true)
+local originalBuildSet=optionTables[3].controls[2].setFunc
+optionTables[3].controls[2].setFunc=function()error('Native pause unavailable')end
+check(not fullSharing.SuspendBuildTransport() and not values[507] and values[510],
+    'Failed native pause retains successful OFF controls instead of rolling them back ON')
+local paused,pausedReason,pausedAvailable=fullSharing.GetStatus('builds')
+check(not paused and not pausedAvailable and pausedReason:find('Reload the UI',1,true),
+    'A partial failed native pause never reports an unqualified available OFF')
+optionTables[3].controls[2].setFunc=originalBuildSet
+check(fullSharing.SetEnabled('builds',false),'Explicit OFF can recover once native setters work again')
 print('Sharing controls and boundaries: '..checks..' assertions passed')

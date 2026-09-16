@@ -172,9 +172,33 @@ function SC:EvaluateCoverage(reason)
         foodExpiring = {},
         glyphMissing = {},
         readinessUnknownCount = 0,
+        readinessIssues = {},
+        limitedSourceCount = 0,
         ready = true,
         capabilityDataIncomplete = false,
     }
+
+    -- Keep the compact HUD bounded: one row per check, with player details on
+    -- hover. Source rows and preparation checks are separate kinds of evidence.
+    local readinessByKind={}
+    local priorities={error=1,warning=2,unknown=3}
+    local labels={players="Player status",food="Food & drink",glyphs="Armor glyphs"}
+    local function ReadinessIssue(kind,severity,message)
+        result.issues[#result.issues+1]={severity=severity,text=message,readinessCategory=kind}
+        local row=readinessByKind[kind]
+        if not row then
+            row={key="readiness_"..kind,readiness=true,effect={label=labels[kind]},
+                severity=severity,status=severity=="unknown" and "unknown" or "missing",details={},count=0}
+            readinessByKind[kind]=row
+            result.readinessIssues[#result.readinessIssues+1]=row
+        end
+        row.count=row.count+1
+        row.details[#row.details+1]=message
+        if priorities[severity]<priorities[row.severity] then
+            row.severity=severity
+            row.status=severity=="unknown" and "unknown" or "missing"
+        end
+    end
 
     for _, player in ipairs(self.roster or {}) do
         if player.connected ~= false and player.capabilitiesComplete ~= true then result.capabilityDataIncomplete = true end
@@ -186,16 +210,16 @@ function SC:EvaluateCoverage(reason)
         end
         if player.connected == false then
             result.ready = false
-            result.issues[#result.issues + 1] = {severity="error", text=player.displayName .. " - offline"}
+            ReadinessIssue("players","error",player.displayName .. " - offline")
         elseif player.dead == true then
             result.ready = false
-            result.issues[#result.issues + 1] = {severity="warning", text=player.displayName .. " - dead"}
+            ReadinessIssue("players","warning",player.displayName .. " - dead")
         else
             local food = player.food
             if self.sv.checkFoodPresence then
                 if not food or food.verified ~= true then
                     result.readinessUnknownCount = result.readinessUnknownCount + 1
-                    result.issues[#result.issues + 1] = {severity="unknown", text=player.displayName .. " - food unverified"}
+                    ReadinessIssue("food","unknown",player.displayName .. " - food unverified")
                 elseif food.active == false then
                     result.foodMissing[#result.foodMissing + 1] = player.displayName
                 elseif tonumber(food.timeEnds) and tonumber(food.timeEnds) > 0 and (self.sv.foodWarningSeconds or 0) > 0 then
@@ -209,7 +233,7 @@ function SC:EvaluateCoverage(reason)
                 local glyphs = player.equipment and player.equipment.glyphs
                 if not glyphs or glyphs.verified ~= true then
                     result.readinessUnknownCount = result.readinessUnknownCount + 1
-                    result.issues[#result.issues + 1] = {severity="unknown", text=player.displayName .. " - armor glyphs unverified"}
+                    ReadinessIssue("glyphs","unknown",player.displayName .. " - armor glyphs unverified")
                 else
                     local missingGlyphs = tonumber(glyphs.armorMissing) or 0
                     if missingGlyphs > 0 then
@@ -259,12 +283,17 @@ function SC:EvaluateCoverage(reason)
             result.duplicates[effectKey] = duplicatePlayers
         end
 
-        local partialRecipients=effect.coverageLimit and effect.coverageLimit<#self.roster or false
+        local recipientLimit=effect.coverageLimit
+        local partialRecipients=recipientLimit and recipientLimit<#self.roster or false
         for _,owner in ipairs(owners) do
             for _,detail in pairs((owner.capabilities[effectKey] or {}).sourceDetails or {}) do
-                if type(detail.recipientLimit)=="number" and detail.recipientLimit<#self.roster then partialRecipients=true end
+                if type(detail.recipientLimit)=="number" and detail.recipientLimit<#self.roster then
+                    partialRecipients=true
+                    recipientLimit=math.min(recipientLimit or detail.recipientLimit,detail.recipientLimit)
+                end
             end
         end
+        if status=="covered" and partialRecipients then result.limitedSourceCount=result.limitedSourceCount+1 end
         result.entries[#result.entries + 1] = {
             key = effectKey,
             effect = effect,
@@ -274,6 +303,8 @@ function SC:EvaluateCoverage(reason)
             locked = false,
             sourceOnly = true,
             partialRecipients = partialRecipients,
+            recipientLimit = recipientLimit,
+            groupSize = #self.roster,
             duplicatePlayers = duplicatePlayers,
             unverified = status == "missing" and unverified,
         }
@@ -304,27 +335,18 @@ function SC:EvaluateCoverage(reason)
     result.penetration.remaining = math.max(0, result.penetration.target - result.penetration.covered)
 
     for _, name in ipairs(result.foodMissing) do
-        result.issues[#result.issues + 1] = {
-            severity="warning",
-            text=name .. " no food",
-        }
+        ReadinessIssue("food","warning",name .. " - no food")
         result.ready = false
     end
 
     for _, glyph in ipairs(result.glyphMissing) do
-        result.issues[#result.issues + 1] = {
-            severity="warning",
-            text=string.format("%s missing %d armor glyph%s", glyph.player, glyph.count, glyph.count == 1 and "" or "s"),
-        }
+        ReadinessIssue("glyphs","warning",string.format("%s - missing %d armor glyph%s", glyph.player, glyph.count, glyph.count == 1 and "" or "s"))
         result.ready = false
     end
 
     for _, food in ipairs(result.foodExpiring) do
-        result.issues[#result.issues + 1] = {
-            severity="warning",
-            text=string.format("%s food expires in %d minute%s", food.player,
-                math.max(1, math.ceil(food.seconds/60)), food.seconds > 60 and "s" or ""),
-        }
+        ReadinessIssue("food","warning",string.format("%s - food expires in %d minute%s", food.player,
+            math.max(1, math.ceil(food.seconds/60)), food.seconds > 60 and "s" or ""))
     end
 
     -- UNKNOWN data never becomes a false hard failure; the raidlead sees LIMITED instead.
@@ -340,6 +362,12 @@ function SC:EvaluateCoverage(reason)
         if sa ~= sb then return sa < sb end
         return a.text < b.text
     end)
+    table.sort(result.readinessIssues,function(a,b)
+        if priorities[a.severity]~=priorities[b.severity] then return priorities[a.severity]<priorities[b.severity] end
+        return a.key<b.key
+    end)
+    for _,row in ipairs(result.readinessIssues) do table.sort(row.details) end
+    result.confirmedMissingCount=math.max(0,result.missingCount-result.unknownCount)
     result.budgetEvidence = "SOURCE_CAPABILITY_ONLY"
     self.coverage = result
 

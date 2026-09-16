@@ -20,10 +20,12 @@ Build sharing uses ESO's group channel, not the website or Discord. Group recipi
 
 Remote builds are temporary in-memory snapshots. Received packets cannot supply executable Lua, external URLs or arbitrary texture paths. Sharing permissions and module tracking are separate. See the [data security review](docs/SECURITY_REVIEW.md) for limits, validation and consent behavior.
 
+Fresh installations start sharing OFF and require an explicit choice. Existing saved preferences are preserved. A queued-data revocation failure is reported; if native controls have been blocked for safety, re-enabling requires an explicit choice after the problem is resolved. Data already delivered to group members cannot be recalled.
+
 Transport IDs 507/510 remain provisional. Public protocol reservation and coexistence validation have not been established by the automated checks. Do not describe this transport as certified or independently authenticated.
 
 ## Project and dependency security
 
-Use a GitHub-provided `noreply` email for commits. Keep credentials and real player captures out of the repository and use the redacted security checks before publication. Report a discovered historical exposure privately; do not repeat its value in an issue or commit message.
+Use an approved public commit identity. The maintainer prefers the public project mailbox `info@alphasquadeso.com` with an approved public alias and also permits the matching GitHub-provided `noreply` identity, including automatic connector attribution. A `noreply` email is not mandatory; the project-mailbox approval covers only that exact address. Keep credentials and real player captures out of the repository and use the redacted security checks before publication. Report a discovered historical exposure privately; do not repeat its value in an issue or commit message.
 
 Third-party libraries and ESO itself have their own security and compatibility boundaries. Problems in those components should also be reported to their maintainers through their published security or support routes.

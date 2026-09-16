@@ -150,6 +150,7 @@ function Input.RegisterWindow(control, options)
         Hook(control, "OnEffectivelyShown", function() Input.ActivateWindow(control) end)
         Hook(control, "OnEffectivelyHidden", function()
             if Input.activeWindow == control then Input.Deactivate() end
+            if Input.suspendedWindow == control then Input.suspendedWindow, Input.suspendedScene = nil, nil end
         end)
     end
     for key, value in pairs(options or {}) do data[key] = value end
@@ -186,6 +187,7 @@ local function RefreshHint()
 end
 function Input.Deactivate(keepWindow)
     local window = Input.activeWindow
+    local scene = Input.activeScene
     Input.ClearFocus()
     Input.keys = {}; Input.axisX, Input.axisY = 0, 0
     if Input.layerActive then
@@ -197,14 +199,16 @@ function Input.Deactivate(keepWindow)
         DIRECTIONAL_INPUT:Deactivate(Input)
     end
     Input.activeWindow, Input.activeScene = nil, nil
-    if keepWindow then Input.suspendedWindow = window end
+    if keepWindow then
+        if window then Input.suspendedWindow, Input.suspendedScene = window, scene end
+    else Input.suspendedWindow, Input.suspendedScene = nil, nil end
 end
 function Input.ActivateWindow(window)
     if not Input.initialized or not Input.windows[window] or Hidden(window) or Input.loading
         or InCombat() or DialogVisible() or Input.nativePending then return false end
     if Input.activeWindow == window and Input.layerActive then return true end
     Input.Deactivate()
-    Input.activeWindow, Input.suspendedWindow = window, nil
+    Input.activeWindow, Input.suspendedWindow, Input.suspendedScene = window, nil, nil
     Input.activeScene = SCENE_MANAGER and SCENE_MANAGER.GetCurrentScene and SCENE_MANAGER:GetCurrentScene()
     Input.layoutMode = "move"
     if PushActionLayerByName then PushActionLayerByName(LAYER); Input.layerActive = true end
@@ -451,12 +455,12 @@ function Input.Initialize()
             if id then EVENT_MANAGER:RegisterForEvent("AlphaSquadUI_Input", id, callback) end
         end
         Event(EVENT_PLAYER_COMBAT_STATE, function(_, combat)
-            if combat then Input.suspendedWindow = nil; Input.Deactivate(); if ASUI.Layout then ASUI.Layout.Finish() end
+            if combat then Input.Deactivate(true); if ASUI.Layout then ASUI.Layout.Finish() end
             else Input.Refresh() end
         end)
-        Event(EVENT_PLAYER_DEACTIVATED, function() Input.loading = true; Input.Deactivate(); if ASUI.Layout then ASUI.Layout.Finish(true) end end)
+        Event(EVENT_PLAYER_DEACTIVATED, function() Input.loading = true; Input.Deactivate(true); if ASUI.Layout then ASUI.Layout.Finish(true) end end)
         Event(EVENT_PLAYER_ACTIVATED, function() Input.loading = false; Input.RegisterGamepadEntry(); Input.Refresh() end)
-        Event(EVENT_GAMEPAD_PREFERRED_MODE_CHANGED, function() Input.Deactivate(); Input.Refresh() end)
+        Event(EVENT_GAMEPAD_PREFERRED_MODE_CHANGED, function() Input.Deactivate(true); Input.Refresh() end)
     end
     if CALLBACK_MANAGER and CALLBACK_MANAGER.RegisterCallback then
         CALLBACK_MANAGER:RegisterCallback("AllDialogsHidden", function() Input.nativePending = nil; Input.Refresh() end)
@@ -468,16 +472,18 @@ function Input.Initialize()
     end
     if SCENE_MANAGER and SCENE_MANAGER.RegisterCallback then
         SCENE_MANAGER:RegisterCallback("SceneStateChanged", function(scene, _, state)
-            if Input.activeWindow and state == SCENE_SHOWING and Input.activeScene ~= scene then
-                local control, data = Input.activeWindow, Input.windows[Input.activeWindow]
+            local control = Input.activeWindow or Input.suspendedWindow
+            local previousScene = Input.activeScene or Input.suspendedScene
+            if control and state == SCENE_SHOWING and previousScene ~= scene then
+                local data = Input.windows[control]
                 local name = scene and scene.GetName and scene:GetName()
-                local previousName = Input.activeScene and Input.activeScene.GetName and Input.activeScene:GetName()
+                local previousName = previousScene and previousScene.GetName and previousScene:GetName()
                 local fromGameplay = previousName == "hud" or previousName == "hudui"
                 if data and (data.layout or fromGameplay) and (name == "hud" or name == "hudui") then
                     -- Native cursor ownership can itself transition HUD/HUDUI,
                     -- including when Done returns to the addon settings. This
                     -- retains the same context; external menus still dismiss it.
-                    Input.activeScene = scene
+                    if Input.activeWindow then Input.activeScene = scene else Input.suspendedScene = scene end
                     return
                 end
                 Input.Deactivate()

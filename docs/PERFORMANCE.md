@@ -68,7 +68,7 @@ Global MOVE HUD is a short-lived placement state without an idle heartbeat. Its 
 
 `Core/Preview.lua` stores only the selected presentation mode. Personal, group and Support renderers cache their sample tables by mode and consume them only during placement. Switching samples performs no scan, build request or send, and sample rows never enter live evidence. Placement previews suspend normal alert animation work and preserve normal visibility settings; closing saves and locks the panels. Personal ULT and Overload share one HUD, with cached slot state choosing the display and no extra skill scan.
 
-Sharing defaults are applied once, and actual native library states remain authoritative afterward. Missing libraries and unsupported controls do not trigger polling or repeated navigation. Sharing controls do not create a second library-settings window.
+New sharing categories start OFF until explicitly enabled, and actual native library states remain authoritative afterward. Missing libraries and unsupported controls do not trigger polling or repeated navigation. Sharing controls do not create a second library-settings window.
 
 ## Input ownership
 
@@ -85,3 +85,13 @@ Core Shell initializes independently of disabled gameplay modules. The widened W
 ## Recorded observations
 
 The supplied 3.1.0 client recording shows a brief FPS-counter decrease when Builds opens, followed by recovery. It does not isolate the addon from the game scene or other addons, and cannot establish a cause or a before/after improvement. This update fixes scene ordering and redundant resize callbacks; it makes no measured FPS claim. The [video review](VIDEO_REVIEW_3.2.0.md) distinguishes visible failures from code findings and remaining client checks.
+
+## 3.3.1 maintenance boundaries
+
+Hidden personal and Group Ultimate HUDs retain current data but defer painting until their next visible presentation. Normal visibility restoration and placement previews perform the pending render. Static Ultimate names/icons are cached for resource-only ticks; identity, cost and active effect state remain dynamic. Settings execute global refreshers and the selected page's refreshers, with an immediate refresh when a page becomes active.
+
+Readiness-only changes are coalesced separately from build changes. If food/potion/Mundus and their presentation facts are unchanged, the fast path avoids another roster/coverage reconstruction; meaningful expiry and peer-freshness boundaries still require evaluation. A full build scan reuses its readiness facts rather than immediately reading them twice. Equipment and skill changes retain full invalidation because native descriptions and derived evidence can depend on changed stats. This is a correctness choice, not a claim that every future scan optimization is complete.
+
+Transfer watchdogs exist only for live transfers. They enforce inactivity and total duration, have at most one live next check per transfer, and stop after cancellation. Incoming summary/capability work is bounded and duplicate content reuses existing state without suppressing a stale-to-fresh transition. The protocol still retains one incoming and one outgoing build.
+
+Counter-based regressions establish skipped work, not a measured FPS gain. Solo, four-player and twelve-player measurements remain native-client acceptance work.

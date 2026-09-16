@@ -145,6 +145,18 @@ AlphaSquadUI.Preview.SetMode("ready")
 check(ULT.window.cards.primary.statusLabel.text=="READY","Selecting Ready replaces missing examples without a resource event")
 Layout.Finish()
 check(ULT.window.cards.primary.statusLabel.text~="EMPTY" and ULT:GetHUDBar("primary")==livePrimary,"Closing the real editor restores current personal values immediately")
+local cardUpdates=0
+local renderCard=ULT.RefreshCard
+ULT.RefreshCard=function(self,...) cardUpdates=cardUpdates+1;return renderCard(self,...) end
+ULT:SetVisible(false)
+cardUpdates=0
+ULT:Refresh("power",173)
+check(cardUpdates==0 and ULT.currentUltimate==173 and ULT.hudDirty,
+    "A hidden personal HUD keeps current resources without updating its cards")
+ULT:SetVisible(true)
+check(cardUpdates>0 and not ULT.hudDirty and not ULT.window:IsHidden(),
+    "Showing the personal HUD flushes its deferred presentation")
+ULT.RefreshCard=renderCard
 for _,scale in ipairs({60,180}) do
     ULT.initialized=false
     ZO_SavedVars.NewAccountWide=function(_,name,_,_,defaults)

@@ -143,4 +143,18 @@ local edgeScale=G.window:GetScale();L.EndResize();G:RefreshHUD()
 check(math.abs(edgeScale-pointerScale)<0.00001 and math.abs(G.window:GetScale()-pointerScale)<0.00001,
     'Edge resizing stops at the full-roster screen limit without changing scale mid-drag')
 L.active=false
+local tracker=AlphaSquadUI.Modules.ULTTracker
+local entryReads,rowWrites=0,0
+local getEntries,refreshRow=G.GetTrackedEntries,G.RefreshRow
+G.GetTrackedEntries=function(self) entryReads=entryReads+1;return getEntries(self) end
+G.RefreshRow=function(self,...) rowWrites=rowWrites+1;return refreshRow(self,...) end
+tracker.uiObscured=true;G.sv.hideInMenus=true;G:ApplyVisibility()
+G:RefreshHUD()
+check(entryReads==0 and rowWrites==0 and G.hudDirty,
+    'Menu-hidden group HUDs defer sorting and row writes while data can still change')
+entries[1].chargePercent=73
+tracker.uiObscured=false;G:ApplyVisibility()
+check(entryReads==1 and rowWrites==12 and not G.hudDirty and G.window.rows[1].percent.text=='73%',
+    'Restoring group visibility renders the latest state once without waiting for another packet')
+G.GetTrackedEntries,G.RefreshRow=getEntries,refreshRow
 print('Group HUD resizing: '..count..' assertions passed')
