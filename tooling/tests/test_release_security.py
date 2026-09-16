@@ -6,12 +6,13 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import Mock
 import warnings
 import zipfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from package_utils import collect_package, inspect_archive, sha256, version_numbers, write_archive
-from publish_release import publication_request, verified_artifacts, verify_existing_release
+from publish_release import GitHub, publication_request, verified_artifacts, verify_existing_release
 from security_scan import approved_identity, commit_message_findings, findings, public_email, scan
 from validate import clean_source
 
@@ -62,6 +63,51 @@ class ReleaseIntegrity(unittest.TestCase):
                     verify_existing_release(draft, None, 'a' * 40, ['safe.zip'], root)
             draft = {'draft': True, 'target_commitish': 'a' * 40, 'assets': [safe]}
             self.assertEqual(list(verify_existing_release(draft, None, 'a' * 40, ['safe.zip'], root)), ['safe.zip'])
+            with self.assertRaisesRegex(ValueError, 'different source commit'):
+                verify_existing_release({**draft, 'target_commitish': 'b' * 40}, None,
+                                        'a' * 40, ['safe.zip'], root)
+
+    def test_interrupted_draft_is_found_on_later_pages_and_refreshed(self):
+        github = GitHub('example/fixture', '')
+        draft = {'id': 7, 'tag_name': 'v3.3.1', 'draft': True,
+                 'target_commitish': 'a' * 40, 'assets': []}
+        refreshed = {**draft, 'assets': [{'name': 'existing.zip'}]}
+        github.request = Mock(side_effect=[None,
+            [{'id': n + 100, 'tag_name': f'v0.0.{n}'} for n in range(100)],
+            [draft], refreshed])
+        self.assertEqual(github.release_by_tag('v3.3.1'), refreshed)
+        self.assertEqual(github.request.call_args_list, [
+            unittest.mock.call('/releases/tags/v3.3.1', missing_ok=True),
+            unittest.mock.call('/releases?per_page=100&page=1'),
+            unittest.mock.call('/releases?per_page=100&page=2'),
+            unittest.mock.call('/releases/7')])
+
+    def test_duplicate_pending_tags_and_published_draft_conflicts_are_rejected(self):
+        first = {'id': 7, 'tag_name': 'v3.3.1', 'draft': True}
+        second = {**first, 'id': 8}
+        for published, listed in ((None, [first, second]),
+                                  ({**first, 'draft': False}, [second])):
+            with self.subTest(published=published is not None):
+                github = GitHub('example/fixture', '')
+                github.request = Mock(side_effect=[published, listed])
+                with self.assertRaisesRegex(ValueError, 'Multiple releases'):
+                    github.release_by_tag('v3.3.1')
+                self.assertEqual(github.request.call_count, 2)
+
+    def test_published_release_lookup_is_deduplicated_and_missing_release_is_explicit(self):
+        published = {'id': 7, 'tag_name': 'v3.3.1', 'draft': False}
+        github = GitHub('example/fixture', '')
+        github.request = Mock(side_effect=[published, [published], published])
+        self.assertEqual(github.release_by_tag('v3.3.1'), published)
+        github.request = Mock(side_effect=[None, []])
+        self.assertIsNone(github.release_by_tag('v3.3.1'))
+
+    def test_release_tag_changed_during_lookup_is_rejected(self):
+        draft = {'id': 7, 'tag_name': 'v3.3.1', 'draft': True}
+        github = GitHub('example/fixture', '')
+        github.request = Mock(side_effect=[None, [draft], {**draft, 'tag_name': 'v3.3.2'}])
+        with self.assertRaisesRegex(ValueError, 'changed during lookup'):
+            github.release_by_tag('v3.3.1')
 
     def bundle(self, folder):
         names = {}

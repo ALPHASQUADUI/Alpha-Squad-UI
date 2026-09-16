@@ -143,6 +143,32 @@ class GitHub:
             obj = self.request('/git/tags/' + obj['sha'])['object']
         raise ValueError('Release tag does not resolve to a commit')
 
+    def release_by_tag(self, tag):
+        """Find published releases and pending-tag drafts without creating duplicates."""
+        # The by-tag endpoint only finds published releases. Authenticated release
+        # listings also include drafts, including drafts whose tag does not exist.
+        published = self.request('/releases/tags/' + tag, missing_ok=True)
+        matches = {} if published is None else {published['id']: published}
+        page = 1
+        while True:
+            listed = self.request(f'/releases?per_page=100&page={page}')
+            for release in listed:
+                if release['tag_name'] == tag:
+                    matches[release['id']] = release
+            if len(matches) > 1:
+                raise ValueError('Multiple releases use this tag; manual review is required')
+            if len(listed) < 100:
+                break
+            page += 1
+        if not matches:
+            return None
+        release_id = next(iter(matches))
+        # Refresh the inventory before verifying source and existing asset hashes.
+        release = self.request('/releases/' + str(release_id))
+        if release['id'] != release_id or release['tag_name'] != tag:
+            raise ValueError('Release changed during lookup; manual review is required')
+        return release
+
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -158,7 +184,7 @@ def main():
         return
     github = GitHub(repository, os.environ['GH_TOKEN'])
     tag = 'v' + version
-    release = github.request('/releases/tags/' + tag, missing_ok=True)
+    release = github.release_by_tag(tag)
     target = github.tag_commit(tag)
     assets = verify_existing_release(release, target, commit, paths, args.artifacts)
     if release is not None and not release['draft']:

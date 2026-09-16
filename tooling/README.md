@@ -105,11 +105,17 @@ GitHub's asset digests and complete inventory, then publishes the release and
 verifies the tag. The commit selected for the tag is the validated source commit.
 
 An existing published version must have that same commit and identical assets.
-The publisher never replaces published tags or files. Interrupted drafts can
+The publisher never replaces published tags or files. It searches the authenticated
+release listing across all pages as well as the published-tag endpoint, so an
+interrupted draft can be found even before its tag exists. Multiple release IDs
+claiming the same tag stop publication for review. Interrupted drafts can
 resume only when their source and existing assets match; extra, duplicate or
 different assets stop publication for review. A changed source needs a new
 version. Native acceptance evidence and protocol reservation/coexistence evidence
 must support the policy before publishing. Release notes must not overstate them.
+
+Follow the ordered [public release procedure](../docs/REPOSITORY_OPERATIONS.md#public-release-procedure)
+for registry evidence, repository settings, manual dispatch and recovery.
 
 `--dry-run` validates the publication inputs without network requests. It still
 requires the matching GitHub event/ref/repository/SHA environment and clean
